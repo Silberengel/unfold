@@ -5,9 +5,9 @@
      data-nostr-preview-decoded-value="{{ preview.data|json_encode }}"
      data-nostr-preview-full-match-value="{{ preview.full_match }}">
     <div data-nostr-preview-target="container">
-        <div class="text-center my-2">
-            <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-            <span class="ms-2">Loading preview...</span>
+        <div class="nostr-preview__loading text-center my-2">
+            <span class="nostr-preview__spinner" role="status" aria-label="Loading"></span>
+            <span class="nostr-preview__loading-text ms-2">Loading preview…</span>
         </div>
         {% if preview.full_match is defined and preview.full_match %}
             <div class="nostr-preview-link mt-2">
@@ -16,11 +16,9 @@
         {% endif %}
         {% if preview.data is not null %}
             <div class="nostr-preview-details mt-2">
-                {# Example: show kind if available #}
                 {% if preview.data.kind is defined %}
-                    <span class="badge bg-info">Kind: {{ preview.data.kind }}</span>
+                    <span class="ui-badge ui-badge--neutral">Kind: {{ preview.data.kind }}</span>
                 {% endif %}
-                {# Add more event details here as needed #}
             </div>
         {% endif %}
     </div>

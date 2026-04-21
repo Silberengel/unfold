@@ -16,7 +16,7 @@ export default class extends Controller {
 
     async fetchPreview() {
         try {
-            this.containerTarget.innerHTML = '<div class="text-center my-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"></div> Loading preview...</div>';
+            this.containerTarget.innerHTML = '<div class="nostr-preview__loading text-center my-2"><span class="nostr-preview__spinner" role="status" aria-label="Loading"></span><span class="nostr-preview__loading-text ms-2">Loading preview…</span></div>';
             if (this.typeValue === 'url' && this.fullMatchValue) {
                 // Fetch OG preview for plain URLs
                 fetch("/og-preview/", {

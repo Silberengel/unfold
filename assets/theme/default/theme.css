@@ -2,7 +2,11 @@
     --color-bg: #f4f1ee;
     --color-bg-light: #e8e4df;
     --color-text: #2a2a2a;
-    --color-text-mid: #3a3a3a;   /* Warm light gray */
+    --color-text-mid: #3d3a36;
     --color-text-contrast: #f4f1ee;
     --brand-color: black;
+    --color-link: #3a342f;
+    --color-link-hover: #1a1a1a;
+    --color-focus-ring: #1a1a1a;
+    --color-shadow: color-mix(in srgb, var(--color-text) 10%, transparent);
 }

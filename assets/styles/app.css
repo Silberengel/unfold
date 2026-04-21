@@ -647,6 +647,82 @@ label.search {
     margin-bottom: 15px;
 }
 
+/* Shared layout / theme utilities (replaces Bootstrap-only classes where removed) */
+.text-subtle {
+    color: var(--color-text-mid);
+}
+
+.text-muted {
+    color: var(--color-text-mid);
+}
+
+.text-center {
+    text-align: center;
+}
+
+.my-2 {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.mt-2 {
+    margin-top: 0.5rem;
+}
+
+.ms-2 {
+    margin-left: 0.5rem;
+}
+
+.nostr-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ui-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+
+.ui-badge--brand {
+    background-color: var(--brand-color);
+    color: var(--color-text-contrast);
+}
+
+.ui-badge--primary {
+    background-color: var(--color-primary);
+    color: var(--color-text-contrast);
+}
+
+.ui-badge--secondary {
+    background-color: var(--color-secondary);
+    color: var(--color-text-contrast);
+}
+
+.ui-badge--neutral {
+    background-color: var(--color-bg-light);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.alert.alert-warning {
+    background-color: var(--color-bg-light);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+a:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+
 @media (max-width: 600px) {
     h1.brand {
         font-size: 2.2rem;

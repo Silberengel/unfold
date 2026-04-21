@@ -9,15 +9,25 @@
     --color-bg-light: #2a2a2a;  /* Slightly lighter charcoal */
     --color-bg-primary: #2e1f2e; /* Muted aubergine for a rich, elegant feel */
     --color-text: #f5f5f5;       /* Soft white for readability */
-    --color-text-mid: #d8d8d8;   /* Warm light gray */
+    --color-text-mid: #d8d8d8;   /* Warm light gray — use on dark bg for ≥4.5:1 vs --color-bg */
     --color-text-contrast: #000; /* Black text for contrast */
     --color-primary: #5F7355;   /* Plum primary color */
     --color-secondary: #495544; /*  secondary color */
     --color-border: #3a3a3a;     /* Subtle gray border */
+    /* Aliases / derived (WCAG AA on typical surfaces when paired as documented) */
+    --color-text-light: var(--color-text-mid); /* deprecated name: use --color-text-mid */
+    --color-footer-bg: var(--color-bg-light);
+    --color-footer-text: var(--color-text);
+    --color-footer-link: var(--color-primary);
+    --color-link: var(--color-secondary);
+    --color-link-hover: var(--color-text);
+    --color-focus-ring: var(--color-secondary);
+    --color-shadow: color-mix(in srgb, var(--color-text) 16%, transparent);
     --font-family: 'Montserrat', serif; /* Set the Montserrat font as default */
     --main-body-font: 'Newsreader', serif; /* Set the font for the main body */
     --heading-font: 'EB Garamond', serif; /* Set the font for headings */
     --brand-font: 'Lobster', serif; /* A classic, refined branding font */
     --brand-color: white;
+    --accent-color: var(--color-secondary);
 }
 

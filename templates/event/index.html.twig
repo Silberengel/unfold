@@ -4,8 +4,8 @@
 
 {% block body %}
 <div class="container">
-    <div class="event-container">
-        <div class="event-header">
+    <div class="event-page">
+        <div class="event-page__header">
             {% if author %}
                 {% set author_pic = null %}
                 {% if author.picture is defined and author.picture %}
@@ -27,30 +27,30 @@
                 </div>
                 <hr />
             {% endif %}
-            <div class="event-meta">
+            <div class="event-page__meta">
                 <span class="event-date">{{ event.created_at|date('F j, Y - H:i') }}</span>
             </div>
         </div>
-        <div class="event-content">
+        <div class="event-page__content">
             <twig:Atoms:Content :content="event.content" />
         </div>
 
         {% if nostrLinks is defined and nostrLinks|length > 0 %}
-        <div class="nostr-links">
+        <div class="event-page__links">
             <h4>Referenced Nostr Links</h4>
             <ul class="link-list">
                 {% for link in nostrLinks %}
                 <li>
                     <a href="/e/{{ link.identifier }}">{{ link.identifier }}</a>
-                    <span class="link-type">({{ link.type }})</span>
+                    <span class="event-page__link-type">({{ link.type }})</span>
                 </li>
                 {% endfor %}
             </ul>
         </div>
         {% endif %}
 
-        <div class="event-footer">
-            <div class="event-tags">
+        <div class="event-page__footer">
+            <div class="event-page__tags">
                 {% if event.tags is defined and event.tags|length > 0 %}
                     <ul>
                     {% for tag in event.tags %}
@@ -74,73 +74,4 @@
 
 {% block stylesheets %}
 {{ parent() }}
-<style>
-    .event-container {
-        max-width: 800px;
-        margin: 2rem auto;
-        padding: 1.5rem;
-        background: #fff;
-        border-radius: 8px;
-    }
-
-    .event-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 1rem;
-    }
-
-    .event-content {
-        font-size: 1.1rem;
-        line-height: 1.6;
-        margin-bottom: 2rem;
-        white-space: pre-wrap;
-    }
-
-    .nostr-links {
-        margin: 1.5rem 0;
-        padding: 1rem;
-        background-color: #f9f9f9;
-        border-radius: 4px;
-    }
-
-    .link-list {
-        list-style: none;
-        padding-left: 0;
-    }
-
-    .link-list li {
-        margin-bottom: 0.5rem;
-        word-break: break-all;
-    }
-
-    .link-type {
-        color: #6c757d;
-        font-size: 0.9rem;
-        margin-left: 0.5rem;
-    }
-
-    .event-footer {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 1.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid #eee;
-    }
-
-    .event-tags {
-        flex: 1;
-    }
-
-    .event-tags ul, .event-references ul {
-        list-style-type: none;
-        padding-left: 0;
-    }
-
-    .event-tags li, .event-references li {
-        margin-bottom: 0.5rem;
-    }
-</style>
 {% endblock %}

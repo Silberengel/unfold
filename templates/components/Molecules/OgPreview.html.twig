@@ -14,7 +14,7 @@
             <a href="{{ og.url }}" target="_blank" rel="noopener noreferrer"><b>{{ og.title ?: og.url }}</b></a>
         </div>
         {% if og.description %}
-            <div class="og-preview-description text-muted">{{ og.description }}</div>
+            <div class="og-preview-description">{{ og.description|e }}</div>
         {% endif %}
     </div>
 </div>

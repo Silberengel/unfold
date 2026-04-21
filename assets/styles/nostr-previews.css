@@ -1,0 +1,112 @@
+/* Nostr link previews + in-content nostr: links (mirrors components/_nostr_previews.scss; loaded by app.js) */
+.nostr-preview__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.nostr-preview__spinner {
+    box-sizing: border-box;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: nostr-preview-spin 0.75s linear infinite;
+}
+
+@keyframes nostr-preview-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.nostr-preview__loading-text {
+    color: var(--color-text-mid);
+    font-size: 0.9rem;
+}
+
+.nostr-preview {
+    margin-top: 0.5rem;
+}
+
+.nostr-preview .nostr-preview-link a {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.nostr-preview .nostr-preview-link a:hover {
+    color: var(--color-link-hover);
+}
+
+.nostr-preview .nostr-event-preview,
+.nostr-preview .nostr-profile-preview,
+.nostr-preview .nostr-address-preview,
+.nostr-preview .nostr-highlight-preview {
+    border-left: 3px solid var(--color-primary);
+    box-shadow: 0 2px 6px var(--color-shadow);
+}
+
+.nostr-preview .nostr-profile-preview {
+    border-left-color: var(--color-secondary);
+}
+
+.nostr-preview .nostr-highlight-preview {
+    border-left-color: var(--brand-color);
+}
+
+.nostr-preview .card-title {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    color: var(--color-text);
+}
+
+.nostr-preview .card-text {
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+
+.nostr-preview .card-footer {
+    padding: 0.5rem 1rem;
+    color: var(--color-text-mid);
+}
+
+.nostr-preview .nostr-profile-preview__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.nostr-previews h6 {
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+}
+
+.nostr-previews .preview-container {
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.nostr-link {
+    color: var(--color-link);
+    background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+    padding: 0 3px;
+    border-radius: 3px;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.nostr-link:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
+    color: var(--color-link-hover);
+}
+
+.nostr-link:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}

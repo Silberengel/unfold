@@ -12,14 +12,13 @@
         {% endfor %}
     </div>
 {% elseif preview.type == 'nevent' %}
-    {# If kind is 9802 - Highlight #}
     {% if preview.kind == 9802 %}
         <div class="card nostr-highlight-preview">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header nostr-card-header">
                 <div>
                     <twig:Molecules:UserFromNpub ident="{{ preview.pubkey }}" />
                 </div>
-                <span class="badge bg-warning">Highlight</span>
+                <span class="ui-badge ui-badge--brand">Highlight</span>
             </div>
             <div class="card-body">
                 <p>{{ preview.content }}</p>
@@ -40,41 +39,53 @@
             </div>
         </div>
     {% else %}
+        {% set is_longform = preview.kind == 30023 or preview.kind == 30024 %}
+        {% set article_title = null %}
+        {% set article_summary = null %}
+        {% if preview.tags is defined %}
+            {% for tag in preview.tags %}
+                {% if tag[0] == 'title' %}
+                    {% set article_title = tag[1] %}
+                {% elseif tag[0] == 'summary' %}
+                    {% set article_summary = tag[1] %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
         <div class="card nostr-event-preview">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header nostr-card-header">
                 <div>
-                    <twig:Molecules:UserFromNpub ident="{{ preview.author }}" />
+                    <twig:Molecules:UserFromNpub ident="{{ preview.pubkey }}" />
                 </div>
-                {% if preview.type == 'event' %}
-                    <span class="badge bg-secondary">Article</span>
+                {% if is_longform %}
+                    <span class="ui-badge ui-badge--secondary">Article</span>
                 {% else %}
-                    <span class="badge bg-info">Note</span>
+                    <span class="ui-badge ui-badge--primary">Note</span>
                 {% endif %}
             </div>
             <div class="card-body">
-                {% if preview.type == 'event' %}
-                    <h5 class="card-title">{{ preview.title }}</h5>
+                {% if is_longform %}
+                    <h5 class="card-title">{{ article_title ?: 'Article' }}</h5>
                     <p class="card-text">
-                        {% if preview.event.summary is defined %}
-                            {{ preview.event.summary }}
+                        {% if article_summary %}
+                            {{ article_summary }}
                         {% else %}
-                            {{ preview.event.content|length > 150 ? preview.event.content|slice(0, 150) ~ '...' : preview.event.content }}
+                            {{ preview.content|length > 150 ? preview.content|slice(0, 150) ~ '...' : preview.content }}
                         {% endif %}
                     </p>
                 {% else %}
                     <p class="card-text">{{ preview.content|length > 280 ? preview.content|slice(0, 280) ~ '...' : preview.content }}</p>
                 {% endif %}
             </div>
-            <div class="card-footer text-muted">
-                <small>{{ preview.event.created_at is defined ? preview.event.created_at|date('F j Y') : '' }}</small>
+            <div class="card-footer nostr-preview-card__meta text-subtle">
+                <small>{{ preview.created_at is defined ? preview.created_at|date('F j Y') : '' }}</small>
             </div>
         </div>
     {% endif %}
 {% elseif preview.type == 'nprofile' %}
     <div class="card nostr-profile-preview">
-        <div class="card-body d-flex">
+        <div class="card-body nostr-profile-preview__body">
             <h5 class="card-title">{{ preview.display_name ?: preview.name }} </h5>
-            <small class="text-muted">@{{ preview.npub|shortenNpub }}</small>
+            <small class="text-subtle">@{{ preview.npub|shortenNpub }}</small>
             {% if preview.about %}
                 <p class="card-text">{{ preview.about|length > 150 ? preview.about|slice(0, 150) ~ '...' : preview.about }}</p>
             {% endif %}

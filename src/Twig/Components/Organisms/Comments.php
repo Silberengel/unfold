@@ -4,19 +4,23 @@ namespace App\Twig\Components\Organisms;
 
 use App\Service\NostrClient;
 use App\Service\NostrLinkParser;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
 
 #[AsTwigComponent]
 final class Comments
 {
     public array $list = [];
+
     public array $commentLinks = [];
+
     public array $processedContent = [];
 
     public function __construct(
         private readonly NostrClient $nostrClient,
-        private readonly NostrLinkParser $nostrLinkParser
-
+        private readonly NostrLinkParser $nostrLinkParser,
+        private readonly CacheInterface $cache,
     ) {
     }
 
@@ -25,10 +29,14 @@ final class Comments
      */
     public function mount($current): void
     {
-        // Fetch comments
-        $this->list = $this->nostrClient->getComments($current);
+        $cacheKey = 'comments_' . hash('sha256', (string) $current);
 
-        // Parse Nostr links in comments but don't fetch previews
+        $this->list = $this->cache->get($cacheKey, function (ItemInterface $item) use ($current) {
+            $item->expiresAfter(120);
+
+            return $this->nostrClient->getComments($current);
+        });
+
         $this->parseNostrLinks();
     }
 
