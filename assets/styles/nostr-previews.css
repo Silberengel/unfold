@@ -32,6 +32,11 @@
     margin-top: 0.5rem;
 }
 
+.nostr-preview.nostr-preview--inline {
+    margin: 1rem 0;
+    max-width: 100%;
+}
+
 .nostr-preview .nostr-preview-link a {
     color: var(--color-link);
     text-decoration: underline;

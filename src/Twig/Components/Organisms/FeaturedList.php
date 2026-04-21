@@ -59,6 +59,10 @@ final class FeaturedList
             return;
         }
 
+        if (!\is_object($catIndex) || !\method_exists($catIndex, 'getTags')) {
+            return;
+        }
+
         $slugs = [];
         foreach ($catIndex->getTags() as $tag) {
             if (($tag[0] ?? null) === 'title' && isset($tag[1])) {

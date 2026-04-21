@@ -16,6 +16,7 @@ class NostrSchemeExtension  implements ExtensionInterface
     public function register(EnvironmentBuilderInterface $environment): void
     {
         $environment
+            ->addInlineParser(new NostrBareBech32Parser(), 202)
             ->addInlineParser(new NostrMentionParser($this->cacheService), 200)
             ->addInlineParser(new NostrSchemeParser(), 199)
             ->addInlineParser(new NostrRawNpubParser($this->cacheService), 198)

@@ -19,58 +19,82 @@ use swentel\nostr\Relay\RelaySet;
 use swentel\nostr\Request\Request;
 use swentel\nostr\Subscription\Subscription;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class NostrClient
 {
     private RelaySet $defaultRelaySet;
 
-    public function __construct(private readonly EntityManagerInterface $entityManager,
-                                private readonly ManagerRegistry        $managerRegistry,
-                                private readonly ArticleFactory         $articleFactory,
-                                private readonly TokenStorageInterface  $tokenStorage,
-                                private readonly LoggerInterface        $logger,
-                                private readonly string                 $defaultRelayUrl)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $entityManager,
+        private readonly ManagerRegistry $managerRegistry,
+        private readonly ArticleFactory $articleFactory,
+        private readonly TokenStorageInterface $tokenStorage,
+        private readonly LoggerInterface $logger,
+        private readonly string $defaultRelayUrl,
+        private readonly CacheInterface $relayQueryCache,
+    ) {
         $this->defaultRelaySet = new RelaySet();
         $this->defaultRelaySet->addRelay(new Relay($this->defaultRelayUrl));
     }
 
     /**
-     * Creates a RelaySet from a list of relay URLs
+     * Build a fresh relay set: default relay plus optional extras (deduped).
+     * Never reuse {@see $defaultRelaySet} as a mutable base — that used to append relays
+     * onto the singleton forever and multiplied every nostr request latency.
      */
     private function createRelaySet(array $relayUrls): RelaySet
     {
-        $relaySet = $this->defaultRelaySet;
-        foreach ($relayUrls as $relayUrl) {
+        $relaySet = new RelaySet();
+        $seen = [];
+        foreach (array_merge([$this->defaultRelayUrl], $relayUrls) as $relayUrl) {
+            if (!\is_string($relayUrl) || $relayUrl === '') {
+                continue;
+            }
+            if (isset($seen[$relayUrl])) {
+                continue;
+            }
+            $seen[$relayUrl] = true;
             $relaySet->addRelay(new Relay($relayUrl));
         }
+
         return $relaySet;
     }
 
     /**
-     * Get top 3 reputable relays from an author's relay list
+     * Get top 3 reputable relays from an author's relay list (cached; avoids a kind-10002 round trip per page view).
      */
     private function getTopReputableRelaysForAuthor(string $pubkey, int $limit = 3): array
     {
-        try {
-            $authorRelays = $this->getNpubRelays($pubkey);
-        } catch (\Exception $e) {
-            $this->logger->error('Error getting author relays', [
-                'pubkey' => $pubkey,
-                'error' => $e->getMessage()
-            ]);
-            // fall through
-            $authorRelays = [];
-        }
-        if (empty($authorRelays)) {
-            return [$this->defaultRelayUrl]; // Default to theforest if no author relays
-        }
+        $cacheKey = 'nostr_author_relays_'.hash('sha256', $pubkey);
 
-        // Can only keep wss relays
-        $authorRelays = array_filter($authorRelays, function ($relay) {
-            return str_starts_with($relay, 'wss:') && !str_contains($relay, 'localhost');
+        return $this->relayQueryCache->get($cacheKey, function (ItemInterface $item) use ($pubkey, $limit): array {
+            $item->expiresAfter(3600);
+            try {
+                $authorRelays = $this->getNpubRelays($pubkey);
+            } catch (\Exception $e) {
+                $this->logger->error('Error getting author relays', [
+                    'pubkey' => $pubkey,
+                    'error' => $e->getMessage(),
+                ]);
+                $authorRelays = [];
+            }
+            if ($authorRelays === []) {
+                return [$this->defaultRelayUrl];
+            }
+
+            $authorRelays = array_filter($authorRelays, static function ($relay): bool {
+                return \is_string($relay)
+                    && str_starts_with($relay, 'wss:')
+                    && !str_contains($relay, 'localhost');
+            });
+            if ($authorRelays === []) {
+                return [$this->defaultRelayUrl];
+            }
+
+            return array_values(array_slice($authorRelays, 0, $limit));
         });
-        return array_slice($authorRelays, 0, $limit);
     }
 
     /**
@@ -783,37 +807,91 @@ class NostrClient
             // construct a request from the descriptor to fetch the event
             /** @var Data $ata */
             $data = json_decode($descriptor->decoded);
-            // If id is set, search by id and kind
-            if (isset($data->id)) {
+            if (!\is_object($data)) {
+                $this->logger->error('Invalid descriptor decoded JSON', ['descriptor' => $descriptor]);
+
+                return null;
+            }
+
+            $byEventId = isset($data->id) && \is_string($data->id) && $data->id !== '';
+
+            if ($byEventId) {
+                // NIP-01: filter by "ids", not "#e" (which matches *tags* named "e").
+                $kind = isset($data->kind) ? (int) $data->kind : 1;
                 $request = $this->createNostrRequest(
-                    kinds: [$data->kind],
-                    filters: ['e' => [$data->id]],
+                    kinds: [$kind],
+                    filters: ['ids' => [$data->id]],
                     relaySet: $this->defaultRelaySet
                 );
             } else {
+                // Replaceable address (naddr): must filter on #d like {@see getEventByNaddr()}.
+                // Using key "d" does not call Filter::setTag — relays then return any kind match for the author.
+                $pubkey = (string) ($data->pubkey ?? '');
+                $identifier = (string) ($data->identifier ?? '');
+                if ($pubkey === '' || $identifier === '') {
+                    $this->logger->warning('Naddr descriptor missing pubkey or identifier', ['data' => $data]);
+
+                    return null;
+                }
+                $kind = (int) ($data->kind ?? KindsEnum::LONGFORM->value);
                 $request = $this->createNostrRequest(
-                    kinds: [$data->kind],
-                    filters: ['authors' => [$data->pubkey], 'd' => [$data->identifier]],
+                    kinds: [$kind],
+                    filters: [
+                        'authors' => [$pubkey],
+                        'tag' => ['#d', [$identifier]],
+                    ],
                     relaySet: $this->defaultRelaySet
                 );
             }
 
             $events = $this->processResponse($request->send(), function($received) {
                 $this->logger->info('Getting event', ['item' => $received]);
+
                 return $received;
             });
 
-            if (!empty($events)) {
-                // Return the first event found
-                return $events[0];
-            } else {
+            if (empty($events)) {
                 $this->logger->warning('No events found for descriptor', ['descriptor' => $descriptor]);
+
                 return null;
             }
+
+            if ($byEventId) {
+                foreach ($events as $event) {
+                    if (isset($event->id) && $event->id === $data->id) {
+                        return $event;
+                    }
+                }
+
+                return $events[0];
+            }
+
+            $wantD = (string) ($data->identifier ?? '');
+            foreach ($events as $event) {
+                if ($this->eventHasDTag($event, $wantD)) {
+                    return $event;
+                }
+            }
+
+            return $events[0];
         } else {
             $this->logger->error('Invalid descriptor format', ['descriptor' => $descriptor]);
             return null;
         }
+    }
+
+    private function eventHasDTag(object $event, string $identifier): bool
+    {
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            if (($tag[0] ?? '') === 'd' && (string) ($tag[1] ?? '') === $identifier) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

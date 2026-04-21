@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Article;
 use App\Enum\KindsEnum;
 use App\Form\EditorType;
+use App\Service\ArticleCommentThreadLoader;
 use App\Service\NostrClient;
 use App\Service\CacheService;
 use App\Util\CommonMark\Converter;
@@ -25,6 +26,49 @@ use Symfony\Component\Workflow\WorkflowInterface;
 class ArticleController  extends AbstractController
 {
     /**
+     * Lazy-loaded comment thread (HTML fragment for Stimulus). Must not live under /article/{naddr}.
+     */
+    #[Route('/fragment/comments', name: 'article_comments_fragment', methods: ['GET'])]
+    public function commentsFragment(Request $request, ArticleCommentThreadLoader $loader): Response
+    {
+        $coordinate = $request->query->getString('coordinate');
+        if ($coordinate === '' || !self::isValidNostrCoordinate($coordinate)) {
+            return new Response('Invalid coordinate', Response::HTTP_BAD_REQUEST);
+        }
+
+        $headers = [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'private, max-age=60',
+        ];
+
+        try {
+            $data = $loader->load($coordinate);
+
+            return $this->render('components/Organisms/Comments.html.twig', $data, new Response(
+                '',
+                Response::HTTP_OK,
+                $headers
+            ));
+        } catch (\Throwable) {
+            return new Response('<div class="comments"></div>', Response::HTTP_OK, $headers);
+        }
+    }
+
+    private static function isValidNostrCoordinate(string $coordinate): bool
+    {
+        $parts = explode(':', $coordinate, 3);
+        if (\count($parts) !== 3) {
+            return false;
+        }
+        [$kind, $pubkey, $d] = $parts;
+        if ($d === '' || !ctype_digit((string) $kind)) {
+            return false;
+        }
+
+        return strlen($pubkey) === 64 && ctype_xdigit($pubkey);
+    }
+
+    /**
      * @throws \Exception
      */
     #[Route('/article/{naddr}', name: 'article-naddr')]
@@ -41,9 +85,10 @@ class ArticleController  extends AbstractController
         $slug = $data->identifier;
         $relays = $data->relays;
         $author = $data->pubkey;
-        $kind = $data->kind;
+        $kind = (int) $data->kind;
 
-        if ($kind !== KindsEnum::LONGFORM->value) {
+        $allowedKinds = [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value];
+        if (!\in_array($kind, $allowedKinds, true)) {
             throw new \Exception('Not a long form article');
         }
 

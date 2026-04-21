@@ -92,3 +92,7 @@ blockquote p {
     height: auto;
     aspect-ratio: 16/9;
 }
+
+.article-comments-async .comments--pending {
+    margin: 1rem 0;
+}

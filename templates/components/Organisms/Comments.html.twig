@@ -1,18 +1,21 @@
 <div class="comments">
     {% for item in list %}
+        {% set cid = item.id|default('') %}
+        {% set cpk = item.pubkey|default('') %}
+        {% set cts = item.created_at|default(null) %}
         <div class="card comment">
             <div class="metadata">
-                <p><twig:Molecules:UserFromNpub ident="{{ item.pubkey }}" /></p>
-                <small>{{ item.created_at|date('F j Y') }}</small>
+                <p>{% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}</p>
+                <small>{% if cts is not null and cts != '' %}{{ cts|date('F j Y') }}{% endif %}</small>
             </div>
             <div class="card-body">
-                <twig:Atoms:Content content="{{ item.content }}" />
+                <twig:Atoms:Content content="{{ item.content|default('') }}" />
             </div>
             {# Display Nostr link previews if links detected #}
-            {% if commentLinks[item.id] is defined and commentLinks[item.id]|length > 0 %}
+            {% if cid != '' and commentLinks[cid] is defined and commentLinks[cid]|length > 0 %}
                 <div class="card-footer nostr-previews mt-3">
                     <div class="preview-container">
-                        {% for link in commentLinks[item.id] %}
+                        {% for link in commentLinks[cid] %}
                             <div>
                                 <twig:Molecules:NostrPreview preview="{{ link }}" />
                             </div>

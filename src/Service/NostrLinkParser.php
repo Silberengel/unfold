@@ -131,6 +131,38 @@ readonly class NostrLinkParser
             }
         }
 
+        if (preg_match_all(
+            '~(?<![\w#])(?:@)?(naddr1[0-9a-z]+|nevent1[0-9a-z]+)(?![0-9a-z])~i',
+            $content,
+            $bare,
+            PREG_SET_ORDER | PREG_OFFSET_CAPTURE
+        )) {
+            foreach ($bare as $match) {
+                $raw = $match[0][0];
+                $position = $match[0][1];
+                $identifier = ltrim($raw, '@');
+                try {
+                    $decoded = new Bech32($identifier);
+                    if (!\in_array($decoded->type, ['naddr', 'nevent'], true)) {
+                        continue;
+                    }
+                    $links[] = [
+                        'type' => $decoded->type,
+                        'identifier' => $identifier,
+                        'full_match' => 'nostr:'.$identifier,
+                        'position' => $position,
+                        'data' => $decoded->data,
+                        'is_url' => false,
+                    ];
+                } catch (\Exception $e) {
+                    $this->logger->info('Failed to decode bare Nostr identifier', [
+                        'identifier' => $identifier,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
         return $links;
     }
 

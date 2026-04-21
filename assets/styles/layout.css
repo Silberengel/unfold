@@ -83,7 +83,18 @@ header {
 /* Mobile Styles */
 @media (max-width: 1024px) {
     .header__logo {
-        justify-content: space-around;
+        box-sizing: border-box;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem max(0.65rem, env(safe-area-inset-left)) 0.4rem max(0.65rem, env(safe-area-inset-right));
+    }
+
+    .header__brand {
+        flex: 1;
+        min-width: 0;
+        display: block;
+        text-align: left;
     }
 
     .header__categories {
@@ -111,6 +122,7 @@ header {
 main {
     margin-top: 140px;
     flex-grow: 1;
+    min-width: 0; /* flex item: allow shrinking below wide images / intrinsic min-content */
     padding: 1em;
     word-break: break-word;
 }

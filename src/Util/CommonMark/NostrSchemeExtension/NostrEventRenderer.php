@@ -6,38 +6,62 @@ use League\CommonMark\Node\Node;
 use League\CommonMark\Renderer\ChildNodeRendererInterface;
 use League\CommonMark\Renderer\NodeRendererInterface;
 use League\CommonMark\Util\HtmlElement;
+use nostriphant\NIP19\Bech32;
 
 class NostrEventRenderer implements NodeRendererInterface
 {
-
     public function render(Node $node, ChildNodeRendererInterface $childRenderer)
     {
         if (!($node instanceof NostrSchemeData)) {
-            throw new \InvalidArgumentException('Incompatible inline node type: ' . get_class($node));
+            throw new \InvalidArgumentException('Incompatible inline node type: '.get_class($node));
         }
 
-        if ($node->getType() === 'nevent') {
-            // Construct the local link URL from the special part
-            $url = '/e/' . $node->getSpecial();
-        } else if ($node->getType() === 'naddr') {
-            // dump($node);
-            // Construct the local link URL from the special part
-            $url = '/article/' .  $node->getSpecial();
-        }
-
-        if (isset($url)) {
-            // Create the anchor element
-            return new HtmlElement('a', ['href' => $url], '@' . $this->labelFromKey($node->getSpecial()));
+        $type = $node->getType();
+        if ($type === 'nevent' || $type === 'naddr') {
+            return $this->renderPreviewOrFallback($node, $type);
         }
 
         return false;
-
     }
 
-    private function labelFromKey($key): string
+    private function renderPreviewOrFallback(NostrSchemeData $node, string $type): HtmlElement
+    {
+        $bech = $node->getSpecial();
+        try {
+            $decoded = new Bech32($bech);
+            $payload = json_decode(json_encode($decoded->data), true, 512, JSON_THROW_ON_ERROR);
+            $decodedJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            $url = 'nevent' === $type ? '/e/'.$bech : '/article/'.$bech;
+
+            return new HtmlElement('a', ['href' => $url, 'class' => 'nostr-link'], '@'.$this->labelFromKey($bech));
+        }
+
+        $nostrUrl = 'nostr:'.$bech;
+        $safeNostr = htmlspecialchars($nostrUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $inner = '<div data-nostr-preview-target="container">'
+            .'<div class="nostr-preview__loading text-center my-2">'
+            .'<span class="nostr-preview__spinner" role="status" aria-label="Loading"></span>'
+            .'<span class="nostr-preview__loading-text ms-2">Loading preview…</span>'
+            .'</div>'
+            .'<div class="nostr-preview-link mt-2"><a href="'.$safeNostr.'" target="_blank" rel="noopener noreferrer">'.$safeNostr.'</a></div>'
+            .'</div>';
+
+        return new HtmlElement('div', [
+            'class' => 'nostr-preview nostr-preview--inline',
+            'data-controller' => 'nostr-preview',
+            'data-nostr-preview-identifier-value' => $bech,
+            'data-nostr-preview-type-value' => $type,
+            'data-nostr-preview-decoded-value' => $decodedJson,
+            'data-nostr-preview-full-match-value' => $nostrUrl,
+        ], $inner, false);
+    }
+
+    private function labelFromKey(string $key): string
     {
         $start = substr($key, 0, 8);
         $end = substr($key, -8);
-        return $start . '…' . $end;
+
+        return $start.'…'.$end;
     }
 }

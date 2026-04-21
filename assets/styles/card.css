@@ -37,13 +37,19 @@ h2.card-title {
 
 .article-list .card {
     margin-bottom: 1rem;
+    min-width: 0; /* column flex: do not let cover images set unshrinkable row width */
+}
+
+.card-header {
+    overflow: hidden;
 }
 
 .card-header img {
+    display: block;
     max-width: 100%;
-    height: auto;
-    max-height: 200px;
     width: 100%;
+    height: auto;
+    max-height: 220px;
     object-fit: cover;
 }
 

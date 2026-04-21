@@ -33,7 +33,8 @@ class DefaultController extends AbstractController
     {
         $npub = $this->params->get('npub');
         $dTag = $this->params->get('d_tag');
-        $cacheKey = 'magazine-' . $dTag;
+        // Key must match {@see Header} — `magazine_root_` avoids stale `null` entries from the old Header callback.
+        $cacheKey = 'magazine_root_'.$dTag;
         $mag = $this->cache->get($cacheKey, function ($item) use ($npub, $dTag) {
             $item->expiresAfter(300); // 5 minutes
             return $this->nostrClient->getMagazineIndex($npub, $dTag);
@@ -66,10 +67,19 @@ class DefaultController extends AbstractController
     {
         $npub = $this->params->get('npub');
         $cacheKey = 'magazine-' . $slug;
-        $catIndex = $this->cache->get($cacheKey, function ($item) use ($npub, $slug) {
-            $item->expiresAfter(300); // 5 minutes
-            return $this->nostrClient->getMagazineIndex($npub, $slug);
-        });
+        try {
+            $catIndex = $this->cache->get($cacheKey, function ($item) use ($npub, $slug) {
+                $item->expiresAfter(300); // 5 minutes
+                $mag = $this->nostrClient->getMagazineIndex($npub, $slug);
+                if ($mag === null) {
+                    throw new \RuntimeException('Category index not found for '.$slug);
+                }
+
+                return $mag;
+            });
+        } catch (\Throwable) {
+            $catIndex = null;
+        }
         $list = [];
         $coordinates = [];
         $category = [];

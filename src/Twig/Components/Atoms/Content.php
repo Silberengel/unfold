@@ -19,10 +19,14 @@ class Content
      */
     public function mount($content): void
     {
+        $raw = $content ?? '';
+        if (!\is_string($raw)) {
+            $raw = (string) $raw;
+        }
         try {
-            $this->parsed = $this->converter->convertToHtml($content);
+            $this->parsed = $this->converter->convertToHtml($raw);
         } catch (CommonMarkException) {
-            $this->parsed = $content;
+            $this->parsed = $raw;
         }
     }
 }
