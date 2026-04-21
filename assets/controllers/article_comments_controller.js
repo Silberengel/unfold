@@ -18,6 +18,7 @@ export default class extends Controller {
     }
 
     async load() {
+        const t0 = performance.now();
         try {
             const res = await fetch(this.urlValue, {
                 headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
@@ -27,7 +28,11 @@ export default class extends Controller {
             }
             const html = await res.text();
             this.containerTarget.innerHTML = html;
-        } catch {
+            const ms = Math.round(performance.now() - t0);
+            console.info(`[article-comments] fragment OK in ${ms}ms`, this.urlValue);
+        } catch (err) {
+            const ms = Math.round(performance.now() - t0);
+            console.warn(`[article-comments] fragment failed after ${ms}ms`, this.urlValue, err);
             this.containerTarget.innerHTML =
                 '<p class="text-subtle">Comments could not be loaded.</p>';
         }

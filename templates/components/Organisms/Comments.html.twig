@@ -5,13 +5,19 @@
         {% set cts = item.created_at|default(null) %}
         <div class="card comment">
             <div class="metadata">
-                <p>{% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}</p>
+                <p>
+                    {% if item.kind is defined and item.kind == 1 %}
+                        <span class="ui-badge ui-badge--neutral" title="Legacy text-note reply (pre–NIP-22)">kind 1</span>
+                    {% elseif item.kind is defined and item.kind == 1111 %}
+                        <span class="ui-badge ui-badge--secondary" title="NIP-22 comment">1111</span>
+                    {% endif %}
+                    {% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}
+                </p>
                 <small>{% if cts is not null and cts != '' %}{{ cts|date('F j Y') }}{% endif %}</small>
             </div>
             <div class="card-body">
                 <twig:Atoms:Content content="{{ item.content|default('') }}" />
             </div>
-            {# Display Nostr link previews if links detected #}
             {% if cid != '' and commentLinks[cid] is defined and commentLinks[cid]|length > 0 %}
                 <div class="card-footer nostr-previews mt-3">
                     <div class="preview-container">
@@ -26,3 +32,44 @@
         </div>
     {% endfor %}
 </div>
+
+{% if quotes is defined and quotes|length > 0 %}
+    <div class="comments-quotes">
+        <h3 class="comments-quotes__title">Quotes and references</h3>
+        <p class="text-subtle comments-quotes__lede">Other notes that cite this article in a <code>q</code> tag (NIP-18) or reference its address in <code>a</code> / <code>A</code> (e.g. generic reposts, highlights).</p>
+        {% for item in quotes %}
+            {% set cid = item.id|default('') %}
+            {% set cpk = item.pubkey|default('') %}
+            {% set cts = item.created_at|default(null) %}
+            <div class="card comment comment--quote">
+                <div class="metadata">
+                    <p>
+                        <span class="ui-badge ui-badge--neutral">kind {{ item.kind|default('?') }}</span>
+                        {% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}
+                    </p>
+                    <small>
+                        {% if cts is not null and cts != '' %}{{ cts|date('F j Y') }}{% endif %}
+                        {% if cid != '' %}
+                            <span class="comments-quotes__sep">·</span>
+                            <a href="https://jumble.imwald.eu/feed/notes/{{ cid }}" class="comments-quotes__outlink" target="_blank" rel="noopener noreferrer">View event</a>
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="card-body">
+                    <twig:Atoms:Content content="{{ item.content|default('') }}" />
+                </div>
+                {% if cid != '' and quoteLinks[cid] is defined and quoteLinks[cid]|length > 0 %}
+                    <div class="card-footer nostr-previews mt-3">
+                        <div class="preview-container">
+                            {% for link in quoteLinks[cid] %}
+                                <div>
+                                    <twig:Molecules:NostrPreview preview="{{ link }}" />
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}

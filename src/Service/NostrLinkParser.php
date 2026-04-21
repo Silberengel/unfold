@@ -30,7 +30,44 @@ readonly class NostrLinkParser
         );
         // Sort by position to maintain the original order in the text
         usort($links, fn($a, $b) => $a['position'] <=> $b['position']);
-        return $links;
+
+        return $this->dedupeLinksForPreviews($links);
+    }
+
+    /**
+     * One preview per target. A single `nostr:naddr1…` line is matched both as a prefixed
+     * link and again as a bare `naddr1…` substring; URL + bare overlaps can happen too.
+     *
+     * @param list<array<string, mixed>> $links
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function dedupeLinksForPreviews(array $links): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($links as $link) {
+            $key = $this->linkPreviewDedupeKey($link);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $link;
+        }
+
+        return $out;
+    }
+
+    private function linkPreviewDedupeKey(array $link): string
+    {
+        $identifier = $link['identifier'] ?? null;
+        if (\is_string($identifier) && $identifier !== '') {
+            $type = (string) ($link['type'] ?? '');
+
+            return $type."\0".strtolower($identifier);
+        }
+
+        return 'match:' . (string) ($link['full_match'] ?? '');
     }
 
     private function parseUrlsWithNostrIds(string $content): array

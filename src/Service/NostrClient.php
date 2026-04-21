@@ -408,45 +408,382 @@ class NostrClient
     }
 
     /**
-     * Get comments for a specific coordinate
+     * NIP-22 kind 1111 thread, legacy kind 1 replies (pre-NIP-22 clients), and quote/repost-style references.
      *
-     * @param string $coordinate The event coordinate (kind:pubkey:identifier)
-     * @return array Array of comment events
-     * @throws \Exception
+     * @param string               $coordinate      kind:pubkey:d-identifier (e.g. longform address)
+     * @param null|string          $rootEventHexId  Published article event id (hex) for #e / #q matching
+     *
+     * @return array{thread: array<int, object>, quotes: array<int, object>}
      */
-    public function getComments(string $coordinate): array
+    public function getArticleDiscussion(string $coordinate, ?string $rootEventHexId = null): array
     {
-        $this->logger->info('Getting comments for coordinate', ['coordinate' => $coordinate]);
+        $this->logger->info('nostr.article_discussion.start', [
+            'coordinate' => $coordinate,
+            'root_event_hex' => $rootEventHexId,
+        ]);
 
-        // Get author from coordinate, then relays
         $parts = explode(':', $coordinate, 3);
-        if (count($parts) < 3) {
+        if (\count($parts) < 3) {
             throw new \InvalidArgumentException('Invalid coordinate format, expected kind:pubkey:identifier');
         }
-        $kind = (int)$parts[0];
         $pubkey = $parts[1];
-        $identifier = end($parts);
-        // Get relays for the author
-        $authorRelays = $this->getTopReputableRelaysForAuthor($pubkey);
-        // Turn into a relaySet
+
+        $tRelays = microtime(true);
+        $authorRelays = $this->getTopReputableRelaysForAuthor($pubkey, 1);
+        $this->logger->info('nostr.article_discussion.author_relays_ready', [
+            'elapsed_ms' => (int) round((microtime(true) - $tRelays) * 1000),
+            'author_relays' => $authorRelays,
+        ]);
+
         $relaySet = $this->createRelaySet($authorRelays);
+        $plannedRelayUrls = $this->plannedRelayUrlsForSet($authorRelays);
 
-        // Create request using the helper method
-        $request = $this->createNostrRequest(
-            kinds: [KindsEnum::COMMENTS->value],
-            filters: ['tag' => ['#A', [$coordinate]]],
-            relaySet: $relaySet
-        );
+        $filters = $this->createArticleDiscussionFilters($coordinate, $rootEventHexId);
+        $subscription = new Subscription();
+        $subscriptionId = $subscription->setId();
+        $requestMessage = new RequestMessage($subscriptionId, $filters);
+        $request = new Request($relaySet, $requestMessage);
 
-        // Process the response and deduplicate by eventId
-        $uniqueEvents = [];
-        $this->processResponse($request->send(), function($event) use (&$uniqueEvents, $pubkey) {
-            $this->logger->debug('Received comment event', ['event_id' => $event->id]);
-            $uniqueEvents[$event->id] = $event;
+        $this->logger->info('nostr.article_discussion.req_sending', [
+            'subscription_id' => $subscriptionId,
+            'filter_count' => \count($filters),
+            'relay_urls' => $plannedRelayUrls,
+            'relay_count' => \count($plannedRelayUrls),
+        ]);
+
+        $byId = [];
+        try {
+            $tSend = microtime(true);
+            $response = $request->send();
+            $sendMs = (int) round((microtime(true) - $tSend) * 1000);
+            $this->logger->info('nostr.article_discussion.req_response_envelope', [
+                'elapsed_ms' => $sendMs,
+                'subscription_id' => $subscriptionId,
+            ]);
+            $this->logNostrWireResponseSummary('article_discussion', $response);
+        } catch (\Throwable $e) {
+            $this->logger->error('nostr.article_discussion.req_send_failed', [
+                'coordinate' => $coordinate,
+                'error' => $e->getMessage(),
+                'exception_class' => \get_class($e),
+            ]);
+
+            return ['thread' => [], 'quotes' => []];
+        }
+
+        $tParse = microtime(true);
+        $this->processResponse($response, function ($event) use (&$byId) {
+            if (\is_object($event) && isset($event->id)) {
+                $byId[(string) $event->id] = $event;
+            }
+
             return null;
         });
+        $this->logger->info('nostr.article_discussion.events_collected', [
+            'elapsed_ms' => (int) round((microtime(true) - $tParse) * 1000),
+            'unique_events' => \count($byId),
+        ]);
 
-        return array_values($uniqueEvents);
+        $all = array_values($byId);
+        $thread = [];
+        $threadIds = [];
+
+        foreach ($all as $event) {
+            $kind = (int) ($event->kind ?? 0);
+            if ($kind === KindsEnum::COMMENTS->value && $this->eventIsNip22ArticleThreadReply($event, $coordinate)) {
+                $thread[] = $event;
+                $threadIds[(string) $event->id] = true;
+
+                continue;
+            }
+            if ($kind === KindsEnum::TEXT_NOTE->value && $this->eventIsLegacyThreadReply($event, $coordinate, $rootEventHexId)) {
+                $thread[] = $event;
+                $threadIds[(string) $event->id] = true;
+            }
+        }
+
+        $quotes = [];
+        foreach ($all as $event) {
+            $id = (string) ($event->id ?? '');
+            if ($id === '' || isset($threadIds[$id])) {
+                continue;
+            }
+            if ($this->eventIsArticleQuote($event, $coordinate, $rootEventHexId)) {
+                $quotes[] = $event;
+            }
+        }
+
+        $sortAsc = static function ($a, $b): int {
+            return ((int) ($a->created_at ?? 0)) <=> ((int) ($b->created_at ?? 0));
+        };
+        $sortDesc = static function ($a, $b): int {
+            return ((int) ($b->created_at ?? 0)) <=> ((int) ($a->created_at ?? 0));
+        };
+        usort($thread, $sortAsc);
+        usort($quotes, $sortDesc);
+
+        $this->logger->info('nostr.article_discussion.done', [
+            'thread_count' => \count($thread),
+            'quotes_count' => \count($quotes),
+        ]);
+
+        return ['thread' => $thread, 'quotes' => $quotes];
+    }
+
+    /**
+     * Same merge/dedupe rules as {@see createRelaySet()} — used only for logging planned relay URLs.
+     *
+     * @param array<int, string> $relayUrls
+     *
+     * @return list<string>
+     */
+    private function plannedRelayUrlsForSet(array $relayUrls): array
+    {
+        $seen = [];
+        $out = [];
+        foreach (array_merge([$this->defaultRelayUrl], $relayUrls) as $relayUrl) {
+            if (!\is_string($relayUrl) || $relayUrl === '') {
+                continue;
+            }
+            if (isset($seen[$relayUrl])) {
+                continue;
+            }
+            $seen[$relayUrl] = true;
+            $out[] = $relayUrl;
+        }
+
+        return $out;
+    }
+
+    /**
+     * One line per relay after {@see Request::send()}: errors vs message-type counts (EVENT, EOSE, …).
+     *
+     * @param array<string, mixed> $response
+     */
+    private function logNostrWireResponseSummary(string $context, array $response): void
+    {
+        foreach ($response as $relayUrl => $relayRes) {
+            if ($relayRes instanceof \Throwable) {
+                $this->logger->warning('nostr.wire.relay_throwable', [
+                    'context' => $context,
+                    'relay' => $relayUrl,
+                    'message' => $relayRes->getMessage(),
+                    'class' => \get_class($relayRes),
+                ]);
+
+                continue;
+            }
+            if (!\is_iterable($relayRes)) {
+                $this->logger->warning('nostr.wire.relay_not_iterable', [
+                    'context' => $context,
+                    'relay' => $relayUrl,
+                    'php_type' => \get_debug_type($relayRes),
+                ]);
+
+                continue;
+            }
+            $counts = [
+                'EVENT' => 0,
+                'EOSE' => 0,
+                'NOTICE' => 0,
+                'ERROR' => 0,
+                'AUTH' => 0,
+                'CLOSED' => 0,
+                'other' => 0,
+            ];
+            foreach ($relayRes as $item) {
+                if (!\is_object($item)) {
+                    ++$counts['other'];
+
+                    continue;
+                }
+                $t = (string) ($item->type ?? 'other');
+                if (\array_key_exists($t, $counts)) {
+                    ++$counts[$t];
+                } else {
+                    ++$counts['other'];
+                }
+            }
+            $this->logger->info('nostr.wire.relay_messages', [
+                'context' => $context,
+                'relay' => $relayUrl,
+                'counts' => $counts,
+            ]);
+        }
+    }
+
+    private function eventIsNip22ArticleThreadReply(object $event, string $coordinate): bool
+    {
+        if ((int) ($event->kind ?? 0) !== KindsEnum::COMMENTS->value) {
+            return false;
+        }
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            $name = (string) ($tag[0] ?? '');
+            if (($name === 'a' || $name === 'A') && (string) ($tag[1] ?? '') === $coordinate) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function eventIsLegacyThreadReply(object $event, string $coordinate, ?string $rootEventHexId): bool
+    {
+        if ((int) ($event->kind ?? 0) !== KindsEnum::TEXT_NOTE->value) {
+            return false;
+        }
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            $name = (string) ($tag[0] ?? '');
+            $val = (string) ($tag[1] ?? '');
+            if (($name === 'a' || $name === 'A') && $val === $coordinate) {
+                return true;
+            }
+            if ($rootEventHexId !== null && $rootEventHexId !== '' && $name === 'e' && $val === $rootEventHexId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function eventIsArticleQuote(object $event, string $coordinate, ?string $rootEventHexId): bool
+    {
+        $kind = (int) ($event->kind ?? 0);
+        if ($kind === KindsEnum::COMMENTS->value) {
+            foreach ($event->tags ?? [] as $tag) {
+                if (!\is_array($tag) || \count($tag) < 2) {
+                    continue;
+                }
+                if (($tag[0] ?? '') === 'q') {
+                    $val = (string) ($tag[1] ?? '');
+                    if ($val === $coordinate || ($rootEventHexId !== null && $val === $rootEventHexId)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            $name = (string) ($tag[0] ?? '');
+            $val = (string) ($tag[1] ?? '');
+            if ($name === 'q') {
+                if ($val === $coordinate || ($rootEventHexId !== null && $val === $rootEventHexId)) {
+                    return true;
+                }
+            }
+        }
+        if ($kind === KindsEnum::GENERIC_REPOST->value) {
+            foreach ($event->tags ?? [] as $tag) {
+                if (!\is_array($tag) || \count($tag) < 2) {
+                    continue;
+                }
+                if (($tag[0] ?? '') === 'a' && (string) ($tag[1] ?? '') === $coordinate) {
+                    return true;
+                }
+            }
+        }
+        if ($kind === KindsEnum::HIGHLIGHTS->value) {
+            foreach ($event->tags ?? [] as $tag) {
+                if (!\is_array($tag) || \count($tag) < 2) {
+                    continue;
+                }
+                $n = (string) ($tag[0] ?? '');
+                if (($n === 'a' || $n === 'A') && (string) ($tag[1] ?? '') === $coordinate) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int, Filter>
+     */
+    private function createArticleDiscussionFilters(string $coordinate, ?string $rootEventHexId): array
+    {
+        $limThread = 100;
+        $limQuote = 80;
+
+        $filters = [];
+
+        $k1111 = KindsEnum::COMMENTS->value;
+        $f = new Filter();
+        $f->setKinds([$k1111]);
+        $f->setTag('#A', [$coordinate]);
+        $f->setLimit($limThread);
+        $filters[] = $f;
+        $f = new Filter();
+        $f->setKinds([$k1111]);
+        $f->setTag('#a', [$coordinate]);
+        $f->setLimit($limThread);
+        $filters[] = $f;
+
+        $k1 = KindsEnum::TEXT_NOTE->value;
+        $f = new Filter();
+        $f->setKinds([$k1]);
+        $f->setTag('#A', [$coordinate]);
+        $f->setLimit($limThread);
+        $filters[] = $f;
+        $f = new Filter();
+        $f->setKinds([$k1]);
+        $f->setTag('#a', [$coordinate]);
+        $f->setLimit($limThread);
+        $filters[] = $f;
+
+        if ($rootEventHexId !== null && $rootEventHexId !== '') {
+            $f = new Filter();
+            $f->setKinds([$k1]);
+            $f->setTag('#e', [$rootEventHexId]);
+            $f->setLimit($limThread);
+            $filters[] = $f;
+        }
+
+        $qKinds = [
+            KindsEnum::TEXT_NOTE->value,
+            KindsEnum::REPOST->value,
+            KindsEnum::GENERIC_REPOST->value,
+            KindsEnum::COMMENTS->value,
+            KindsEnum::HIGHLIGHTS->value,
+        ];
+        $qVals = [$coordinate];
+        if ($rootEventHexId !== null && $rootEventHexId !== '') {
+            $qVals[] = $rootEventHexId;
+        }
+        $f = new Filter();
+        $f->setKinds($qKinds);
+        $f->setTag('#q', $qVals);
+        $f->setLimit($limQuote);
+        $filters[] = $f;
+
+        $f = new Filter();
+        $f->setKinds([KindsEnum::GENERIC_REPOST->value]);
+        $f->setTag('#a', [$coordinate]);
+        $f->setLimit(50);
+        $filters[] = $f;
+
+        $f = new Filter();
+        $f->setKinds([KindsEnum::HIGHLIGHTS->value]);
+        $f->setTag('#a', [$coordinate]);
+        $f->setLimit(40);
+        $filters[] = $f;
+        $f = new Filter();
+        $f->setKinds([KindsEnum::HIGHLIGHTS->value]);
+        $f->setTag('#A', [$coordinate]);
+        $f->setLimit(40);
+        $filters[] = $f;
+
+        return $filters;
     }
 
     /**
@@ -691,6 +1028,7 @@ class NostrClient
     private function createNostrRequest(array $kinds, array $filters = [], ?RelaySet $relaySet = null): Request
     {
         $subscription = new Subscription();
+        $subscriptionId = $subscription->setId();
         $filter = new Filter();
         $filter->setKinds($kinds);
 
@@ -707,7 +1045,8 @@ class NostrClient
             }
         }
 
-        $requestMessage = new RequestMessage($subscription->getId(), [$filter]);
+        $requestMessage = new RequestMessage($subscriptionId, [$filter]);
+
         return new Request($relaySet ?? $this->defaultRelaySet, $requestMessage);
     }
 
@@ -724,9 +1063,10 @@ class NostrClient
                 continue;
             }
 
+            $itemEstimate = \is_countable($relayRes) ? \count($relayRes) : null;
             $this->logger->debug('Processing relay response', [
                 'relay' => $relayUrl,
-                'response' => $relayRes
+                'item_count' => $itemEstimate,
             ]);
 
             foreach ($relayRes as $item) {

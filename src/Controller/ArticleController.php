@@ -13,6 +13,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use League\CommonMark\Exception\CommonMarkException;
 use nostriphant\NIP19\Bech32;
 use nostriphant\NIP19\Data\NAddr;
+use Psr\Log\LoggerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use swentel\nostr\Key\Key;
@@ -29,12 +30,29 @@ class ArticleController  extends AbstractController
      * Lazy-loaded comment thread (HTML fragment for Stimulus). Must not live under /article/{naddr}.
      */
     #[Route('/fragment/comments', name: 'article_comments_fragment', methods: ['GET'])]
-    public function commentsFragment(Request $request, ArticleCommentThreadLoader $loader): Response
+    public function commentsFragment(Request $request, ArticleCommentThreadLoader $loader, LoggerInterface $logger): Response
     {
+        // Article body may raise the global limit; keep this sub-request bounded so relay I/O cannot hit max_execution_time (500).
+        set_time_limit(45);
+
+        $t0 = microtime(true);
         $coordinate = $request->query->getString('coordinate');
         if ($coordinate === '' || !self::isValidNostrCoordinate($coordinate)) {
             return new Response('Invalid coordinate', Response::HTTP_BAD_REQUEST);
         }
+
+        $articleEventId = $request->query->getString('e');
+        if ($articleEventId !== '' && !self::isValidHexEventId($articleEventId)) {
+            return new Response('Invalid event id', Response::HTTP_BAD_REQUEST);
+        }
+        if ($articleEventId === '') {
+            $articleEventId = null;
+        }
+
+        $logger->info('http.fragment.comments_start', [
+            'coordinate' => $coordinate,
+            'article_event_hex' => $articleEventId,
+        ]);
 
         $headers = [
             'Content-Type' => 'text/html; charset=UTF-8',
@@ -42,14 +60,30 @@ class ArticleController  extends AbstractController
         ];
 
         try {
-            $data = $loader->load($coordinate);
+            $data = $loader->load($coordinate, $articleEventId);
+            $logger->info('http.fragment.comments_after_load', [
+                'elapsed_ms' => (int) round((microtime(true) - $t0) * 1000),
+            ]);
 
-            return $this->render('components/Organisms/Comments.html.twig', $data, new Response(
+            $tRender = microtime(true);
+            $response = $this->render('components/Organisms/Comments.html.twig', $data, new Response(
                 '',
                 Response::HTTP_OK,
                 $headers
             ));
-        } catch (\Throwable) {
+            $logger->info('http.fragment.comments_response', [
+                'total_elapsed_ms' => (int) round((microtime(true) - $t0) * 1000),
+                'render_elapsed_ms' => (int) round((microtime(true) - $tRender) * 1000),
+            ]);
+
+            return $response;
+        } catch (\Throwable $e) {
+            $logger->error('http.fragment.comments_exception', [
+                'message' => $e->getMessage(),
+                'exception_class' => \get_class($e),
+                'elapsed_ms' => (int) round((microtime(true) - $t0) * 1000),
+            ]);
+
             return new Response('<div class="comments"></div>', Response::HTTP_OK, $headers);
         }
     }
@@ -66,6 +100,11 @@ class ArticleController  extends AbstractController
         }
 
         return strlen($pubkey) === 64 && ctype_xdigit($pubkey);
+    }
+
+    private static function isValidHexEventId(string $id): bool
+    {
+        return strlen($id) === 64 && ctype_xdigit($id);
     }
 
     /**

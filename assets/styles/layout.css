@@ -54,6 +54,15 @@ header {
     width: 100vw;
     top: 0;
     left: 0;
+    box-sizing: border-box;
+}
+
+/* Desktop: breathing room under the browser chrome. Mobile gets inset via
+   .header__logo padding in the max-width block below. */
+@media (min-width: 1025px) {
+    header {
+        padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+    }
 }
 
 /* Hamburger button */
@@ -133,6 +142,17 @@ main {
     width: calc(21vw - 10px);
     min-width: 150px;
     max-width: 270px;
+}
+
+@media (min-width: 1025px) {
+    /* Match extra header padding-top so content and menu clear the fixed bar */
+    main {
+        margin-top: 152px;
+    }
+
+    .user-menu {
+        top: 162px;
+    }
 }
 
 .user-nav {
