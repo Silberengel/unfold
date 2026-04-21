@@ -6,25 +6,14 @@ services:
         dockerfile: Dockerfile
     environment:
       APP_ENV: ${APP_ENV:-dev}
-      SERVER_NAME: ${SERVER_NAME:-localhost}, php:80
-      # Run "composer require symfony/orm-pack" to install and configure Doctrine ORM
-      DATABASE_URL: mysql://${MYSQL_USER:-app}:${MYSQL_PASSWORD:-!ChangeMe!}@database:3306/${MYSQL_DATABASE:-app}?serverVersion=${MYSQL_VERSION:-8.0}&charset=${MYSQL_CHARSET:-utf8mb4}
+      # Caddy site address: :80 accepts any Host (needed when the app is reached via localhost:HTTP_PORT).
+      SERVER_NAME: ${SERVER_NAME:-:80}
+      # Defaults match .env.dist so a first boot without a .env file creates the same DB user as copying .env.dist later.
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0}&charset=${MYSQL_CHARSET:-utf8mb4}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-    ports:
-      # HTTP
-      - target: 80
-        published: 80
-        protocol: tcp
-      # HTTPS
-      - target: 443
-        published: 443
-        protocol: tcp
-      # HTTP/3
-      - target: 443
-        published: 443
-        protocol: udp
+    # Host port publishing: see compose.override.yaml (dev) and compose.prod.yaml (prod).
 
 
 ###> doctrine/doctrine-bundle ###
@@ -35,10 +24,10 @@ services:
   database:
     image: mysql:${MYSQL_VERSION:-8.0}
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-app}
-      MYSQL_USER: ${MYSQL_USER:-app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-!ChangeMe!}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-!ChangeRootPassword!}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}
+      MYSQL_USER: ${MYSQL_USER:-unfold_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 5s

@@ -1,13 +1,21 @@
+# Site identity and theme (see assets/theme/local/ to override default assets).
+
 parameters:
-    name: 'GitCitadel'
-    short_name: 'GitCitadel'
-    description: 'Unfolding nostr magazines and community articles'
+    name: 'Nostr, Curated Thoughtfully'
+    short_name: 'Imwald Blog'
+    description: 'A selection of my own Nostr long-form articles and articles from other authors, selected for the quality of their writing and the depth of their analysis.'
+
+    og_headline: 'Nostr, Curated Thoughtfully'
+    og_subheading: 'Imwald Blog by Laeserin'
+
     default_relay: 'wss://TheForest.nostr1.com'
-    theme: 'space'
-    theme_color: '#000000'
-    theme_bg_color: '#ffffff'
-    npub: 'npub1ez09adke4vy8udk3y2skwst8q5chjgqzym9lpq4u58zf96zcl7kqyry2lz'
-    d_tag: 'newsroom-magazine-by-newsroom'
+
+    theme: 'imwald'
+    theme_color: '#8c2f1c'
+    theme_bg_color: '#f1ebe4'
+
+    npub: 'npub1m4ny6hjqzepn4rxknuq94c2gpqzr29ufkkw7ttcxyak7v43n6vvsajc2jl'
+    d_tag: 'newsroom-magazine-on-imwald-by-laeserin'
     community_articles: true
     external_links:
       - title: "Unfold"

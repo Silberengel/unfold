@@ -6,7 +6,7 @@
     <title>{% block title %}{{ website_name }}{% endblock %}</title>
     <meta name="description" content="{{ website_description }}">
     <link rel="icon" type="image/png" href="{{ asset('icons/favicon-96x96.png') }}" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="{{ asset('icons/favicon.svg') }}" />
+    <link rel="icon" type="image/x-icon" href="{{ asset('icons/favicon.ico') }}" />
     <link rel="shortcut icon" href="{{ asset('icons/favicon.ico') }}" />
     <link rel="apple-touch-icon" href="{{ asset('icons/apple-touch-icon.png') }}">
     <meta name="apple-mobile-web-app-title" content="{{ website_short_name }}" />
@@ -14,7 +14,7 @@
     <link rel="manifest" href="{{ path('pwa_manifest') }}">
 
     {% block ogtags %}
-        <meta property="og:image" content="{{ asset('icons/favicon.ico') }}" />
+        <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg')) }}" />
     {% endblock %}
     {% block javascripts %}
         {% block importmap %}{{ importmap('app') }}{% endblock %}

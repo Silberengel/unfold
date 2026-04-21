@@ -15,6 +15,11 @@ services:
     environment:
       # See https://xdebug.org/docs/all_settings#mode
       XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+    ports:
+      # Defaults avoid crowded 8080/8443; override with HTTP_PORT / HTTPS_PORT in .env
+      - "127.0.0.1:${HTTP_PORT:-9080}:80/tcp"
+      - "127.0.0.1:${HTTPS_PORT:-9443}:443/tcp"
+      - "127.0.0.1:${HTTPS_PORT:-9443}:443/udp"
     extra_hosts:
       # Ensure that host.docker.internal is correctly defined on Linux
       - host.docker.internal:host-gateway
@@ -23,6 +28,7 @@ services:
 ###> doctrine/doctrine-bundle ###
   database:
     restart: always
+    # Optional host access for mysql clients (3307 avoids clashing with a local MySQL on 3306).
     ports:
-      - "5432"
+      - "127.0.0.1:3307:3306"
 ###< doctrine/doctrine-bundle ###

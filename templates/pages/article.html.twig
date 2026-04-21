@@ -6,9 +6,11 @@
     <meta property="og:url" content="{{ app.request.uri }}">
     {% if article.image %}
         <meta property="og:image" content="{{ article.image }}">
+    {% else %}
+        <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg')) }}">
     {% endif %}
     <meta property="og:description" content="{{ article.summary|striptags|u.truncate(159,'…')|e }}">
-    <meta property="og:site_name" content="Newsroom">
+    <meta property="og:site_name" content="{{ website_name }}">
 {% endblock %}
 
 {% block body %}
