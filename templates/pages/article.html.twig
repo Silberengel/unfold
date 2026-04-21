@@ -28,10 +28,9 @@
         </div>
         {% if author %}
             <div class="byline">
-                <span>
-                    {{ 'text.byline'|trans }} <a href="{{ path('author-redirect', {'pubkey': article.pubkey}) }}">
-                        <twig:Atoms:NameOrNpub :author="author" :npub="npub" />
-                    </a>
+                <span class="byline__author">
+                    {{ 'text.byline'|trans }}
+                    <twig:Molecules:UserFromNpub ident="{{ article.pubkey }}" />
                 </span>
                 <span>
                     {% if article.publishedAt is not null %}

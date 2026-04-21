@@ -50,8 +50,8 @@ readonly class Converter
                 'symbol' => '§',
             ],
             'autolink' => [
-                'allowed_protocols' => ['https'], // defaults to ['https', 'http', 'ftp']
-                'default_protocol' => 'https', // defaults to 'http'
+                'allowed_protocols' => ['https', 'http'],
+                'default_protocol' => 'https',
             ],
             'embed' => [
                 'adapter' => new OscaroteroEmbedAdapter(), // See the "Adapter" documentation below
@@ -81,7 +81,32 @@ readonly class Converter
         $converter = new MarkdownConverter($environment);
         $content = html_entity_decode($markdown);
 
-        return $converter->convert($content);
+        $html = (string) $converter->convert($content);
+
+        return $this->rewriteAutolinkedImageLinks($html);
+    }
+
+    /**
+     * UrlAutolinkParser turns bare URLs into &lt;a href="U"&gt;U&lt;/a&gt;. If U is an image URL, show an img.
+     * Covers cached HTML from before RawImageLinkParser priority fix and edge cases where autolink still wins.
+     */
+    private function rewriteAutolinkedImageLinks(string $html): string
+    {
+        return (string) preg_replace_callback(
+            '#<a\b[^>]*\bhref="([^"]+)"[^>]*>\s*\1\s*</a>#i',
+            static function (array $m): string {
+                $url = $m[1];
+                if (preg_match('~\.(?:jpe?g|png|gif|webp|avif)(?:\?[^#]*)?(?:#.*)?$~i', $url) !== 1) {
+                    return $m[0];
+                }
+
+                $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+                return '<img src="' . $safe . '" alt="" loading="lazy" decoding="async" />';
+            },
+            $html
+        );
     }
 
 }
+

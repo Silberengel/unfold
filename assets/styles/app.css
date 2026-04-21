@@ -513,6 +513,72 @@ footer a {
     background-color: var(--color-secondary);
 }
 
+/* Author link + small Nostr profile picture (NIP-01 `picture`) */
+.user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    vertical-align: middle;
+    text-decoration: none;
+}
+
+.user-badge:hover {
+    text-decoration: underline;
+}
+
+.user-badge__avatar {
+    display: inline-block;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.user-badge__avatar--wrap {
+    position: relative;
+    vertical-align: middle;
+}
+
+.user-badge__avatar-img {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    border-radius: 50%;
+}
+
+.user-badge__avatar-img.is-broken {
+    display: none;
+}
+
+.user-badge__avatar-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.user-badge__avatar--generated .pubkey-avatar-svg,
+.user-badge__avatar-fallback .pubkey-avatar-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.user-badge__name {
+    line-height: 1.2;
+}
+
 .avatar {
     width: 24px;         /* Adjust the size as needed */
     height: 24px;        /* Adjust the size as needed */

@@ -56,6 +56,12 @@ readonly class NostrLinkParser
                         ]);
                     }
                 }
+
+                // Inline image URLs are already rendered in the body; skip OG/footer preview for them.
+                if ($nostrId === null && $this->isDirectImageUrl($url)) {
+                    continue;
+                }
+
                 $links[] = [
                     'type' => $nostrType ?? 'url',
                     'identifier' => $nostrId,
@@ -67,6 +73,16 @@ readonly class NostrLinkParser
             }
         }
         return $links;
+    }
+
+    private function isDirectImageUrl(string $url): bool
+    {
+        // Ends in image extension, or CDN style `…/name.jpg/…` (thumb, width, etc.)
+        if (1 === preg_match('~\.(?:jpe?g|png|gif|webp|avif)(?:\?[^#]*)?(?:#.*)?$~i', $url)) {
+            return true;
+        }
+
+        return 1 === preg_match('~\.(?:jpe?g|png|gif|webp|avif)/~i', $url);
     }
 
     private function parseBareNostrIdentifiers(string $content): array

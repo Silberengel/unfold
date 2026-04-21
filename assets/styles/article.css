@@ -2,6 +2,13 @@
     margin-top: 30px;
 }
 
+.article-main img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1.25rem auto;
+}
+
 .article-main h2, .article-main h3,
 .article-main h4, .article-main h5, .article-main h6 {
     margin-top: 2em;
@@ -30,11 +37,18 @@
 .byline {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     margin: 2rem 0;
     padding-top: 0.5rem;
     border-top: 1px solid var(--color-border);
     font-size: 1rem;
+}
+
+.byline__author {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35em;
 }
 
 blockquote {

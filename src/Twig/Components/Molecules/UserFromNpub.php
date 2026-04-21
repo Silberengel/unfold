@@ -3,15 +3,20 @@
 namespace App\Twig\Components\Molecules;
 
 use App\Service\CacheService;
+use App\Util\PubkeyAvatarSvg;
 use swentel\nostr\Key\Key;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
 
 #[AsTwigComponent]
 final class UserFromNpub
 {
-    public string $pubkey;
+    public string $pubkey = '';
+
     public string $npub;
+
     public $user = null;
+
+    public string $fallbackSvg = '';
 
     public function __construct(private readonly CacheService $cacheService)
     {
@@ -19,14 +24,20 @@ final class UserFromNpub
 
     public function mount(string $ident): void
     {
-        // if npub doesn't start with 'npub' then assume it's a hex pubkey
+        $keys = new Key();
         if (!str_starts_with($ident, 'npub')) {
-            $keys = new Key();
             $this->pubkey = $ident;
             $this->npub = $keys->convertPublicKeyToBech32($ident);
         } else {
             $this->npub = $ident;
+            $this->pubkey = $keys->convertToHex($ident);
         }
+
         $this->user = $this->cacheService->getMetadata($this->npub);
+
+        $seed = (\strlen($this->pubkey) === 64 && ctype_xdigit($this->pubkey))
+            ? $this->pubkey
+            : hash('sha256', $this->npub, false);
+        $this->fallbackSvg = PubkeyAvatarSvg::generate($seed);
     }
 }

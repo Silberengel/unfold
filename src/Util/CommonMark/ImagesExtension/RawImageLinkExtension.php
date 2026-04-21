@@ -9,6 +9,7 @@ class RawImageLinkExtension implements ExtensionInterface
 {
     public function register(EnvironmentBuilderInterface $environment): void
     {
-        $environment->addInlineParser(new RawImageLinkParser());
+        // UrlAutolinkParser uses default priority 0; run first so GIF/JPEG URLs become <img>, not <a>.
+        $environment->addInlineParser(new RawImageLinkParser(), 1000);
     }
 }
