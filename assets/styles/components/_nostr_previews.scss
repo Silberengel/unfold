@@ -102,3 +102,18 @@
         outline-offset: 2px;
     }
 }
+
+.nostr-jumble-outlink {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+        color: var(--color-link-hover);
+    }
+}
+
+.nostr-preview-card__sep {
+    margin: 0 0.25rem;
+    color: var(--color-text-mid);
+}

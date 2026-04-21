@@ -122,11 +122,6 @@ blockquote p {
     color: var(--color-text-mid);
 }
 
-.comments-quotes__outlink {
-    color: var(--color-link);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-}
 
 .comment--quote .metadata {
     flex-wrap: wrap;

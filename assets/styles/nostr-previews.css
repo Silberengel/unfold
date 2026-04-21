@@ -115,3 +115,19 @@
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
 }
+
+/* Jumble feed viewer — shared by embedded previews and quote metadata */
+.nostr-jumble-outlink {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.nostr-jumble-outlink:hover {
+    color: var(--color-link-hover);
+}
+
+.nostr-preview-card__sep {
+    margin: 0 0.25rem;
+    color: var(--color-text-mid);
+}

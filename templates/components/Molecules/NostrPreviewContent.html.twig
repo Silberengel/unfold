@@ -10,6 +10,11 @@
                 <p class="card-text">{{ tag[1] }}</p>
             {% endif %}
         {% endfor %}
+        {% if preview.id is defined and preview.id %}
+            <div class="card-footer nostr-preview-card__meta text-subtle">
+                <a href="https://jumble.imwald.eu/feed/notes/{{ preview.id }}" class="nostr-jumble-outlink" target="_blank" rel="noopener noreferrer">View event</a>
+            </div>
+        {% endif %}
     </div>
 {% elseif preview.type == 'nevent' %}
     {% if preview.kind == 9802 %}
@@ -37,6 +42,11 @@
                     </blockquote>
                 {% endif %}
             </div>
+            {% if preview.id is defined and preview.id %}
+                <div class="card-footer nostr-preview-card__meta text-subtle">
+                    <a href="https://jumble.imwald.eu/feed/notes/{{ preview.id }}" class="nostr-jumble-outlink" target="_blank" rel="noopener noreferrer">View event</a>
+                </div>
+            {% endif %}
         </div>
     {% else %}
         {% set is_longform = preview.kind == 30023 or preview.kind == 30024 %}
@@ -78,6 +88,10 @@
             </div>
             <div class="card-footer nostr-preview-card__meta text-subtle">
                 <small>{{ preview.created_at is defined ? preview.created_at|date('F j Y') : '' }}</small>
+                {% if preview.id is defined and preview.id %}
+                    <span class="nostr-preview-card__sep">·</span>
+                    <a href="https://jumble.imwald.eu/feed/notes/{{ preview.id }}" class="nostr-jumble-outlink" target="_blank" rel="noopener noreferrer">View event</a>
+                {% endif %}
             </div>
         </div>
     {% endif %}
