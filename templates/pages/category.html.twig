@@ -1,10 +1,10 @@
 {% extends 'base.html.twig' %}
 
 {% block ogtags %}
-    <meta property="og:title" content="{{ category.title }}">
+    <meta property="og:title" content="{{ category.title|default('') }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ app.request.uri }}">
-    <meta property="og:description" content="{{ category.summary }}">
+    <meta property="og:description" content="{{ category.summary|default('') }}">
     <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg')) }}">
     <meta property="og:site_name" content="{{ website_name }}">
 {% endblock %}

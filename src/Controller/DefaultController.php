@@ -116,6 +116,9 @@ class DefaultController extends AbstractController
             }
         }
 
+        $category['title'] = $category['title'] ?? '';
+        $category['summary'] = $category['summary'] ?? '';
+
         return $this->render('pages/category.html.twig', [
             'list' => $list,
             'category' => $category

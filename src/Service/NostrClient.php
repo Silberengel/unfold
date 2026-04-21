@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\Article;
+use App\Entity\Event as PublicationEventEntity;
 use App\Enum\KindsEnum;
 use App\Factory\ArticleFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -815,11 +816,15 @@ class NostrClient
         }
     }
 
-    public function getMagazineIndex( $npub, $dTag)
+    /**
+     * Latest kind 30040 index for this author and #d tag, as {@see PublicationEventEntity}
+     * so callers can use {@see PublicationEventEntity::getTags()} (relay payloads are otherwise stdClass).
+     */
+    public function getMagazineIndex(mixed $npub, mixed $dTag): ?PublicationEventEntity
     {
         $request = $this->createNostrRequest(
             kinds: [KindsEnum::PUBLICATION_INDEX],
-            filters: ['authors' => [$npub], 'tag' => ['#d', [$dTag]]],
+            filters: ['authors' => [(string) $npub], 'tag' => ['#d', [(string) $dTag]]],
         );
         $response = $request->send();
         $this->logger->info('Getting magazine index', ['npub' => $npub, 'dTag' => $dTag, 'response' => $response]);
@@ -831,8 +836,56 @@ class NostrClient
             $this->logger->warning('No magazine index found', ['npub' => $npub, 'dTag' => $dTag]);
             return null;
         }
-        // Sort by date and return the most recent
-        usort($events, fn($a, $b) => $b->created_at <=> $a->created_at);
-        return $events[0];
+        usort($events, static function ($a, $b): int {
+            return self::magazineEventCreatedAt($b) <=> self::magazineEventCreatedAt($a);
+        });
+
+        return self::magazineEventToPublicationEntity($events[0]);
+    }
+
+    private static function magazineEventCreatedAt(mixed $event): int
+    {
+        if ($event instanceof PublicationEventEntity) {
+            return $event->getCreatedAt();
+        }
+        if (\is_object($event) && isset($event->created_at)) {
+            return (int) $event->created_at;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Normalize relay / library event objects to the app's Event entity (not persisted).
+     */
+    private static function magazineEventToPublicationEntity(mixed $raw): ?PublicationEventEntity
+    {
+        if ($raw instanceof PublicationEventEntity) {
+            return $raw;
+        }
+        if (!\is_object($raw)) {
+            return null;
+        }
+
+        try {
+            /** @var array<string, mixed> $data */
+            $data = json_decode(json_encode($raw, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!\is_array($data)) {
+            return null;
+        }
+        $entity = new PublicationEventEntity();
+        $entity->setId((string) ($data['id'] ?? ''));
+        $entity->setKind((int) ($data['kind'] ?? 0));
+        $entity->setPubkey((string) ($data['pubkey'] ?? ''));
+        $entity->setContent((string) ($data['content'] ?? ''));
+        $entity->setCreatedAt((int) ($data['created_at'] ?? 0));
+        $tags = $data['tags'] ?? [];
+        $entity->setTags(\is_array($tags) ? $tags : []);
+        $entity->setSig((string) ($data['sig'] ?? ''));
+
+        return $entity;
     }
 }
