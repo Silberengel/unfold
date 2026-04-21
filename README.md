@@ -2,6 +2,8 @@
 
 Unfold is a customizable framework for your Nostr-based magazine.
 
+(This is the **Imwald** edition of Unfold.)
+
 ## Setup
 
 ### Clone the repository
