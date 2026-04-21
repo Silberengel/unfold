@@ -7,8 +7,16 @@
     <div class="event-container">
         <div class="event-header">
             {% if author %}
-                {% if author.image is defined %}
-                    <img src="{{ author.image }}" class="avatar" alt="{{ author.name }}" onerror="this.style.display = 'none'" />
+                {% set author_pic = null %}
+                {% if author.picture is defined and author.picture %}
+                    {% set author_pic = author.picture %}
+                {% elseif author.image is defined and author.image %}
+                    {% set author_pic = author.image %}
+                {% endif %}
+                {% if author_pic %}
+                    <div class="author-profile__avatar author-profile__avatar--compact">
+                        <img src="{{ author_pic }}" alt="" loading="lazy" decoding="async" onerror="this.parentElement.remove()" />
+                    </div>
                 {% endif %}
 
                 <twig:Molecules:UserFromNpub ident="{{ event.pubkey }}" />
