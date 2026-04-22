@@ -1,5 +1,7 @@
 {% extends 'base.html.twig' %}
 
+{% block magazine_sync_page %}home{% endblock %}
+
 {% block ogtags %}
     {% set _og_image = absolute_url(asset('og-image.jpg')) %}
     <meta property="og:type" content="website">
@@ -18,10 +20,11 @@
 {% endblock %}
 
 {% block body %}
-    {# content #}
-    {% for item in indices %}
-        <twig:Organisms:FeaturedList :category="item" class="featured-list"/>
-    {% endfor %}
+    <div class="home-body" data-magazine-sync-target="pageBody">
+        {% for item in indices %}
+            <twig:Organisms:FeaturedList :category="item" class="featured-list"/>
+        {% endfor %}
+    </div>
 {% endblock %}
 
 {% block aside %}

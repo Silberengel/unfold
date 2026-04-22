@@ -3,11 +3,8 @@
 namespace App\Twig\Components\Organisms;
 
 use App\Repository\ArticleRepository;
-use App\Service\NostrClient;
+use App\Service\MagazineIndexStore;
 use Psr\Cache\InvalidArgumentException;
-use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
 
 #[AsTwigComponent]
@@ -20,10 +17,8 @@ final class FeaturedList
     public array $list = [];
 
     public function __construct(
-        private readonly CacheInterface $cache,
+        private readonly MagazineIndexStore $store,
         private readonly ArticleRepository $articleRepository,
-        private readonly NostrClient $nostrClient,
-        private readonly ParameterBagInterface $params,
     ) {
     }
 
@@ -43,22 +38,8 @@ final class FeaturedList
         }
 
         $slug = $parts[2];
-        $npub = (string) $this->params->get('npub');
 
-        try {
-            $catIndex = $this->cache->get('magazine-' . $slug, function (ItemInterface $item) use ($npub, $slug) {
-                $item->expiresAfter(300);
-                $mag = $this->nostrClient->getMagazineIndex($npub, $slug);
-                if ($mag === null) {
-                    throw new \RuntimeException('Category index not found for '.$slug);
-                }
-
-                return $mag;
-            });
-        } catch (\Throwable) {
-            return;
-        }
-
+        $catIndex = $this->store->getCategory($slug);
         if (!\is_object($catIndex) || !\method_exists($catIndex, 'getTags')) {
             return;
         }

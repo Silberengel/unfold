@@ -57,7 +57,4 @@ return [
         'version' => '2.0.3',
         'type' => 'css',
     ],
-    'es-module-shims' => [
-        'version' => '2.0.10',
-    ],
 ];

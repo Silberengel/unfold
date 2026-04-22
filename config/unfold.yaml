@@ -9,6 +9,13 @@ parameters:
     og_subheading: 'Imwald Blog by Laeserin'
 
     default_relay: 'wss://TheForest.nostr1.com'
+    # Extra wss:// URLs for article sync (articles:get), comment threads (NIP-22 / getArticleDiscussion),
+    # and any request that merges the default set with author-specific relays. default_relay is first; duplicates ignored.
+    article_relays: ['wss://christpill.nostr1.com', 'wss://nostr.land', 'wss://nostr.wine', 'wss://nostr21.com', 'wss://nostr.sovbit.host']
+    # Example:
+    # article_relays:
+    #   - 'wss://nos.lol'
+    #   - 'wss://relay.ditto.pub'
 
     theme: 'imwald'
     theme_color: '#8c2f1c'

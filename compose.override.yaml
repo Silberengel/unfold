@@ -13,8 +13,9 @@ services:
       #  from the bind-mount for better performance by enabling the next line:
       - /app/vendor
     environment:
+      # develop: xdebug_info(), better stack traces, etc. Use debug,develop for step debugging (IDE).
       # See https://xdebug.org/docs/all_settings#mode
-      XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+      XDEBUG_MODE: "${XDEBUG_MODE:-develop}"
     ports:
       # Defaults avoid crowded 8080/8443; override with HTTP_PORT / HTTPS_PORT in .env
       - "127.0.0.1:${HTTP_PORT:-9080}:80/tcp"

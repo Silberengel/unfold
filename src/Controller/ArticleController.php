@@ -378,6 +378,7 @@ class ArticleController  extends AbstractController
         return $this->render('pages/category.html.twig', [
             'category' => $category,
             'list' => $articles,
+            'sync_slug' => '',
         ]);
     }
 

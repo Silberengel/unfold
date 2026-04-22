@@ -34,7 +34,15 @@ services:
     App\Service\NostrClient:
         arguments:
             $defaultRelayUrl: '%default_relay%'
+            $articleRelayUrls: '%article_relays%'
     App\Twig\FooterLinksExtension:
         arguments:
             $footerLinksPath: '%footer_links%'
         tags: [ 'twig.extension' ]
+    # Nostr index snapshots: distinct key prefix from other cache.app users.
+    App\Service\MagazineIndexStore:
+        arguments:
+            $pool: '@cache.app'
+    App\Service\MagazineRefresher:
+        arguments:
+            $appCache: '@cache.app'

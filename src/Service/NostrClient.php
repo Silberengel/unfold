@@ -26,6 +26,9 @@ class NostrClient
 {
     private RelaySet $defaultRelaySet;
 
+    /**
+     * @param list<string> $articleRelayUrls extra relays for the default set (default_relay is always first)
+     */
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly ManagerRegistry $managerRegistry,
@@ -33,26 +36,56 @@ class NostrClient
         private readonly TokenStorageInterface $tokenStorage,
         private readonly LoggerInterface $logger,
         private readonly string $defaultRelayUrl,
+        private readonly array $articleRelayUrls,
         private readonly CacheInterface $relayQueryCache,
     ) {
-        $this->defaultRelaySet = new RelaySet();
-        $this->defaultRelaySet->addRelay(new Relay($this->defaultRelayUrl));
+        $this->defaultRelaySet = $this->buildArticleRelaySet();
     }
 
     /**
-     * Build a fresh relay set: default relay plus optional extras (deduped).
-     * Never reuse {@see $defaultRelaySet} as a mutable base — that used to append relays
-     * onto the singleton forever and multiplied every nostr request latency.
+     * default_relay + article_relays from config, in order, deduplicated. Used for the static
+     * default set and as the base when merging author/extra relay URLs in {@see createRelaySet()}.
+     *
+     * @return list<string>
+     */
+    private function configuredArticleRelayUrlList(): array
+    {
+        $seen = [];
+        $out = [];
+        foreach (array_merge([$this->defaultRelayUrl], $this->articleRelayUrls) as $url) {
+            if (!\is_string($url) || $url === '' || isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            $out[] = $url;
+        }
+        if ($out === []) {
+            $out[] = $this->defaultRelayUrl;
+        }
+
+        return $out;
+    }
+
+    private function buildArticleRelaySet(): RelaySet
+    {
+        $relaySet = new RelaySet();
+        foreach ($this->configuredArticleRelayUrlList() as $url) {
+            $relaySet->addRelay(new Relay($url));
+        }
+
+        return $relaySet;
+    }
+
+    /**
+     * Merges all configured article relays (default + article_relays) with the given URLs in order, deduped.
+     * Used for comment threads (getArticleDiscussion), per-author fetches, etc.
      */
     private function createRelaySet(array $relayUrls): RelaySet
     {
         $relaySet = new RelaySet();
         $seen = [];
-        foreach (array_merge([$this->defaultRelayUrl], $relayUrls) as $relayUrl) {
-            if (!\is_string($relayUrl) || $relayUrl === '') {
-                continue;
-            }
-            if (isset($seen[$relayUrl])) {
+        foreach (array_merge($this->configuredArticleRelayUrlList(), $relayUrls) as $relayUrl) {
+            if (!\is_string($relayUrl) || $relayUrl === '' || isset($seen[$relayUrl])) {
                 continue;
             }
             $seen[$relayUrl] = true;
@@ -153,16 +186,14 @@ class NostrClient
 
         $request = new Request($relays, $requestMessage);
 
-        $response = $request->send();
-        // response is an n-dimensional array, where n is the number of relays in the set
-        // check that response has events in the results
-        foreach ($response as $relayRes) {
-            $filtered = array_filter($relayRes, function ($item) {
-                return $item->type === 'EVENT';
-            });
-            if (count($filtered) > 0) {
-                $this->saveLongFormContent($filtered);
-            }
+        $wrappers = $this->processResponse($request->send(), function (object $event) {
+            $w = new \stdClass();
+            $w->event = $event;
+
+            return $w;
+        });
+        if ($wrappers !== []) {
+            $this->saveLongFormContent($wrappers);
         }
         // TODO handle relays that require auth
     }
@@ -181,36 +212,51 @@ class NostrClient
     }
 
     /**
+     * Backfill long-form (NIP-23) in time windows so relay responses and PHP stay bounded (avoids
+     * OOM on year-wide queries with many relays). ~60 days per step (≈2 months).
+     */
+    private const LONGFORM_BACKFILL_CHUNK_SECONDS = 5184000; // 60 days
+
+    /**
      * Long-form Content
      * NIP-23
      */
     public function getLongFormContent($from = null, $to = null): void
     {
+        $toTs = $to !== null ? (int) $to : time();
+        $fromTs = $from !== null ? (int) $from : strtotime('-1 week');
+        if ($fromTs >= $toTs) {
+            return;
+        }
+
+        $chunk = self::LONGFORM_BACKFILL_CHUNK_SECONDS;
+        for ($windowFrom = $fromTs; $windowFrom < $toTs; $windowFrom += $chunk) {
+            $windowTo = min($windowFrom + $chunk, $toTs);
+            $this->getLongFormContentForTimeWindow($windowFrom, $windowTo);
+            $this->entityManager->clear();
+        }
+    }
+
+    private function getLongFormContentForTimeWindow(int $since, int $until): void
+    {
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $filter = new Filter();
         $filter->setKinds([KindsEnum::LONGFORM]);
-        $filter->setSince(strtotime('-1 week')); // default
-        if ($from !== null) {
-            $filter->setSince($from);
-        }
-        if ($to !== null) {
-            $filter->setUntil($to);
-        }
+        $filter->setSince($since);
+        $filter->setUntil($until);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
         $request = new Request($this->defaultRelaySet, $requestMessage);
 
-        $response = $request->send();
-        // response is an n-dimensional array, where n is the number of relays in the set
-        // check that response has events in the results
-        foreach ($response as $relayRes) {
-            $filtered = array_filter($relayRes, function ($item) {
-                return $item->type === 'EVENT';
-            });
-            if (count($filtered) > 0) {
-                $this->saveLongFormContent($filtered);
-            }
+        $wrappers = $this->processResponse($request->send(), function (object $event) {
+            $w = new \stdClass();
+            $w->event = $event;
+
+            return $w;
+        });
+        if ($wrappers !== []) {
+            $this->saveLongFormContent($wrappers);
         }
     }
 
@@ -541,11 +587,8 @@ class NostrClient
     {
         $seen = [];
         $out = [];
-        foreach (array_merge([$this->defaultRelayUrl], $relayUrls) as $relayUrl) {
-            if (!\is_string($relayUrl) || $relayUrl === '') {
-                continue;
-            }
-            if (isset($seen[$relayUrl])) {
+        foreach (array_merge($this->configuredArticleRelayUrlList(), $relayUrls) as $relayUrl) {
+            if (!\is_string($relayUrl) || $relayUrl === '' || isset($seen[$relayUrl])) {
                 continue;
             }
             $seen[$relayUrl] = true;
@@ -963,9 +1006,8 @@ class NostrClient
                 // Continue with default relays
             }
 
-            // If no author relays found, add default relay
             if (empty($relayList)) {
-                $relayList = [$this->defaultRelayUrl];
+                $relayList = [];
             }
 
             // Ensure we use a RelaySet
@@ -1237,6 +1279,10 @@ class NostrClient
     /**
      * Latest kind 30040 index for this author and #d tag, as {@see PublicationEventEntity}
      * so callers can use {@see PublicationEventEntity::getTags()} (relay payloads are otherwise stdClass).
+     *
+     * The magazine root uses the site d_tag from config. Each category uses the full child d
+     * (third segment of the root "a" address). A category 30040 lists 30023 article "a" tags, not
+     * further nested 30040 indices.
      */
     public function getMagazineIndex(mixed $npub, mixed $dTag): ?PublicationEventEntity
     {

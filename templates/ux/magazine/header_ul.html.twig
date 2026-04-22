@@ -1,0 +1,10 @@
+<ul data-magazine-sync-target="headerNav">
+    {% for category in cats %}
+        <li><twig:Molecules:CategoryLink :category="category" /></li>
+    {% endfor %}
+    {% if magazine_community_articles %}
+        <li>
+            <a href="{{ path('articles') }}">Latest Articles</a>
+        </li>
+    {% endif %}
+</ul>

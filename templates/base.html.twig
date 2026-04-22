@@ -29,7 +29,12 @@
         <link rel="stylesheet" href="{{ asset('theme.css') }}">
     {% endblock %}
 </head>
-<body data-controller="service-worker">
+<body
+    data-controller="service-worker magazine-sync"
+    data-magazine-sync-page-value="{% block magazine_sync_page %}article{% endblock %}"
+    data-magazine-sync-slug-value="{% block magazine_sync_slug %}{% endblock %}"
+    data-magazine-sync-url-value="{{ path('ux_magazine_sync') }}"
+>
 
 <twig:Header />
 

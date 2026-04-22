@@ -1,5 +1,9 @@
 framework:
     asset_mapper:
+        # es-module-shims + native import maps can trigger "Multiple import maps are not allowed"
+        # in current browsers; rely on native import map support (Chrome 89+, Firefox 108+, Safari 16.4+).
+        # Re-enable the polyfill for older clients: set to `es-module-shims` and add the package in importmap.php.
+        importmap_polyfill: false
         # The paths to make available to the asset mapper.
         paths:
             - assets/theme/local       # Highest priority (overrides)
