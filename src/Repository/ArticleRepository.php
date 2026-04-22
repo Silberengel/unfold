@@ -70,6 +70,46 @@ class ArticleRepository extends ServiceEntityRepository
     }
 
     /**
+     * Resolve NIP-33 `a` tags (kind:pubkey:identifier) to articles without conflating the same
+     * #d value across different authors.
+     *
+     * @param list<array{pubkey: string, slug: string}> $pairs
+     * @return array<string, Article> key "pubkey\0slug" (lowercase hex pubkey, trimmed slug)
+     */
+    public function findByAuthorAndSlugIndexed(array $pairs): array
+    {
+        $pairs = array_values(array_filter($pairs, static fn (array $p): bool => $p['pubkey'] !== '' && $p['slug'] !== ''));
+        if ($pairs === []) {
+            return [];
+        }
+
+        $qb = $this->createQueryBuilder('a');
+        $orX = $qb->expr()->orX();
+        foreach ($pairs as $i => $p) {
+            $orX->add($qb->expr()->andX(
+                $qb->expr()->eq('a.pubkey', ':pk'.$i),
+                $qb->expr()->eq('a.slug', ':sl'.$i)
+            ));
+            $qb->setParameter('pk'.$i, $p['pubkey']);
+            $qb->setParameter('sl'.$i, $p['slug']);
+        }
+        $qb->where($orX);
+
+        /** @var list<Article> $rows */
+        $rows = $qb->getQuery()->getResult();
+        $out = [];
+        foreach ($rows as $a) {
+            $pk = (string) $a->getPubkey();
+            $sl = trim((string) $a->getSlug());
+            if ($sl !== '') {
+                $out[$pk."\0".$sl] = $a;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Find articles by author's public key
      */
     public function findByPubkey(string $pubkey, int $limit = 25): array

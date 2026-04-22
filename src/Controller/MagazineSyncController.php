@@ -31,9 +31,6 @@ final class MagazineSyncController
     #[Route('/ux/magazine-sync', name: 'ux_magazine_sync', methods: ['GET'])]
     public function __invoke(Request $request): JsonResponse
     {
-        @set_time_limit(8);
-        @ini_set('max_execution_time', '8');
-
         try {
             $page = (string) $request->query->get('page', 'article');
             if (!\in_array($page, ['home', 'category', 'article', 'articles'], true)) {
@@ -44,7 +41,7 @@ final class MagazineSyncController
             $prefer = $slug !== '' ? [$slug] : [];
 
             try {
-                $this->refresher->refreshFromRelays(8, $prefer);
+                $this->refresher->refreshFromRelays(20, $prefer);
             } catch (\Throwable $e) {
                 $this->logger->warning('MagazineSyncController: refresh failed', [
                     'message' => $e->getMessage(),

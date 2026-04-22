@@ -24,6 +24,7 @@ final class MagazineContentService
         private readonly MagazineRefresher $refresher,
         private readonly ParameterBagInterface $params,
         private readonly ArticleRepository $articleRepository,
+        private readonly NostrClient $nostrClient,
     ) {
     }
 
@@ -37,9 +38,9 @@ final class MagazineContentService
         $npub = (string) $this->params->get('npub');
         $dTag = (string) $this->params->get('d_tag');
         if ($this->store->getRoot($npub, $dTag) === null) {
-            $this->refresher->refreshFromRelays(8, []);
+            $this->refresher->refreshFromRelays(20, []);
         } elseif ($this->shouldRevalidateRootFromRelay()) {
-            $this->refresher->refreshFromRelays(8, []);
+            $this->refresher->refreshFromRelays(20, []);
         }
 
         return $this->getHomeCategoryAIndexTagsFromStoreOnly();
@@ -101,7 +102,7 @@ final class MagazineContentService
     {
         $catIndex = $this->store->getCategory($slug);
         if ($catIndex === null) {
-            $this->refresher->refreshFromRelays(8, [$slug]);
+            $this->refresher->refreshFromRelays(20, [$slug]);
             $catIndex = $this->store->getCategory($slug);
         }
         $list = [];
@@ -122,32 +123,45 @@ final class MagazineContentService
         }
 
         if (!empty($coordinates)) {
-            $slugs = array_map(static function ($coordinate) {
+            $pairs = [];
+            foreach ($coordinates as $coordinate) {
                 $parts = explode(':', (string) $coordinate, 3);
-
-                return trim((string) end($parts));
-            }, $coordinates);
-            $slugs = array_values(array_filter($slugs, static fn (string $s): bool => $s !== ''));
-            $articles = $this->articleRepository->findBySlugsCriteria($slugs);
-            $slugMap = [];
-            foreach ($articles as $item) {
-                $s = trim((string) $item->getSlug());
-                if ($s !== '') {
-                    if (!isset($slugMap[$s])) {
-                        $slugMap[$s] = $item;
-                    } else {
-                        $existingItem = $slugMap[$s];
-                        if ($item->getCreatedAt() > $existingItem->getCreatedAt()) {
-                            $slugMap[$s] = $item;
-                        }
-                    }
+                if (\count($parts) < 3) {
+                    continue;
                 }
+                $slugPart = trim((string) $parts[2]);
+                if ($slugPart === '') {
+                    continue;
+                }
+                $pairs[] = [
+                    'pubkey' => (string) $parts[1],
+                    'slug' => $slugPart,
+                ];
+            }
+            $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
+            $missing = [];
+            foreach ($coordinates as $coordinate) {
+                $parts = explode(':', (string) $coordinate, 3);
+                if (\count($parts) < 3) {
+                    continue;
+                }
+                $k = (string) $parts[1]."\0".trim((string) $parts[2]);
+                if (!isset($byAddress[$k])) {
+                    $missing[] = (string) $coordinate;
+                }
+            }
+            if ($missing !== []) {
+                $this->nostrClient->ingestMissingLongformForCategoryCoordinates($missing);
+                $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
             }
             foreach ($coordinates as $coordinate) {
                 $parts = explode(':', (string) $coordinate, 3);
-                $slugKey = trim((string) end($parts));
-                if ($slugKey !== '' && isset($slugMap[$slugKey])) {
-                    $list[] = $slugMap[$slugKey];
+                if (\count($parts) < 3) {
+                    continue;
+                }
+                $k = (string) $parts[1]."\0".trim((string) $parts[2]);
+                if (isset($byAddress[$k])) {
+                    $list[] = $byAddress[$k];
                 }
             }
         }

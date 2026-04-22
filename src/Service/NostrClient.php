@@ -77,6 +77,19 @@ class NostrClient
     }
 
     /**
+     * One relay for magazine 30040 lookups. {@see Request::send()} iterates every relay in the set
+     * sequentially; the full default set (5–6 wss) multiplies wall time — often 10s+ while a single
+     * relay returns in under 2s for the same filter.
+     */
+    private function buildSingleRelaySet(string $wssUrl): RelaySet
+    {
+        $rs = new RelaySet();
+        $rs->addRelay(new Relay($wssUrl));
+
+        return $rs;
+    }
+
+    /**
      * Merges all configured article relays (default + article_relays) with the given URLs in order, deduped.
      * Used for comment threads (getArticleDiscussion), per-author fetches, etc.
      */
@@ -1286,18 +1299,38 @@ class NostrClient
      */
     public function getMagazineIndex(mixed $npub, mixed $dTag): ?PublicationEventEntity
     {
+        $entity = $this->queryMagazineIndex($npub, $dTag, $this->buildSingleRelaySet($this->defaultRelayUrl));
+        if ($entity !== null) {
+            return $entity;
+        }
+        if (\count($this->configuredArticleRelayUrlList()) <= 1) {
+            $this->logger->warning('No magazine index found', ['npub' => $npub, 'dTag' => $dTag]);
+
+            return null;
+        }
+        $this->logger->notice('Magazine index not on default relay, falling back to full relay set', [
+            'dTag' => $dTag,
+        ]);
+
+        return $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet);
+    }
+
+    private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet): ?PublicationEventEntity
+    {
         $request = $this->createNostrRequest(
-            kinds: [KindsEnum::PUBLICATION_INDEX],
-            filters: ['authors' => [(string) $npub], 'tag' => ['#d', [(string) $dTag]]],
+            [KindsEnum::PUBLICATION_INDEX],
+            ['authors' => [(string) $npub], 'tag' => ['#d', [(string) $dTag]]],
+            $relaySet,
         );
+        $this->logger->info('Magazine index query', [
+            'npub' => $npub,
+            'dTag' => $dTag,
+        ]);
         $response = $request->send();
-        $this->logger->info('Getting magazine index', ['npub' => $npub, 'dTag' => $dTag, 'response' => $response]);
-        $events = $this->processResponse($response, function($received) {
-            $this->logger->info('Received magazine index event', ['item' => $received]);
+        $events = $this->processResponse($response, function ($received) {
             return $received;
         });
         if (empty($events)) {
-            $this->logger->warning('No magazine index found', ['npub' => $npub, 'dTag' => $dTag]);
             return null;
         }
         usort($events, static function ($a, $b): int {
@@ -1305,6 +1338,66 @@ class NostrClient
         });
 
         return self::magazineEventToPublicationEntity($events[0]);
+    }
+
+    /**
+     * Batch-fetch longform for category `a` coordinates that are not in the DB; one Nostr call per
+     * (author × kind) group, only the default relay (see {@see getMagazineIndex} rationale).
+     *
+     * @param list<string> $addresses kind:pubkey:identifier
+     */
+    public function ingestMissingLongformForCategoryCoordinates(array $addresses): void
+    {
+        if ($addresses === []) {
+            return;
+        }
+        $groups = [];
+        foreach ($addresses as $c) {
+            $parts = explode(':', (string) $c, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $kind = (int) $parts[0];
+            $pubkey = $parts[1];
+            $d = trim((string) $parts[2]);
+            if ($d === '' || $kind <= 0) {
+                continue;
+            }
+            $gkey = $pubkey.':'.(string) $kind;
+            $groups[$gkey]['pubkey'] = $pubkey;
+            $groups[$gkey]['kind'] = $kind;
+            $groups[$gkey]['dTags'][] = $d;
+        }
+        foreach ($groups as $g) {
+            $dTags = array_values(array_unique($g['dTags'] ?? []));
+            if ($dTags === [] || !isset($g['pubkey'], $g['kind'])) {
+                continue;
+            }
+            $kindEnum = KindsEnum::tryFrom((int) $g['kind']);
+            if ($kindEnum === null) {
+                $this->logger->notice('Skipping category coordinate with unknown kind', ['kind' => $g['kind']]);
+
+                continue;
+            }
+            $request = $this->createNostrRequest(
+                [$kindEnum],
+                ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
+                $this->buildSingleRelaySet($this->defaultRelayUrl),
+            );
+            try {
+                $this->processResponse($request->send(), function ($event) {
+                    $article = $this->articleFactory->createFromLongFormContentEvent($event);
+                    $this->saveEachArticleToTheDatabase($article);
+
+                    return null;
+                });
+            } catch (\Throwable $e) {
+                $this->logger->error('ingestMissingLongformForCategoryCoordinates', [
+                    'message' => $e->getMessage(),
+                    'pubkey' => $g['pubkey'] ?? null,
+                ]);
+            }
+        }
     }
 
     private static function magazineEventCreatedAt(mixed $event): int
