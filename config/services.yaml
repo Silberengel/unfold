@@ -8,6 +8,8 @@ imports:
 
 parameters:
     footer_links: '%kernel.project_dir%/config/unfold.yaml'
+    # Default when TRUSTED_PROXIES is unset (override in .env / Compose for real deployments).
+    env(TRUSTED_PROXIES): '127.0.0.0/8,::1'
 
 services:
     # default configuration for services in *this* file

@@ -96,7 +96,10 @@ RUN rm -Rf frankenphp/
 
 RUN set -eux; \
 	mkdir -p var/cache var/log; \
+	cp .env.dist .env; \
 	composer dump-autoload --classmap-authoritative --no-dev; \
 	composer dump-env prod; \
+	rm -f .env; \
 	composer run-script --no-dev post-install-cmd; \
+	php bin/console asset-map:compile --no-debug; \
 	chmod +x bin/console; sync;

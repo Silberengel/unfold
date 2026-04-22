@@ -1,5 +1,19 @@
 {% extends 'base.html.twig' %}
 
+{% block ogtags %}
+    {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ url('home') }}">
+    <meta property="og:title" content="{{ website_name|e('html_attr') }}">
+    <meta property="og:description" content="{{ website_description|e('html_attr') }}">
+    <meta property="og:image" content="{{ _og_image|e('html_attr') }}">
+    <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ website_name|e('html_attr') }}">
+    <meta name="twitter:description" content="{{ website_description|e('html_attr') }}">
+    <meta name="twitter:image" content="{{ _og_image|e('html_attr') }}">
+{% endblock %}
+
 {% block nav %}
 {% endblock %}
 

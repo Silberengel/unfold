@@ -102,7 +102,7 @@
             "docker": true
         },
         "runtime": {
-            "dotenv_overload": true
+            "dotenv_overload": false
         }
     },
     "require-dev": {

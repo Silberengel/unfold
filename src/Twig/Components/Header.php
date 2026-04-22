@@ -26,13 +26,24 @@ class Header
     ) {
         $dTag = (string) $this->params->get('d_tag');
         $npub = (string) $this->params->get('npub');
-        // Same key as {@see DefaultController::index()} — must load the real index (not cache `null`).
-        $cacheKey = 'magazine_root_'.$dTag;
-        $mag = $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub, $dTag) {
-            $item->expiresAfter(300);
+        // Same key as {@see DefaultController::index()}. If the relay returns nothing, throw from the
+        // callback so Symfony does not persist `null` — otherwise categories vanish until TTL (~5 min).
+        $cacheKey = 'magazine_root_v2_'.$dTag;
+        try {
+            $mag = $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub, $dTag) {
+                $item->expiresAfter(300);
+                $mag = $this->nostrClient->getMagazineIndex($npub, $dTag);
+                if ($mag === null) {
+                    throw new \RuntimeException('Magazine root index not found for '.$dTag);
+                }
 
-            return $this->nostrClient->getMagazineIndex($npub, $dTag);
-        });
+                return $mag;
+            });
+        } catch (\Throwable) {
+            $this->cats = [];
+
+            return;
+        }
 
         if ($mag === null) {
             $this->cats = [];

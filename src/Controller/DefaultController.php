@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Psr\Log\LoggerInterface;
 
 class DefaultController extends AbstractController
@@ -33,17 +34,28 @@ class DefaultController extends AbstractController
     {
         $npub = $this->params->get('npub');
         $dTag = $this->params->get('d_tag');
-        // Key must match {@see Header} — `magazine_root_` avoids stale `null` entries from the old Header callback.
-        $cacheKey = 'magazine_root_'.$dTag;
-        $mag = $this->cache->get($cacheKey, function ($item) use ($npub, $dTag) {
-            $item->expiresAfter(300); // 5 minutes
-            return $this->nostrClient->getMagazineIndex($npub, $dTag);
-        });
+        // Key must match {@see Header}. Throw from the cache callback when the index is missing so `null`
+        // is not stored under this key (same pattern as {@see CategoryLink} / per-category cache).
+        $cacheKey = 'magazine_root_v2_'.$dTag;
+        try {
+            $mag = $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub, $dTag) {
+                $item->expiresAfter(300);
+                $mag = $this->nostrClient->getMagazineIndex($npub, $dTag);
+                if ($mag === null) {
+                    throw new \RuntimeException('Magazine root index not found for '.$dTag);
+                }
 
-        // Handle case when magazine is not found
+                return $mag;
+            });
+        } catch (\Throwable) {
+            return $this->render('home.html.twig', [
+                'indices' => [],
+            ]);
+        }
+
         if ($mag === null) {
             return $this->render('home.html.twig', [
-                'indices' => []
+                'indices' => [],
             ]);
         }
 
@@ -98,15 +110,16 @@ class DefaultController extends AbstractController
         }
 
         if (!empty($coordinates)) {
-            $slugs = array_map(function($coordinate) {
-                $parts = explode(':', $coordinate, 3);
-                return end($parts);
+            $slugs = array_map(static function ($coordinate) {
+                $parts = explode(':', (string) $coordinate, 3);
+
+                return trim((string) end($parts));
             }, $coordinates);
-            $slugs = array_filter($slugs);
+            $slugs = array_values(array_filter($slugs, static fn (string $s): bool => $s !== ''));
             $articles = $articleRepository->findBySlugsCriteria($slugs);
             $slugMap = [];
             foreach ($articles as $item) {
-                $slug = $item->getSlug();
+                $slug = trim((string) $item->getSlug());
                 if ($slug !== '') {
                     if (!isset($slugMap[$slug])) {
                         $slugMap[$slug] = $item;
@@ -119,9 +132,10 @@ class DefaultController extends AbstractController
                 }
             }
             foreach ($coordinates as $coordinate) {
-                $parts = explode(':', $coordinate, 3);
-                if (isset($slugMap[end($parts)])) {
-                    $list[] = $slugMap[end($parts)];
+                $parts = explode(':', (string) $coordinate, 3);
+                $slugKey = trim((string) end($parts));
+                if ($slugKey !== '' && isset($slugMap[$slugKey])) {
+                    $list[] = $slugMap[$slugKey];
                 }
             }
         }

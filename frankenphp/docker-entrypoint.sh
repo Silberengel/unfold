@@ -16,7 +16,7 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		composer require "php:>=$PHP_VERSION" runtime/frankenphp-symfony
 		composer config --json extra.symfony.docker 'true'
 
-		if grep -q ^DATABASE_URL= .env; then
+		if [ -f .env ] && grep -q ^DATABASE_URL= .env; then
 			echo 'To finish the installation please press Ctrl+C to stop Docker Compose and run: docker compose up --build -d --wait'
 			sleep infinity
 		fi
@@ -26,7 +26,8 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		composer install --prefer-dist --no-progress --no-interaction
 	fi
 
-	if grep -q ^DATABASE_URL= .env; then
+	# DATABASE_URL from Compose / k8s env, or from a local .env file (dev bind-mount).
+	if [ -n "${DATABASE_URL:-}" ] || { [ -f .env ] && grep -q ^DATABASE_URL= .env; }; then
 		echo 'Waiting for database to be ready...'
 		ATTEMPTS_LEFT_TO_REACH_DATABASE=60
 		until [ $ATTEMPTS_LEFT_TO_REACH_DATABASE -eq 0 ] || DATABASE_ERROR=$(php bin/console dbal:run-sql -q "SELECT 1" 2>&1); do

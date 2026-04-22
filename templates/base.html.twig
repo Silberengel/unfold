@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ website_name }}{% endblock %}</title>
-    <meta name="description" content="{{ website_description }}">
+    {# Unfurlers often use the first meta description; pages override this block. #}
+    {% block meta_description %}
+        <meta name="description" content="{{ website_description|e('html_attr') }}">
+    {% endblock %}
     <link rel="icon" type="image/png" href="{{ asset('icons/favicon-96x96.png') }}" sizes="96x96" />
     <link rel="icon" type="image/x-icon" href="{{ asset('icons/favicon.ico') }}" />
     <link rel="shortcut icon" href="{{ asset('icons/favicon.ico') }}" />
@@ -14,7 +17,10 @@
     <link rel="manifest" href="{{ path('pwa_manifest') }}">
 
     {% block ogtags %}
-        <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg')) }}" />
+        <meta property="og:type" content="website">
+        <meta property="og:description" content="{{ website_description|e('html_attr') }}">
+        <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg'))|e('html_attr') }}">
+        <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
     {% endblock %}
     {% block javascripts %}
         {% block importmap %}{{ importmap('app') }}{% endblock %}

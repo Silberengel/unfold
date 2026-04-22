@@ -1,16 +1,61 @@
 {% extends 'base.html.twig' %}
 
+{% block title %}{{ article.title|trim }} — {{ website_name }}{% endblock %}
+
+{% block meta_description %}
+    {% set _desc = article.summary|default('')|striptags|u.truncate(159, '…') %}
+    <meta name="description" content="{{ _desc|e('html_attr') }}">
+{% endblock %}
+
 {% block ogtags %}
-    <meta property="og:title" content="{{ article.title }}">
-    <meta property="og:type" content="article">
-    <meta property="og:url" content="{{ app.request.uri }}">
-    {% if article.image %}
-        <meta property="og:image" content="{{ article.image }}">
+    {# Upstream main only outputs og:image when article.image is set — unfurlers often show a blank card. Always set an absolute image + JSON-LD. #}
+    {% set _img = article.image|default('')|trim %}
+    {% if _img == '' %}
+        {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+        {% set _og_default_dims = true %}
+    {% elseif _img starts with '//' %}
+        {% set _og_image = 'https:' ~ _img %}
+        {% set _og_default_dims = false %}
     {% else %}
-        <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg')) }}">
+        {% set _og_image = absolute_url(_img) %}
+        {% set _og_default_dims = false %}
     {% endif %}
-    <meta property="og:description" content="{{ article.summary|striptags|u.truncate(159,'…')|e }}">
-    <meta property="og:site_name" content="{{ website_name }}">
+    {% set _desc = article.summary|default('')|striptags|u.truncate(159, '…') %}
+    {% set _canonical = url('article-slug', {slug: article.slug}) %}
+    {% set _author_name = '' %}
+    {% if author is defined and author %}
+        {% set _author_name = attribute(author, 'name')|default(attribute(author, 'display_name')|default('')) %}
+    {% endif %}
+    <meta property="og:title" content="{{ article.title|e('html_attr') }}">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ _canonical|e('html_attr') }}">
+    <meta property="og:image" content="{{ _og_image|e('html_attr') }}">
+    {% if _og_image starts with 'https://' %}
+        <meta property="og:image:secure_url" content="{{ _og_image|e('html_attr') }}">
+    {% endif %}
+    {% if _og_default_dims %}
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+    {% endif %}
+    <meta property="og:description" content="{{ _desc|e('html_attr') }}">
+    <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
+    <link rel="canonical" href="{{ _canonical|e('html_attr') }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ article.title|e('html_attr') }}">
+    <meta name="twitter:description" content="{{ _desc|e('html_attr') }}">
+    <meta name="twitter:image" content="{{ _og_image|e('html_attr') }}">
+    <script type="application/ld+json">{{ {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        'headline': article.title,
+        'description': _desc,
+        'image': _og_image,
+        'url': _canonical,
+        'datePublished': (article.publishedAt ?? article.createdAt)|date('c'),
+        'mainEntityOfPage': {'@type': 'WebPage', '@id': _canonical},
+        'publisher': {'@type': 'Organization', 'name': website_name},
+        'author': {'@type': 'Person', 'name': _author_name != '' ? _author_name : (npub|default('Author'))}
+    }|json_encode|raw }}</script>
 {% endblock %}
 
 {% block body %}

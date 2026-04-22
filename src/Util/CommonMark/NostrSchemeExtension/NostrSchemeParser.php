@@ -9,8 +9,6 @@ use nostriphant\NIP19\Bech32;
 use nostriphant\NIP19\Data\NAddr;
 use nostriphant\NIP19\Data\NEvent;
 use nostriphant\NIP19\Data\NProfile;
-use nostriphant\NIP19\Data\NPub;
-
 
 class NostrSchemeParser  implements InlineParserInterface
 {
@@ -38,9 +36,8 @@ class NostrSchemeParser  implements InlineParserInterface
 
             switch ($decoded->type) {
                 case 'npub':
-                    /** @var NPub $decoded */
-                    $decoded = $decoded->data;
-                    $inlineContext->getContainer()->appendChild(new NostrMentionLink(null, $decoded->data->data));
+                    // Use the decoded bech32 (npub1…). NPub::$data is the hex pubkey; NostrMentionLink /author routes expect npub1…
+                    $inlineContext->getContainer()->appendChild(new NostrMentionLink(null, $bechEncoded));
                     break;
                 case 'nprofile':
                     /** @var NProfile $decodedProfile */

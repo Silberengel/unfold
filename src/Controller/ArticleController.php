@@ -208,45 +208,64 @@ class ArticleController  extends AbstractController
         CacheItemPoolInterface $articlesCache
     ): Response {
         $data = $request->getContent();
-        // descriptor is an object with properties type, identifier and data
-        // if type === 'nevent', identifier is the event id
-        // if type === 'naddr', identifier is the naddr
-        // if type === 'nprofile', identifier is the npub
         $descriptor = json_decode($data);
-        $previewData = [];
 
-        // if nprofile, get from redis cache
-        if ($descriptor->type === 'nprofile') {
-            $hint = json_decode($descriptor->decoded);
-            $key = new Key();
-            $npub = $key->convertPublicKeyToBech32($hint->pubkey);
-            $metadata = $cacheService->getMetadata($npub);
-            $metadata->npub = $npub;
-            $metadata->pubkey = $hint->pubkey;
-            $metadata->type = 'nprofile';
-            // Render the NostrPreviewContent component with the preview data
-            $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
-                'preview' => $metadata
-            ]);
-        } else {
-            // For nevent or naddr, fetch the event data
-            try {
-                $previewData = $nostrClient->getEventFromDescriptor($descriptor);
-                $previewData->type = $descriptor->type; // Add type to the preview data
-                // Render the NostrPreviewContent component with the preview data
-                $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
-                    'preview' => $previewData
-                ]);
-            } catch (\Exception $e) {
-                $html = '<span>Error fetching preview: ' . htmlspecialchars($e->getMessage()) . '</span>';
-            }
+        if (!\is_object($descriptor) || !isset($descriptor->type)) {
+            return new Response(
+                '<span class="text-subtle">Invalid preview request.</span>',
+                Response::HTTP_OK,
+                ['Content-Type' => 'text/html; charset=UTF-8']
+            );
         }
 
+        $html = '';
+
+        try {
+            if ($descriptor->type === 'nprofile') {
+                if (!isset($descriptor->decoded) || !\is_string($descriptor->decoded)) {
+                    $html = '<span class="text-subtle">Profile preview unavailable.</span>';
+                } else {
+                    $hint = json_decode($descriptor->decoded);
+                    if (!\is_object($hint) || !isset($hint->pubkey)) {
+                        $html = '<span class="text-subtle">Profile preview unavailable.</span>';
+                    } else {
+                        $key = new Key();
+                        $npub = $key->convertPublicKeyToBech32($hint->pubkey);
+                        $metadata = $cacheService->getMetadata($npub);
+                        $metadata->npub = $npub;
+                        $metadata->pubkey = $hint->pubkey;
+                        $metadata->type = 'nprofile';
+                        $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
+                            'preview' => $metadata,
+                        ]);
+                    }
+                }
+            } elseif (!isset($descriptor->decoded)) {
+                $html = '<span class="text-subtle">Preview unavailable (missing data).</span>';
+            } else {
+                try {
+                    $previewData = $nostrClient->getEventFromDescriptor($descriptor);
+                } catch (\Throwable $e) {
+                    $previewData = null;
+                    $html = '<span class="text-subtle">Error fetching preview: '.htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</span>';
+                }
+                if ($html === '' && $previewData === null) {
+                    $html = '<span class="text-subtle">No event found on the default relay for this preview.</span>';
+                } elseif ($html === '' && \is_object($previewData)) {
+                    $previewData->type = $descriptor->type;
+                    $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
+                        'preview' => $previewData,
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            $html = '<span class="text-subtle">Preview error: '.htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</span>';
+        }
 
         return new Response(
             $html,
             Response::HTTP_OK,
-            ['Content-Type' => 'text/html']
+            ['Content-Type' => 'text/html; charset=UTF-8']
         );
     }
 

@@ -1,12 +1,27 @@
 {% extends 'base.html.twig' %}
 
+{% block title %}{{ (category.title|default(''))|trim != '' ? category.title|trim ~ ' — ' ~ website_name : website_name }}{% endblock %}
+
+{% block meta_description %}
+    {% set _summary = category.summary|default('')|striptags|u.truncate(159, '…') %}
+    <meta name="description" content="{{ (_summary != '' ? _summary : (category.title|default('')|striptags))|e('html_attr') }}">
+{% endblock %}
+
 {% block ogtags %}
-    <meta property="og:title" content="{{ category.title|default('') }}">
+    {% set _title = category.title|default('') %}
+    {% set _summary = category.summary|default('')|striptags|u.truncate(159, '…') %}
+    {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+    <meta property="og:title" content="{{ _title|e('html_attr') }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ app.request.uri }}">
-    <meta property="og:description" content="{{ category.summary|default('') }}">
-    <meta property="og:image" content="{{ absolute_url(asset('og-image.jpg')) }}">
-    <meta property="og:site_name" content="{{ website_name }}">
+    <meta property="og:url" content="{{ app.request.attributes.get('_route') == 'articles' ? url('articles') : url('magazine-category', {slug: app.request.attributes.get('slug')}) }}">
+    <meta property="og:description" content="{{ (_summary != '' ? _summary : _title)|e('html_attr') }}">
+    <meta property="og:image" content="{{ _og_image|e('html_attr') }}">
+    <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
+    <link rel="canonical" href="{{ app.request.attributes.get('_route') == 'articles' ? url('articles') : url('magazine-category', {slug: app.request.attributes.get('slug')}) }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ _title|e('html_attr') }}">
+    <meta name="twitter:description" content="{{ (_summary != '' ? _summary : _title)|e('html_attr') }}">
+    <meta name="twitter:image" content="{{ _og_image|e('html_attr') }}">
 {% endblock %}
 
 {% block nav %}

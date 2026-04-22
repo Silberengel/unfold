@@ -70,7 +70,7 @@ final class FeaturedList
             }
             if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
                 $segs = explode(':', (string) $tag[1], 3);
-                $slugs[] = end($segs);
+                $slugs[] = trim((string) end($segs));
                 if (\count($slugs) >= 5) {
                     break;
                 }
@@ -89,7 +89,7 @@ final class FeaturedList
 
         $slugMap = [];
         foreach ($articles as $article) {
-            $articleSlug = $article->getSlug();
+            $articleSlug = trim((string) $article->getSlug());
             if ($articleSlug !== '') {
                 if (!isset($slugMap[$articleSlug])) {
                     $slugMap[$articleSlug] = $article;
@@ -101,7 +101,8 @@ final class FeaturedList
 
         $orderedList = [];
         foreach ($slugs as $articleSlug) {
-            if (isset($slugMap[$articleSlug])) {
+            $articleSlug = trim((string) $articleSlug);
+            if ($articleSlug !== '' && isset($slugMap[$articleSlug])) {
                 $orderedList[] = $slugMap[$articleSlug];
             }
         }
