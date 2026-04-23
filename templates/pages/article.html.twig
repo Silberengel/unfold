@@ -125,6 +125,7 @@
     <section class="article-comments-async" id="article-comments" aria-label="Comments">
         <div
             data-controller="article-comments"
+            data-article-comments-wrapper
             data-article-comments-url-value="{{ path('article_comments_fragment', comments_query)|e('html_attr') }}"
             data-article-comments-preloaded-value="{{ (comments_preloaded|default(false)) ? 'true' : 'false' }}"
         >

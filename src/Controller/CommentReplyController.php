@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\ArticleCommentThreadLoader;
 use App\Service\CommentReplyService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,7 +23,7 @@ final class CommentReplyController extends AbstractController
      */
     #[Route('/comment/publish', name: 'comment_reply_publish', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
-    public function publish(Request $request, CommentReplyService $commentReply): JsonResponse
+    public function publish(Request $request, CommentReplyService $commentReply, ArticleCommentThreadLoader $commentThreadLoader): JsonResponse
     {
         $raw = $request->getContent();
         if ($raw === '') {
@@ -47,6 +48,12 @@ final class CommentReplyController extends AbstractController
 
         $out = $commentReply->publishFromRequestPayload($user, $data);
         if ($out['ok'] === true) {
+            $coord = $data['expected_coordinate'] ?? null;
+            if (\is_string($coord) && $coord !== '') {
+                $eid = isset($data['article_event_id']) && \is_string($data['article_event_id']) && $data['article_event_id'] !== '' ? $data['article_event_id'] : null;
+                $commentThreadLoader->invalidateThread($coord, 64 === \strlen((string) $eid) && ctype_xdigit((string) $eid) ? $eid : null);
+            }
+
             return $this->json(['ok' => true, 'id' => $out['id']]);
         }
 

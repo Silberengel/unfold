@@ -184,7 +184,8 @@ class ArticleController  extends AbstractController
                 if (!\is_array($rawTags)) {
                     $rawTags = [];
                 }
-                $snippet = trim((string) ($row->content ?? ''));
+                $forSnippet = (string) ($row->unfold_body ?? $row->content ?? '');
+                $snippet = trim($forSnippet);
                 if (strlen($snippet) > 120) {
                     $snippet = substr($snippet, 0, 117).'…';
                 }

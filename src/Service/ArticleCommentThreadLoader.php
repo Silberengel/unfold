@@ -33,6 +33,9 @@ final readonly class ArticleCommentThreadLoader
      *     quoteLinks: array<string, array<int, mixed>>,
      *     processedContent: array<string, string>
      * }|null
+     *
+     * Each object in `list` may be enriched with: unfold_reply_blurb, unfold_body, unfold_depth
+     * (0–3, for UI indentation).
      */
     public function tryLoadFromCacheOnly(string $coordinate, ?string $articleEventHexId = null): ?array
     {
@@ -58,7 +61,7 @@ final readonly class ArticleCommentThreadLoader
             ]);
         }
 
-        return $this->expandFromDiscussion($discussion, microtime(true));
+        return $this->expandFromDiscussion($discussion, microtime(true), $articleEventHexId);
     }
 
     /**
@@ -69,6 +72,8 @@ final readonly class ArticleCommentThreadLoader
      *     quoteLinks: array<string, array<int, mixed>>,
      *     processedContent: array<string, string>
      * }
+     *
+     * @see self::tryLoadFromCacheOnly() for list object enrichments
      */
     public function load(string $coordinate, ?string $articleEventHexId = null): array
     {
@@ -106,7 +111,19 @@ final readonly class ArticleCommentThreadLoader
             $discussion = ['thread' => [], 'quotes' => []];
         }
 
-        return $this->expandFromDiscussion($discussion, $t0);
+        return $this->expandFromDiscussion($discussion, $t0, $articleEventHexId);
+    }
+
+    /**
+     * Drop cached thread so the next load refetches from relays (e.g. after publishing a comment).
+     */
+    public function invalidateThread(string $coordinate, ?string $articleEventHexId): void
+    {
+        $key = $this->cacheKeyForThread($coordinate, $articleEventHexId);
+        try {
+            $this->appCachePool->deleteItem($key);
+        } catch (InvalidArgumentException) {
+        }
     }
 
     /**
@@ -129,7 +146,7 @@ final readonly class ArticleCommentThreadLoader
      *     processedContent: array<string, string>
      * }
      */
-    private function expandFromDiscussion(array $discussion, float $t0): array
+    private function expandFromDiscussion(array $discussion, float $t0, ?string $articleEventHexId = null): array
     {
         $list = $discussion['thread'] ?? [];
         $quotes = $discussion['quotes'] ?? [];
@@ -138,6 +155,8 @@ final readonly class ArticleCommentThreadLoader
             'thread_events' => \count($list),
             'quote_events' => \count($quotes),
         ]);
+
+        $this->enrichThreadListForDisplay($list, $articleEventHexId);
 
         $commentLinks = [];
         $quoteLinks = [];
@@ -201,5 +220,116 @@ final readonly class ArticleCommentThreadLoader
         if ($links !== []) {
             $linkBucket[$idKey] = $links;
         }
+    }
+
+    /**
+     * Adds reply blurb / body split and capped thread depth (0–3) on each thread event for Twig/CSS.
+     *
+     * @param array<int, object> $list
+     */
+    private function enrichThreadListForDisplay(array $list, ?string $articleEventHexId): void
+    {
+        $threadIdSet = [];
+        foreach ($list as $ev) {
+            $hid = isset($ev->id) ? (string) $ev->id : '';
+            if ($hid !== '') {
+                $threadIdSet[$hid] = true;
+            }
+        }
+
+        $parentOf = [];
+        foreach ($list as $ev) {
+            $id = isset($ev->id) ? (string) $ev->id : '';
+            if ($id === '') {
+                continue;
+            }
+            $p = $this->resolveParentCommentId($ev, $threadIdSet, $articleEventHexId);
+            if ($p !== null) {
+                $parentOf[$id] = $p;
+            }
+        }
+
+        foreach ($list as $ev) {
+            $id = isset($ev->id) ? (string) $ev->id : '';
+            $raw = isset($ev->content) ? (string) $ev->content : '';
+            $split = $this->splitNip22ReplyBlurb($raw);
+            $ev->unfold_reply_blurb = $split['blurb'];
+            $ev->unfold_body = $split['body'];
+            $ev->unfold_depth = $id === '' ? 0 : $this->threadDepthCapped($id, $parentOf, 3);
+        }
+    }
+
+    /**
+     * @return array{blurb: string|null, body: string}
+     */
+    private function splitNip22ReplyBlurb(string $content): array
+    {
+        if (!str_contains($content, "\n\n")) {
+            return ['blurb' => null, 'body' => $content];
+        }
+        $parts = explode("\n\n", $content, 2);
+        $first = trim((string) ($parts[0] ?? ''));
+        $rest = (string) ($parts[1] ?? '');
+        if ($first === '' || !str_starts_with($first, '>')) {
+            return ['blurb' => null, 'body' => $content];
+        }
+        if (!str_contains($first, 'nostr:')) {
+            return ['blurb' => null, 'body' => $content];
+        }
+
+        return ['blurb' => $first, 'body' => $rest];
+    }
+
+    /**
+     * NIP-22 nested replies use a lowercase `e` tag for the immediate parent comment; root comments
+     * under the article usually have no such tag. Some clients also use `E` for the article root.
+     *
+     * @param array<string, true> $threadIdSet
+     */
+    private function resolveParentCommentId(object $event, array $threadIdSet, ?string $articleEventHexId): ?string
+    {
+        $selfId = isset($event->id) ? (string) $event->id : '';
+        $last = null;
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            if ((string) ($tag[0] ?? '') !== 'e') {
+                continue;
+            }
+            $pid = (string) ($tag[1] ?? '');
+            if (64 !== \strlen($pid) || !ctype_xdigit($pid)) {
+                continue;
+            }
+            if ($selfId !== '' && hash_equals($pid, $selfId)) {
+                continue;
+            }
+            if ($articleEventHexId !== null && $articleEventHexId !== '' && hash_equals($pid, $articleEventHexId)) {
+                continue;
+            }
+            if (isset($threadIdSet[$pid])) {
+                $last = $pid;
+            }
+        }
+
+        return $last;
+    }
+
+    /**
+     * @param array<string, string> $parentOf child id => parent id
+     */
+    private function threadDepthCapped(string $id, array $parentOf, int $max): int
+    {
+        $depth = 0;
+        $current = $id;
+        for ($i = 0; $i < 64; ++$i) {
+            if (!isset($parentOf[$current])) {
+                break;
+            }
+            $current = $parentOf[$current];
+            ++$depth;
+        }
+
+        return $depth > $max ? $max : $depth;
     }
 }

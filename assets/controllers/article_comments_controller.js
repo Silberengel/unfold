@@ -12,6 +12,8 @@ export default class extends Controller {
     static targets = ['container'];
 
     connect() {
+        this.boundOnAuth = this.onAuthChanged.bind(this);
+        window.addEventListener('unfold:auth-changed', this.boundOnAuth);
         if (!this.hasContainerTarget || !this.urlValue) {
             return;
         }
@@ -20,10 +22,21 @@ export default class extends Controller {
                 void this.load();
             };
             if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(run, { timeout: 15_000 });
+                requestIdleCallback(run, { timeout: 8_000 });
             } else {
-                setTimeout(run, 2_000);
+                setTimeout(run, 800);
             }
+            return;
+        }
+        void this.load();
+    }
+
+    disconnect() {
+        window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
+    }
+
+    onAuthChanged() {
+        if (!this.hasContainerTarget || !this.urlValue) {
             return;
         }
         void this.load();

@@ -31,6 +31,10 @@ export default class extends Controller {
     })
     if (!!result) {
       this.component.render();
+      window.dispatchEvent(
+        new CustomEvent('unfold:auth-changed', { detail: { loggedIn: true } })
+      );
     }
   }
 }
+

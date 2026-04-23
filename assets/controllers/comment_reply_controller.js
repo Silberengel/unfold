@@ -1,10 +1,10 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * Builds a NIP-22 kind-1111 event (blurb + body), signs with NIP-07, POSTs to /comment/publish.
+ * NIP-22 kind-1111 reply: optional collapsed panel (Reply button), sign with NIP-07, POST, refresh thread.
  */
 export default class extends Controller {
-    static targets = ['hint'];
+    static targets = ['hint', 'panel', 'toggleBtn'];
 
     static values = {
         publishUrl: String,
@@ -32,6 +32,21 @@ export default class extends Controller {
         }
     }
 
+    togglePanel() {
+        if (!this.hasPanelTarget) {
+            return;
+        }
+        const hidden = this.panelTarget.classList.toggle('comment-reply__panel--hidden');
+        const open = !hidden;
+        if (this.hasToggleBtnTarget) {
+            this.toggleBtnTarget.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        if (open) {
+            const ta = this.panelTarget.querySelector('textarea[name="body"]');
+            requestAnimationFrame(() => ta?.focus());
+        }
+    }
+
     /**
      * @param {Event} ev
      */
@@ -41,7 +56,8 @@ export default class extends Controller {
             this.setHint('Install a Nostr extension (NIP-07) to sign comments.');
             return;
         }
-        const ta = this.element.querySelector('textarea[name="body"]');
+        const root = this.hasPanelTarget ? this.panelTarget : this.element;
+        const ta = root.querySelector('textarea[name="body"]');
         const text = (ta?.value ?? '').trim();
         if (!text) {
             this.setHint('Write something first.');
@@ -99,9 +115,15 @@ export default class extends Controller {
             this.setHint(data.error || `HTTP ${res.status}`);
             return;
         }
-        this.setHint('Published. It may take a short time to show on all relays.');
+        this.setHint('Published.');
         if (ta) {
             ta.value = '';
+        }
+        if (this.hasPanelTarget) {
+            this.panelTarget.classList.add('comment-reply__panel--hidden');
+            if (this.hasToggleBtnTarget) {
+                this.toggleBtnTarget.setAttribute('aria-expanded', 'false');
+            }
         }
         if (this.refreshAfterValue && this.fragmentUrlValue) {
             this.refreshThread();
@@ -133,13 +155,19 @@ export default class extends Controller {
     }
 
     refreshThread() {
-        const el = document.querySelector('[data-article-comments-url-value]');
-        const u = el?.getAttribute('data-article-comments-url-value');
-        const container = document.querySelector('[data-article-comments-target="container"]');
-        if (!u || !container) {
+        const wrap = this.element.closest('[data-article-comments-wrapper]');
+        const url =
+            wrap?.getAttribute('data-article-comments-url-value') ||
+            document.querySelector('[data-article-comments-wrapper]')?.getAttribute('data-article-comments-url-value');
+        const container =
+            wrap?.querySelector('[data-article-comments-target="container"]') ||
+            document.querySelector('[data-article-comments-target="container"]');
+        if (!url || !container) {
             window.location.reload();
             return;
         }
+        const bust = `cb=${Date.now()}`;
+        const u = url.includes('?') ? `${url}&${bust}` : `${url}?${bust}`;
         void fetch(u, { headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' } })
             .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
             .then((html) => {
