@@ -9,6 +9,7 @@ use App\Entity\Event;
 use App\Enum\EventStatusEnum;
 use App\Repository\ArticleRepository;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Magazine index for templates. Reads {@see MagazineIndexStore} only on HTTP; relay refresh and DB
@@ -21,6 +22,7 @@ final class MagazineContentService
         private readonly ParameterBagInterface $params,
         private readonly ArticleRepository $articleRepository,
         private readonly NostrClient $nostrClient,
+        private readonly RequestStack $requestStack,
     ) {
     }
 
@@ -42,7 +44,17 @@ final class MagazineContentService
      */
     public function getHomeCategoryAIndexTagsFromStoreOnly(): array
     {
-        return $this->categoryATagsFromStoredRoot();
+        $request = $this->requestStack->getCurrentRequest();
+        if ($request !== null && $request->attributes->has('_magazine_home_a_tags')) {
+            /** @var list<array<int, string>> */
+            return $request->attributes->get('_magazine_home_a_tags');
+        }
+        $tags = $this->categoryATagsFromStoredRoot();
+        if ($request !== null) {
+            $request->attributes->set('_magazine_home_a_tags', $tags);
+        }
+
+        return $tags;
     }
 
     /**

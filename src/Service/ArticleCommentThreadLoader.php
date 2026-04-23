@@ -12,9 +12,14 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Loads Nostr article discussion: NIP-22 (1111) + legacy kind 1 replies, plus quotes/reposts (q / a tags).
+ *
+ * Reply blurbs mirror the jumble client: resolve the parent from `e` / `E` tags (NIP-10, `reply` marker,
+ * last-of-sequence), then show a short preview of the parent’s body (see jumble `ParentNotePreview`). Inline
+ * NIP-22 blockquotes with `nostr:` in the child still take precedence when present.
  */
 final readonly class ArticleCommentThreadLoader
 {
+    private const PARENT_REPLY_TEXT_PREVIEW_MAX = 200;
     /** PSR-6 pool backing {@see $cache}; used for true cache-only reads (SSR) without invoking Nostr. */
     public function __construct(
         private NostrClient $nostrClient,
@@ -231,31 +236,51 @@ final readonly class ArticleCommentThreadLoader
     {
         $threadIdSet = [];
         foreach ($list as $ev) {
-            $hid = isset($ev->id) ? (string) $ev->id : '';
-            if ($hid !== '') {
+            $hid = isset($ev->id) ? strtolower((string) $ev->id) : '';
+            if (64 === \strlen($hid) && ctype_xdigit($hid)) {
                 $threadIdSet[$hid] = true;
+            }
+        }
+
+        $idToEvent = [];
+        foreach ($list as $ev) {
+            $hid = isset($ev->id) ? strtolower((string) $ev->id) : '';
+            if (64 === \strlen($hid) && ctype_xdigit($hid)) {
+                $idToEvent[$hid] = $ev;
             }
         }
 
         $parentOf = [];
         foreach ($list as $ev) {
-            $id = isset($ev->id) ? (string) $ev->id : '';
-            if ($id === '') {
+            $id = isset($ev->id) ? strtolower((string) $ev->id) : '';
+            if (64 !== \strlen($id) || !ctype_xdigit($id)) {
                 continue;
             }
-            $p = $this->resolveParentCommentId($ev, $threadIdSet, $articleEventHexId);
+            $p = $this->resolveInThreadParentId($ev, $threadIdSet, $articleEventHexId);
             if ($p !== null) {
                 $parentOf[$id] = $p;
             }
         }
 
         foreach ($list as $ev) {
-            $id = isset($ev->id) ? (string) $ev->id : '';
+            $id = isset($ev->id) ? strtolower((string) $ev->id) : '';
             $raw = isset($ev->content) ? (string) $ev->content : '';
             $split = $this->splitNip22ReplyBlurb($raw);
-            $ev->unfold_reply_blurb = $split['blurb'];
+            $blurb = $split['blurb'];
+            if (($blurb === null || trim($blurb) === '') && $id !== '' && isset($parentOf[$id])) {
+                $pid = $parentOf[$id];
+                if (isset($idToEvent[$pid])) {
+                    $parent = $idToEvent[$pid];
+                    $pRaw = isset($parent->content) ? (string) $parent->content : '';
+                    $preview = $this->parentEventTextPreviewForBlurb($pRaw);
+                    if ($preview !== '') {
+                        $blurb = '> *'.'Replying to thread'.'* — '."\n> ".$preview;
+                    }
+                }
+            }
+            $ev->unfold_reply_blurb = $blurb;
             $ev->unfold_body = $split['body'];
-            $ev->unfold_depth = $id === '' ? 0 : $this->threadDepthCapped($id, $parentOf, 3);
+            $ev->unfold_depth = $id === '' || !ctype_xdigit($id) ? 0 : $this->threadDepthCapped($id, $parentOf, 3);
         }
     }
 
@@ -281,38 +306,103 @@ final readonly class ArticleCommentThreadLoader
     }
 
     /**
-     * NIP-22 nested replies use a lowercase `e` tag for the immediate parent comment; root comments
-     * under the article usually have no such tag. Some clients also use `E` for the article root.
-     *
-     * @param array<string, true> $threadIdSet
+     * Truncated single-line text from a parent’s content (strips a leading NIP-22 quote block when present),
+     * similar in spirit to Jumble’s {@see ParentNotePreview} + compact ContentPreview.
      */
-    private function resolveParentCommentId(object $event, array $threadIdSet, ?string $articleEventHexId): ?string
+    private function parentEventTextPreviewForBlurb(string $raw): string
     {
-        $selfId = isset($event->id) ? (string) $event->id : '';
-        $last = null;
+        $split = $this->splitNip22ReplyBlurb($raw);
+        $use = (string) $split['body'];
+        if (trim($use) === '' && $raw !== '') {
+            $use = $raw;
+        }
+        $one = trim((string) (preg_replace('/\s+/', ' ', $use) ?? ''));
+        if ($one === '') {
+            return '';
+        }
+        if (mb_strlen($one) > self::PARENT_REPLY_TEXT_PREVIEW_MAX) {
+            return mb_substr($one, 0, self::PARENT_REPLY_TEXT_PREVIEW_MAX).'…';
+        }
+
+        return $one;
+    }
+
+    /**
+     * In-thread parent id for a reply, mirroring jumble’s {@code getParentETag} / kind-1111 branch: prefer
+     * {@code e}/{@code E} with marker {@code reply} when that id is another event in the loaded thread, else
+     * the last in-thread id when several {@code e}/{@code E} apply (NIP-10), else the only in-thread id.
+     *
+     * The article’s root event id is never returned (blurbs/depth are about comments in the fetched list only).
+     *
+     * @param array<string, true> $threadIdSet lower-hex id keys
+     *
+     * @return string|null lower-hex parent id, or null
+     */
+    private function resolveInThreadParentId(object $event, array $threadIdSet, ?string $articleEventHexId): ?string
+    {
+        $selfId = isset($event->id) ? strtolower((string) $event->id) : '';
+        if (64 !== \strlen($selfId) || !ctype_xdigit($selfId)) {
+            $selfId = '';
+        }
+        $article = ($articleEventHexId !== null && $articleEventHexId !== '' && 64 === \strlen($articleEventHexId) && ctype_xdigit($articleEventHexId))
+            ? strtolower($articleEventHexId) : null;
+
+        $isThreadTag = static function (string $n): bool {
+            return $n === 'e' || $n === 'E';
+        };
+        $validInThread = function (string $pid) use ($selfId, $article, $threadIdSet): bool {
+            if (64 !== \strlen($pid) || !ctype_xdigit($pid)) {
+                return false;
+            }
+            if ($selfId !== '' && hash_equals($pid, $selfId)) {
+                return false;
+            }
+            if ($article !== null && hash_equals($pid, $article)) {
+                return false;
+            }
+
+            return isset($threadIdSet[$pid]);
+        };
+
+        // 1) Explicit NIP-10 "reply" marker
         foreach ($event->tags ?? [] as $tag) {
             if (!\is_array($tag) || \count($tag) < 2) {
                 continue;
             }
-            if ((string) ($tag[0] ?? '') !== 'e') {
+            if (!$isThreadTag((string) ($tag[0] ?? ''))) {
                 continue;
             }
-            $pid = (string) ($tag[1] ?? '');
-            if (64 !== \strlen($pid) || !ctype_xdigit($pid)) {
+            if (($tag[3] ?? '') !== 'reply') {
                 continue;
             }
-            if ($selfId !== '' && hash_equals($pid, $selfId)) {
-                continue;
-            }
-            if ($articleEventHexId !== null && $articleEventHexId !== '' && hash_equals($pid, $articleEventHexId)) {
-                continue;
-            }
-            if (isset($threadIdSet[$pid])) {
-                $last = $pid;
+            $pid = strtolower((string) ($tag[1] ?? ''));
+            if ($validInThread($pid)) {
+                return $pid;
             }
         }
 
-        return $last;
+        // 2) All in-thread references in tag order; last wins when multiple (cf. jumble getParentETagCommentOrDiscussion)
+        $candidates = [];
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            if (!$isThreadTag((string) ($tag[0] ?? ''))) {
+                continue;
+            }
+            $pid = strtolower((string) ($tag[1] ?? ''));
+            if ($validInThread($pid)) {
+                $candidates[] = $pid;
+            }
+        }
+        if ($candidates === []) {
+            return null;
+        }
+        if (\count($candidates) >= 2) {
+            return $candidates[\count($candidates) - 1];
+        }
+
+        return $candidates[0];
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Twig\Components\Organisms;
 
+use App\Dto\FeaturedArticleCard;
 use App\Repository\ArticleRepository;
 use App\Service\MagazineIndexStore;
 use Psr\Cache\InvalidArgumentException;
@@ -66,7 +67,7 @@ final class FeaturedList
             return;
         }
 
-        $articles = $this->articleRepository->findBySlugsCriteria($slugs);
+        $articles = $this->articleRepository->findFeaturedCardsBySlugs($slugs);
 
         $slugMap = [];
         foreach ($articles as $article) {
@@ -74,7 +75,7 @@ final class FeaturedList
             if ($articleSlug !== '') {
                 if (!isset($slugMap[$articleSlug])) {
                     $slugMap[$articleSlug] = $article;
-                } elseif ($article->getCreatedAt() > $slugMap[$articleSlug]->getCreatedAt()) {
+                } elseif (self::isNewer($article, $slugMap[$articleSlug])) {
                     $slugMap[$articleSlug] = $article;
                 }
             }
@@ -89,5 +90,19 @@ final class FeaturedList
         }
 
         $this->list = array_slice($orderedList, 0, 4);
+    }
+
+    private static function isNewer(FeaturedArticleCard $a, FeaturedArticleCard $b): bool
+    {
+        $ca = $a->getCreatedAt();
+        $cb = $b->getCreatedAt();
+        if ($ca === null) {
+            return false;
+        }
+        if ($cb === null) {
+            return true;
+        }
+
+        return $ca > $cb;
     }
 }

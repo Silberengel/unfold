@@ -2,9 +2,11 @@
 
 namespace App\Repository;
 
+use App\Dto\FeaturedArticleCard;
 use App\Entity\Article;
 use App\Enum\EventStatusEnum;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Exception;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -53,20 +55,42 @@ class ArticleRepository extends ServiceEntityRepository
     }
 
     /**
-     * Find articles by multiple slugs
+     * List-card fields only: avoids loading `content` / `raw` (can be very large) for home/category featured rows.
+     *
+     * @return list<FeaturedArticleCard>
      */
-    public function findBySlugsCriteria(array $slugs): array
+    public function findFeaturedCardsBySlugs(array $slugs): array
     {
-        if (empty($slugs)) {
+        if ($slugs === []) {
             return [];
         }
 
-        return $this->createQueryBuilder('a')
-            ->where('a.slug IN (:slugs)')
-            ->setParameter('slugs', $slugs)
-            ->orderBy('a.createdAt', 'DESC')
-            ->getQuery()
-            ->getResult();
+        $conn = $this->getEntityManager()->getConnection();
+        $qb = $conn->createQueryBuilder();
+        $qb
+            ->select('a.id', 'a.slug', 'a.title', 'a.summary', 'a.image', 'a.created_at', 'a.pubkey')
+            ->from('article', 'a')
+            ->where($qb->expr()->in('a.slug', ':slugs'))
+            ->setParameter('slugs', $slugs, ArrayParameterType::STRING)
+            ->orderBy('a.created_at', 'DESC');
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $qb->executeQuery()->fetchAllAssociative();
+        $out = [];
+        foreach ($rows as $row) {
+            $ca = $row['created_at'] ?? null;
+            $out[] = new FeaturedArticleCard(
+                isset($row['id']) ? (int) $row['id'] : null,
+                isset($row['slug']) ? (string) $row['slug'] : null,
+                isset($row['title']) ? (string) $row['title'] : null,
+                isset($row['summary']) ? (string) $row['summary'] : null,
+                isset($row['image']) ? (string) $row['image'] : null,
+                $ca !== null && $ca !== '' ? new \DateTimeImmutable((string) $ca) : null,
+                isset($row['pubkey']) ? (string) $row['pubkey'] : null,
+            );
+        }
+
+        return $out;
     }
 
     /**
