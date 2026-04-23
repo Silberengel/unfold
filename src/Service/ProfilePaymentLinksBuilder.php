@@ -26,7 +26,15 @@ final class ProfilePaymentLinksBuilder
      * @param list<list<string>> $kind0Tags
      * @param list<string>       $extraPaytoUris from kind 10133
      *
-     * @return list<array{type: string, type_label: string, label: string, href: string, sort: int}>
+     * @return list<array{
+     *     type: string,
+     *     type_label: string,
+     *     label: string,
+     *     href: string,
+     *     sort: int,
+     *     group_key: string,
+     *     display_type_label: string
+     * }>
      */
     public function buildPaymentRows(object $content, array $kind0Tags, array $extraPaytoUris = []): array
     {
@@ -44,7 +52,7 @@ final class ProfilePaymentLinksBuilder
                 $seen[$norm] = true;
                 $rows[] = [
                     'type' => self::TYPE_LIGHTNING_ADDRESS,
-                    'type_label' => 'Lightning address',
+                    'type_label' => 'Lightning',
                     'label' => $addr,
                     'href' => 'lightning:'.$addr,
                     'sort' => 0,
@@ -59,13 +67,15 @@ final class ProfilePaymentLinksBuilder
                 $seen[$norm] = true;
                 $rows[] = [
                     'type' => self::TYPE_LNURL_PAY,
-                    'type_label' => 'LNURL Pay',
+                    'type_label' => 'Lightning',
                     'label' => $this->shortenLnurl($ln),
                     'href' => 'lightning:'.$ln,
                     'sort' => 1,
                 ];
             }
         }
+
+        $lud16ForDedup = $resolved['lightning_address'];
 
         $allPayto = array_merge(
             $this->paytoUrisFromJsonObject($content),
@@ -80,6 +90,9 @@ final class ProfilePaymentLinksBuilder
             if (!self::isPaytoOrLegacyPaytoScheme($uri)) {
                 continue;
             }
+            if ($lud16ForDedup !== null && self::paytoLightningUriMatchesLightningAddress($uri, $lud16ForDedup)) {
+                continue;
+            }
             $canon = self::normalizePaytoUriForDedup($uri);
             if (isset($seen[$canon])) {
                 continue;
@@ -87,7 +100,7 @@ final class ProfilePaymentLinksBuilder
             $seen[$canon] = true;
             $rows[] = [
                 'type' => self::TYPE_PAYTO,
-                'type_label' => 'Payto',
+                'type_label' => 'Pay to',
                 'label' => $this->labelForPaytoUri($uri),
                 'href' => $uri,
                 'sort' => 2,
@@ -112,7 +125,77 @@ final class ProfilePaymentLinksBuilder
             }
         );
 
-        return $rows;
+        return $this->collapseGroupLabels($rows);
+    }
+
+    /**
+     * Consecutive rows with the same {@see group_key} only show the first column label on the first row
+     * (e.g. multiple Lightning lines, then Monero).
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function collapseGroupLabels(array $rows): array
+    {
+        $prevKey = null;
+        $out = [];
+        foreach ($rows as $r) {
+            $gk = $this->rowGroupKey($r);
+            $col = $this->rowGroupColumnLabel($r, $gk);
+            $r['group_key'] = $gk;
+            $r['display_type_label'] = $gk === $prevKey ? '' : $col;
+            $prevKey = $gk;
+            $out[] = $r;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $r
+     */
+    private function rowGroupKey(array $r): string
+    {
+        $t = (string) ($r['type'] ?? '');
+        if ($t === self::TYPE_LIGHTNING_ADDRESS || $t === self::TYPE_LNURL_PAY) {
+            return 'lightning';
+        }
+        if ($t === self::TYPE_PAYTO) {
+            $h = strtolower((string) ($r['href'] ?? ''));
+            if (1 === preg_match('#^payto://([a-z0-9-]+)/#i', $h, $m)) {
+                $sc = strtolower($m[1]);
+                if ($sc === 'lightning') {
+                    return 'lightning';
+                }
+
+                return 'payto:'.$sc;
+            }
+
+            return 'payto:other';
+        }
+
+        return 'other';
+    }
+
+    /**
+     * @param array<string, mixed> $r
+     */
+    private function rowGroupColumnLabel(array $r, string $groupKey): string
+    {
+        if ($groupKey === 'lightning') {
+            return 'Lightning';
+        }
+        if (str_starts_with($groupKey, 'payto:')) {
+            $s = substr($groupKey, 6);
+            if ($s === 'other') {
+                return 'Pay to';
+            }
+
+            return $this->stylizePaytoTypeName($s);
+        }
+
+        return (string) ($r['type_label'] ?? 'Pay to');
     }
 
     /**
@@ -363,6 +446,32 @@ final class ProfilePaymentLinksBuilder
         }
 
         return substr($lnurl, 0, 10).'…'.substr($lnurl, -8);
+    }
+
+    /**
+     * Skips NIP-A3 / JSON {@see payto://lightning/…} rows that repeat the LUD16 lightning address
+     * (e.g. same as {@see TYPE_LIGHTNING_ADDRESS} with {@code lightning:user@host}).
+     */
+    private static function paytoLightningUriMatchesLightningAddress(string $uri, string $lud16Email): bool
+    {
+        if (!str_starts_with(strtolower($uri), 'payto://lightning/')) {
+            return false;
+        }
+        $lud = strtolower(trim($lud16Email));
+        if ($lud === '' || !str_contains($lud, '@')) {
+            return false;
+        }
+        if (1 !== preg_match('#^payto://lightning/(.+)$#i', $uri, $m)) {
+            return false;
+        }
+        $tail = (string) $m[1];
+        $first = (string) (str_contains($tail, '/') ? strstr($tail, '/', true) : $tail);
+        if ($first === '') {
+            $first = $tail;
+        }
+        $first = strtolower(rawurldecode($first));
+
+        return $first === $lud;
     }
 
     /**

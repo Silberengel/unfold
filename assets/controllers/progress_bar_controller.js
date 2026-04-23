@@ -43,6 +43,8 @@ export default class extends Controller {
       return;
     }
     this.barTarget.classList.add('pb-indeterminate');
+    this.barTarget.style.transition = 'none';
+    this.barTarget.style.width = '100%';
     const finish = () => {
       this.completeToDone();
     };
@@ -136,7 +138,8 @@ export default class extends Controller {
     }
     sessionStorage.setItem(STORAGE_KEY, '1');
     this.barTarget.style.transition = 'none';
-    this.barTarget.style.width = '0';
     this.barTarget.classList.add('pb-indeterminate');
+    /* Full-width track; motion is the ::before sweep in CSS (avoids keyframed width 20%↔55%). */
+    this.barTarget.style.width = '100%';
   }
 }

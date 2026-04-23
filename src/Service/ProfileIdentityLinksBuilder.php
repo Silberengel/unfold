@@ -95,6 +95,43 @@ final class ProfileIdentityLinksBuilder
     }
 
     /**
+     * Adds a site-assigned NIP-05 (e.g. under the blog domain) into the same list as profile NIP-05,
+     * with the same link shape as {@see buildNip05}, deduped by label.
+     *
+     * @param list<array{label: string, href: string}> $rows
+     *
+     * @return list<array{label: string, href: string}>
+     */
+    public function mergeSiteNip05IntoList(array $rows, string $siteNip05): array
+    {
+        $siteNip05 = trim(strtolower($siteNip05));
+        if ($siteNip05 === '' || !str_contains($siteNip05, '@')) {
+            return $rows;
+        }
+        $seen = [];
+        foreach ($rows as $r) {
+            $seen[strtolower((string) ($r['label'] ?? ''))] = true;
+        }
+        if (isset($seen[$siteNip05])) {
+            return $rows;
+        }
+        $parts = explode('@', $siteNip05, 2);
+        $local = $parts[0] ?? '';
+        $domain = $parts[1] ?? '';
+        if ($local === '' || $domain === '' || str_contains($domain, ' ')) {
+            return $rows;
+        }
+        $href = 'https://'.$domain.'/.well-known/nostr.json?name='.rawurlencode($local);
+        $rows[] = [
+            'label' => $siteNip05,
+            'href' => $href,
+        ];
+        usort($rows, static fn (array $a, array $b): int => strcasecmp($a['label'], $b['label']));
+
+        return $rows;
+    }
+
+    /**
      * @return list<string>
      */
     private function stringsFromJsonField(object $o, string $key): array

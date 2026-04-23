@@ -1,4 +1,4 @@
-{# Shared author “header” + about (no article list). Expects: author, npub, profile_*, jumble_profile_href; optional site_nip05 #}
+{# Shared author “header” + about (no article list). Expects: author, npub, profile_*, jumble_profile_href; show_nip05: true on full /p/ profile only #}
     {% set author_pic = null %}
     {% if author.picture is defined and author.picture %}
         {% set author_pic = author.picture %}
@@ -20,37 +20,34 @@
         {% if profile_websites is not empty %}
             <ul class="author-profile__identity" aria-label="Websites">
                 {% for row in profile_websites %}
-                    <li class="author-profile__identity-row">
+                    <li class="author-profile__identity-row author-profile__meta-line">
                         <span class="author-profile__identity-type">Website</span>
-                        <a class="author-profile__identity-link" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                        <a class="author-profile__identity-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
                     </li>
                 {% endfor %}
             </ul>
         {% endif %}
-        {% if site_nip05|default('')|trim != '' %}
-            <ul class="author-profile__identity" aria-label="Magazine NIP-05">
-                <li class="author-profile__identity-row">
-                    <span class="author-profile__identity-type">Magazine</span>
-                    <span class="author-profile__site-nip05 text-subtle">{{ site_nip05|e }}</span>
-                </li>
-            </ul>
-        {% endif %}
-        {% if profile_nip05 is not empty %}
+        {% if show_nip05|default(false) and profile_nip05 is not empty %}
             <ul class="author-profile__identity" aria-label="NIP-05">
                 {% for row in profile_nip05 %}
-                    <li class="author-profile__identity-row">
+                    <li class="author-profile__identity-row author-profile__meta-line">
                         <span class="author-profile__identity-type">NIP-05</span>
-                        <a class="author-profile__identity-link" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener" title="NIP-05 verification document">{{ row.label|e }}</a>
+                        <span class="author-profile__meta-value author-profile__nip05-value">
+                            <a class="author-profile__identity-link" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer" title="Open /.well-known/nostr.json for this name">{{ row.label|e }}</a>
+                            {% if row.verified|default(false) %}
+                                <span class="author-profile__nip05-verified" title="This identifier matches the pubkey in /.well-known/nostr.json" aria-label="Verified NIP-05">✓</span>
+                            {% endif %}
+                        </span>
                     </li>
                 {% endfor %}
             </ul>
         {% endif %}
         {% if profile_payment_links is not empty %}
-            <ul class="author-profile__payments" aria-label="Payment options">
+            <ul class="author-profile__payments" aria-label="Payment (Lightning and payto)">
                 {% for row in profile_payment_links %}
-                    <li class="author-profile__payment">
-                        <span class="author-profile__payment-type">{{ row.type_label }}</span>
-                        <a class="author-profile__payment-link" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                    <li class="author-profile__payment author-profile__meta-line">
+                        <span class="author-profile__payment-type"{% if row.display_type_label|default('')|trim == '' %} aria-hidden="true"{% endif %}>{{ row.display_type_label|default('')|e }}</span>
+                        <a class="author-profile__payment-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -65,6 +62,6 @@
 
         {% if jumble_profile_href is not null and jumble_profile_href != '' %}
             <p class="author-profile__jumble">
-                <a class="btn btn-secondary" href="{{ jumble_profile_href|e('html_attr') }}" rel="nofollow noopener">View on Jumble</a>
+                <a class="btn btn-secondary" href="{{ jumble_profile_href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">View on Jumble</a>
             </p>
         {% endif %}

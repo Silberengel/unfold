@@ -536,7 +536,8 @@ footer a {
 
 .author-profile__header-meta {
     margin-top: 0.5rem;
-    max-width: 28rem;
+    max-width: min(100%, 40rem);
+    width: 100%;
     margin-left: auto;
     margin-right: auto;
     text-align: left;
@@ -548,18 +549,19 @@ footer a {
     padding: 0;
 }
 
-.author-profile__identity-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.35rem 0.5rem;
+.author-profile__meta-line,
+.author-profile__identity-row,
+.author-profile__payment {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    column-gap: 0.5rem;
+    align-items: center;
     margin: 0.35rem 0;
     font-size: 0.9rem;
     line-height: 1.35;
 }
 
 .author-profile__identity-type {
-    flex: 0 0 7.5rem;
     font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -568,9 +570,36 @@ footer a {
     opacity: 0.75;
 }
 
-.author-profile__identity-link {
-    word-break: break-all;
+.author-profile__meta-value,
+.author-profile__identity-link,
+.author-profile__payment-link {
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.author-profile__nip05-value {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.author-profile__nip05-value .author-profile__identity-link {
+    flex: 1 1 0;
+    min-width: 0;
+    word-break: normal;
+}
+
+.author-profile__nip05-verified {
+    color: #2e7d32;
+    font-size: 0.88em;
+    font-weight: 600;
+    line-height: 1;
+    opacity: 0.85;
+    user-select: none;
 }
 
 .author-profile__payments {
@@ -581,29 +610,13 @@ footer a {
     text-align: left;
 }
 
-.author-profile__payment {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.35rem 0.5rem;
-    margin: 0.35rem 0;
-    font-size: 0.9rem;
-    line-height: 1.35;
-}
-
 .author-profile__payment-type {
-    flex: 0 0 7.5rem;
     font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--color-text);
     opacity: 0.75;
-}
-
-.author-profile__payment-link {
-    word-break: break-all;
-    min-width: 0;
 }
 
 .author-profile__jumble {

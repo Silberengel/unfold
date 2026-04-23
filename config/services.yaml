@@ -54,3 +54,6 @@ services:
     App\Service\CacheService:
         arguments:
             $appCache: '@cache.app'
+    App\Service\Nip05VerificationService:
+        arguments:
+            $appCache: '@cache.app'

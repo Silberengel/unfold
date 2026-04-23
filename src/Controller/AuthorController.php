@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Repository\ArticleRepository;
+use App\Repository\FeaturedAuthorRepository;
 use App\Service\CacheService;
+use App\Service\Nip05VerificationService;
 use App\Service\NostrClient;
 use App\Service\ProfileIdentityLinksBuilder;
 use App\Service\ProfilePaymentLinksBuilder;
@@ -26,6 +28,8 @@ class AuthorController extends AbstractController
         NostrClient $nostrClient,
         CacheService $cacheService,
         ArticleRepository $articleRepository,
+        FeaturedAuthorRepository $featuredAuthorRepository,
+        Nip05VerificationService $nip05Verification,
         ProfilePaymentLinksBuilder $profilePaymentLinks,
         ProfileIdentityLinksBuilder $profileIdentityLinks,
     ): Response {
@@ -70,13 +74,22 @@ class AuthorController extends AbstractController
         $jumbleBase = rtrim($jumbleBase, '/');
         $jumbleProfileHref = $jumbleBase !== '' ? $jumbleBase.'/'.$npub : null;
 
+        $profileNip05 = $profileIdentityLinks->buildNip05($author, $kind0Tags);
+        $fa = $featuredAuthorRepository->findOneByPubkeyHex($pubkey);
+        if ($fa !== null && $fa->isListed()) {
+            $nipDomain = trim((string) $this->getParameter('nip05_domain'));
+            $siteNip = $fa->getLocalPart().($nipDomain !== '' ? '@'.$nipDomain : '');
+            $profileNip05 = $profileIdentityLinks->mergeSiteNip05IntoList($profileNip05, $siteNip);
+        }
+        $profileNip05 = $nip05Verification->enrichRowsWithCache($pubkey, $profileNip05);
+
         return $this->render('pages/author.html.twig', [
             'author' => $author,
             'npub' => $npub,
             'articles' => $articles,
             'is_author_profile' => true,
             'profile_websites' => $profileIdentityLinks->buildWebsites($author, $kind0Tags),
-            'profile_nip05' => $profileIdentityLinks->buildNip05($author, $kind0Tags),
+            'profile_nip05' => $profileNip05,
             'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, $extraPayto),
             'jumble_profile_href' => $jumbleProfileHref,
         ]);

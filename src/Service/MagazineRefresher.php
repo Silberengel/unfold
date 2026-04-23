@@ -32,7 +32,8 @@ final class MagazineRefresher
      * are requested first (e.g. current /cat route) so they are less likely to miss the budget.
      *
      * @param (callable(string, array<string, int|string|bool|null>): void)|null $onProgress
-     *        Phases: `before_root`, `after_root` (total_steps, step, slug_count), `category_fetched` (step, total_steps, slug)
+     *        Phases: `before_root`, `after_root` (total_steps, step, slug_count, slugs: list<string>),
+     *        `category_fetched` (step, total_steps, slug)
      */
     public function refreshFromRelays(int $budgetSeconds = 8, array $preferSlugs = [], ?callable $onProgress = null): void
     {
@@ -72,6 +73,7 @@ final class MagazineRefresher
             'total_steps' => $totalSteps,
             'step' => 1,
             'slug_count' => \count($slugs),
+            'slugs' => $slugs,
         ]);
         $step = 1;
         foreach ($slugs as $slug) {

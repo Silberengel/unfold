@@ -6,13 +6,16 @@ namespace App\Command;
 
 use App\Entity\Article;
 use App\Repository\ArticleRepository;
+use App\Repository\FeaturedAuthorRepository;
 use App\Service\ArticleCommentThreadLoader;
 use App\Service\CacheService;
 use App\Service\FeaturedAuthorSync;
 use App\Service\MagazineContentService;
+use App\Service\Nip05VerificationService;
 use App\Service\MagazineRefresher;
 use App\Service\Nip09DeletionApplier;
 use App\Service\NostrClient;
+use App\Service\ProfileIdentityLinksBuilder;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -32,7 +35,7 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
  */
 #[AsCommand(
     name: 'app:prewarm',
-    description: 'Refresh magazine indices, NIP-09 deletions, profile metadata, and comment caches',
+    description: 'Refresh magazine indices, NIP-09 deletions, profile metadata, NIP-05 verification cache, and comment caches',
 )]
 final class PrewarmCommand extends Command
 {
@@ -47,6 +50,9 @@ final class PrewarmCommand extends Command
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
         private readonly FeaturedAuthorSync $featuredAuthorSync,
+        private readonly Nip05VerificationService $nip05Verification,
+        private readonly ProfileIdentityLinksBuilder $profileIdentityLinks,
+        private readonly FeaturedAuthorRepository $featuredAuthorRepository,
     ) {
         parent::__construct();
     }
@@ -89,6 +95,23 @@ final class PrewarmCommand extends Command
                         } elseif ($phase === 'after_root') {
                             $hb->silent = true;
                             $this->cancelPcntlAlarm();
+                            $planned = $p['slugs'] ?? null;
+                            if (!\is_array($planned)) {
+                                $planned = [];
+                            }
+                            if ($planned === []) {
+                                $io->writeln('   <comment>Magazine root has no child <info>a</info> tag categories; only the root index was stored.</comment>');
+                            } else {
+                                $n = \count($planned);
+                                $io->writeln(sprintf('   <comment>Magazine child categories in root</comment> <info>(%d)</info><comment>:</comment>', $n));
+                                foreach ($planned as $slug) {
+                                    $s = (string) $slug;
+                                    if (strlen($s) > 120) {
+                                        $s = substr($s, 0, 117).'…';
+                                    }
+                                    $io->writeln(sprintf('   · <info>%s</info>', $s));
+                                }
+                            }
                             $bar = $this->createPrewarmProgressBar(
                                 $io,
                                 max(1, (int) ($p['total_steps'] ?? 1)),
@@ -99,10 +122,25 @@ final class PrewarmCommand extends Command
                         } elseif ($phase === 'category_fetched' && $bar !== null) {
                             $bar->advance(1);
                             $slug = (string) ($p['slug'] ?? '');
-                            if (strlen($slug) > 70) {
-                                $slug = substr($slug, 0, 67).'…';
+                            $tSlug = $slug;
+                            if (strlen($tSlug) > 70) {
+                                $tSlug = substr($tSlug, 0, 67).'…';
                             }
-                            $bar->setMessage($slug !== '' ? 'Category: '.$slug : 'Category');
+                            $bar->setMessage($tSlug !== '' ? 'Category: '.$tSlug : 'Category');
+                            if ($tSlug !== '') {
+                                $step = (int) ($p['step'] ?? 0);
+                                $tot = (int) ($p['total_steps'] ?? 0);
+                                if ($tot > 0) {
+                                    $io->writeln(sprintf(
+                                        '   <info>[%d/%d]</info> <comment>Fetched category index</comment> — <info>%s</info>',
+                                        $step,
+                                        $tot,
+                                        $tSlug
+                                    ));
+                                } else {
+                                    $io->writeln(sprintf('   <comment>Fetched category index</comment> — <info>%s</info>', $tSlug));
+                                }
+                            }
                         }
                     });
                 }, $hb);
@@ -230,12 +268,25 @@ final class PrewarmCommand extends Command
             if ($limit > 0) {
                 $pubkeys = \array_slice($pubkeys, 0, $limit);
             }
-            $toWarm = [];
-            foreach ($pubkeys as $pubkey) {
-                if (strlen($pubkey) === 64) {
-                    $toWarm[] = $pubkey;
+            $pubkeysSeen = [];
+            foreach ($pubkeys as $pk) {
+                if (!\is_string($pk) || 64 !== \strlen($pk)) {
+                    continue;
+                }
+                $h = strtolower($pk);
+                if (ctype_xdigit($h) && !isset($pubkeysSeen[$h])) {
+                    $pubkeysSeen[$h] = true;
                 }
             }
+            $pubkeys = array_keys($pubkeysSeen);
+            foreach ($this->featuredAuthorRepository->findAllListedOrderByLocalPart() as $fa) {
+                $hx = strtolower($fa->getPubkeyHex());
+                if (64 === \strlen($hx) && ctype_xdigit($hx) && !isset($pubkeysSeen[$hx])) {
+                    $pubkeys[] = $hx;
+                    $pubkeysSeen[$hx] = true;
+                }
+            }
+            $toWarm = $pubkeys;
             $total = \count($toWarm);
             $n = 0;
             if ($total === 0) {
@@ -269,6 +320,43 @@ final class PrewarmCommand extends Command
                 $io->newLine(2);
             }
             $io->success(sprintf('Warmed metadata for %d of %d author(s).', $n, $total));
+
+            if ($toWarm !== []) {
+                $io->writeln('Verifying <comment>NIP-05</comment> (HTTPS <comment>/.well-known/nostr.json</comment>, per identifier)…');
+                $nt = 0;
+                $nv = 0;
+                $domain = trim((string) $this->params->get('nip05_domain'));
+                foreach ($toWarm as $hex) {
+                    if (64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+                        continue;
+                    }
+                    $hex = strtolower($hex);
+                    $npub = $keys->convertPublicKeyToBech32($hex);
+                    $bundle = $this->cacheService->getMetadataBundle($npub);
+                    $rows = $this->profileIdentityLinks->buildNip05($bundle['content'], $bundle['kind0_tags'] ?? []);
+                    $fa = $this->featuredAuthorRepository->findOneByPubkeyHex($hex);
+                    if ($fa !== null && $fa->isListed() && $domain !== '') {
+                        $rows = $this->profileIdentityLinks->mergeSiteNip05IntoList(
+                            $rows,
+                            $fa->getLocalPart().'@'.$domain
+                        );
+                    }
+                    foreach ($rows as $r) {
+                        ++$nt;
+                        $label = (string) ($r['label'] ?? '');
+                        if ($this->nip05Verification->verifyAndCache($hex, $label)) {
+                            ++$nv;
+                        }
+                    }
+                }
+                $failed = $nt - $nv;
+                $io->writeln(sprintf(
+                    '   <info>%d</info> identifier(s) checked: <info>%d</info> verified, <comment>%d</comment> not verified.',
+                    $nt,
+                    $nv,
+                    $failed
+                ));
+            }
         } else {
             $io->note('Skipping metadata (--no-metadata).');
         }

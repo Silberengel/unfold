@@ -88,25 +88,41 @@ header {
     background: var(--color-primary);
     transition: width 0.4s ease;
     z-index: 1000;
+    overflow: hidden;
+    pointer-events: none;
 }
 
-/* In-flight navigation: loops until the next page fires `load`, then the bar completes. */
+/*
+ * In-flight navigation: a full-width track with a short segment that sweeps left → right
+ * (do not keyframe the track width: 20% / 55% / 28% read as a half-screen rubber band).
+ */
 #progress-bar.pb-indeterminate {
     transition: none;
-    animation: pb-indeterminate 0.9s ease-in-out infinite;
+    /* Tinted track: solid fill comes from ::before while loading */
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+    animation: none;
 }
 
-@keyframes pb-indeterminate {
-    0% {
-        width: 20%;
-    }
+#progress-bar.pb-indeterminate::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 35%;
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 0 2px 2px 0;
+    animation: pb-sweep 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
 
-    50% {
-        width: 55%;
+@keyframes pb-sweep {
+    0% {
+        transform: translateX(-100%);
     }
 
     100% {
-        width: 28%;
+        /* Move one segment width past the right edge of the 100% track */
+        transform: translateX(calc(100% / 0.35 + 100%));
     }
 }
 
