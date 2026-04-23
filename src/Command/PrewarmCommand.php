@@ -57,7 +57,7 @@ final class PrewarmCommand extends Command
             ->addOption('metadata-limit', null, InputOption::VALUE_REQUIRED, 'Max distinct author pubkeys to warm (0 = all)', '0')
             ->addOption('metadata-batch', null, InputOption::VALUE_REQUIRED, 'Kind-0 metadata: pubkeys per Nostr REQ (batched)', '50')
             ->addOption('comments-max', null, InputOption::VALUE_REQUIRED, 'Newest N articles to warm comment cache for (0 = all, order: createdAt DESC)', '20')
-            ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Max seconds for the whole comments phase', '120');
+            ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the whole comments phase (Nostr fetches are slow; a single long thread can exceed a short budget; use 1200+ if 20+ articles)', '600');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -254,7 +254,9 @@ final class PrewarmCommand extends Command
         $maxArticles = (int) $input->getOption('comments-max');
 
         $io->section('Comment / interaction cache');
-        $deadline = microtime(true) + max(1, (int) $input->getOption('comments-budget'));
+        $commentBudgetSeconds = max(1, (int) $input->getOption('comments-budget'));
+        $commentPhaseStart = microtime(true);
+        $deadline = $commentPhaseStart + $commentBudgetSeconds;
         $qb = $this->articleRepository->createQueryBuilder('a')
             ->where('a.slug IS NOT NULL')
             ->andWhere("a.slug != ''")
@@ -276,7 +278,10 @@ final class PrewarmCommand extends Command
                 /** @var Article $article */
                 foreach ($articles as $article) {
                     if (microtime(true) >= $deadline) {
-                        $io->warning('Comment phase stopped: comments-budget reached.');
+                        $io->warning(sprintf(
+                            'Comment phase stopped: comments-budget reached (%s).',
+                            $this->formatCommentBudgetSecondsPair(microtime(true) - $commentPhaseStart, $commentBudgetSeconds),
+                        ));
                         break;
                     }
                     $slug = trim((string) $article->getSlug());
@@ -304,13 +309,28 @@ final class PrewarmCommand extends Command
                     $cBar->advance(1);
                 }
             } finally {
-                $cBar->finish();
-                $io->newLine(2);
+                $this->finishPrewarmProgressBarWithoutFillingToMax($cBar, $io);
             }
         }
-        $io->success(sprintf('Warmed comment cache for %d of %d article(s).', $w, $articleCount));
+        $io->success(sprintf(
+            'Warmed comment cache for %d of %d article(s). Comment phase wall time %s.',
+            $w,
+            $articleCount,
+            $this->formatCommentBudgetSecondsPair(microtime(true) - $commentPhaseStart, $commentBudgetSeconds),
+        ));
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Absolute used/budget wall seconds for the comment phase, e.g. "127.4/600 s" (not a percentage).
+     */
+    private function formatCommentBudgetSecondsPair(float $usedSeconds, int $budgetSeconds): string
+    {
+        $r = round($usedSeconds, 1);
+        $uStr = abs($r - (float) (int) $r) < 0.01 ? (string) (int) $r : sprintf('%.1f', $r);
+
+        return sprintf('%s/%d s', $uStr, $budgetSeconds);
     }
 
     private function createPrewarmProgressBar(SymfonyStyle $io, int $max, string $message = ''): ProgressBar
@@ -323,6 +343,27 @@ final class PrewarmCommand extends Command
         $bar->setMessage($message);
 
         return $bar;
+    }
+
+    /**
+     * ProgressBar::finish() sets progress to max; when the comment phase stops on budget, we only
+     * completed part of the steps, so cap max to the current step first (or clear if nothing ran).
+     */
+    private function finishPrewarmProgressBarWithoutFillingToMax(ProgressBar $bar, SymfonyStyle $io): void
+    {
+        $max = (int) $bar->getMaxSteps();
+        $done = (int) $bar->getProgress();
+        if ($max > 0 && $done < $max && $done === 0) {
+            if (method_exists($bar, 'clear')) {
+                $bar->clear();
+            }
+        } else {
+            if ($max > 0 && $done < $max && $done > 0) {
+                $bar->setMaxSteps($done);
+            }
+            $bar->finish();
+        }
+        $io->newLine(2);
     }
 
     /**

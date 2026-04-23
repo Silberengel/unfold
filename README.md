@@ -80,7 +80,7 @@ make prewarm
 | `--metadata-limit` | `0` (all authors) | Cap distinct author pubkeys |
 | `--metadata-batch` | `50` | Pubkeys per batched Nostr `REQ` |
 | `--comments-max` | `20` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
-| `--comments-budget` | `120` | Max wall seconds for the comments phase |
+| `--comments-budget` | `600` | Max wall seconds for the whole comments phase (Nostr is slow; raise e.g. `1200` if you need more articles in one run) |
 | `--magazine-budget` | `30` | Max wall seconds for magazine refresh |
 
 Prewarm clears the PHP **CLI** execution time limit for that run; relay work can be slow.
