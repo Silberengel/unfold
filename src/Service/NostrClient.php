@@ -33,6 +33,18 @@ class NostrClient
     /** Extra wall time for {@see bin/nostr_relay_request_worker.php} process vs. WebSocket timeout. */
     private const DISCUSSION_WORKER_GRACE_SEC = 5.0;
 
+    /**
+     * Hard cap on unique relay URLs for article discussion. More relays do not help much (indexers duplicate)
+     * but blow up wall time when we fall back to sequential in-process {@see Request::send()}.
+     */
+    private const MAX_DISCUSSION_RELAY_URLS = 10;
+
+    /**
+     * {@see sendArticleDiscussionToRelaysSequential} visits relays one after another (~RELAY_REQUEST_TIMEOUT_SEC
+     * each). Keep this low so HTTP /fragment/comments and browsers do not hit 60–90s proxy cuts.
+     */
+    private const MAX_SEQUENTIAL_RELAY_URLS = 3;
+
     /** When a logged-in user lists this relay, also use {@see self::AGGR_NOSTR_LAND} for comment + profile reads. */
     private const NOSTR_LAND = 'wss://nostr.land';
 
@@ -972,6 +984,12 @@ class NostrClient
             array_merge($baseForDiscussion, $authorRelays)
         );
         $plannedRelayUrls = array_values(array_unique($mergedForDiscussion, \SORT_REGULAR));
+        if (\count($plannedRelayUrls) > self::MAX_DISCUSSION_RELAY_URLS) {
+            $plannedRelayUrls = \array_slice($plannedRelayUrls, 0, self::MAX_DISCUSSION_RELAY_URLS);
+            $this->logger->notice('nostr.article_discussion.relay_list_capped', [
+                'max' => self::MAX_DISCUSSION_RELAY_URLS,
+            ]);
+        }
 
         $filters = $this->createArticleDiscussionFilters($coordinate, $rootEventHexId);
         $subscription = new Subscription();
@@ -990,7 +1008,8 @@ class NostrClient
             $tSend = microtime(true);
             $workerPath = $this->projectDir.'/bin/nostr_relay_request_worker.php';
             if (!\is_file($workerPath) || \count($plannedRelayUrls) <= 1) {
-                $response = $this->sendArticleDiscussionToRelaysSequential($plannedRelayUrls, $requestMessage);
+                $forSeq = $this->capRelayUrlsForSequentialPath($plannedRelayUrls);
+                $response = $this->sendArticleDiscussionToRelaysSequential($forSeq, $requestMessage);
             } else {
                 try {
                     $response = $this->sendArticleDiscussionToRelaysParallel($plannedRelayUrls, $requestMessage);
@@ -999,7 +1018,11 @@ class NostrClient
                         'message' => $e->getMessage(),
                         'exception_class' => \get_class($e),
                     ]);
-                    $response = $this->sendArticleDiscussionToRelaysSequential($plannedRelayUrls, $requestMessage);
+                    $forSeq = $this->capRelayUrlsForSequentialPath($plannedRelayUrls);
+                    $this->logger->warning('nostr.article_discussion.sequential_fallback', [
+                        'relays' => $forSeq,
+                    ]);
+                    $response = $this->sendArticleDiscussionToRelaysSequential($forSeq, $requestMessage);
                 }
             }
             $sendMs = (int) round((microtime(true) - $tSend) * 1000);
@@ -1082,6 +1105,24 @@ class NostrClient
         ]);
 
         return ['thread' => $thread, 'quotes' => $quotes];
+    }
+
+    /**
+     * @param list<string> $relayUrls
+     *
+     * @return list<string>
+     */
+    private function capRelayUrlsForSequentialPath(array $relayUrls): array
+    {
+        if (\count($relayUrls) <= self::MAX_SEQUENTIAL_RELAY_URLS) {
+            return $relayUrls;
+        }
+        $this->logger->notice('nostr.article_discussion.sequential_relay_cap', [
+            'used' => self::MAX_SEQUENTIAL_RELAY_URLS,
+            'had' => \count($relayUrls),
+        ]);
+
+        return \array_values(\array_slice($relayUrls, 0, self::MAX_SEQUENTIAL_RELAY_URLS));
     }
 
     /**

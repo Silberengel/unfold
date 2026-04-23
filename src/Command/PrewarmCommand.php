@@ -17,11 +17,13 @@ use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\Helper;
 use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Console\Terminal;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
@@ -362,6 +364,27 @@ final class PrewarmCommand extends Command
         }
         $bar->setFormat(' %current%/%max% [%bar%] %percent:3s%%'."\n".'  <comment>%message%</comment> <info>%elapsed:6s%</info> ');
         $bar->setMessage($message);
+
+        // Long %message% lines (e.g. category slugs) wider than the terminal make Symfony’s ProgressBar
+        // shrink/expand the bar on every redraw; truncate so each line fits and the bar stays stable
+        // and can use the full width to the right.
+        $tw = (new Terminal())->getWidth();
+        if ($tw < 40) {
+            $tw = 80;
+        }
+        $messageMaxWidth = max(12, $tw - 18);
+        $bar->setPlaceholderFormatter('message', function (ProgressBar $b) use ($messageMaxWidth): string {
+            $m = (string) ($b->getMessage() ?? '');
+            if ($m === '') {
+                return '';
+            }
+            if (Helper::width($m) > $messageMaxWidth) {
+                return Helper::substr($m, 0, max(1, $messageMaxWidth - 1)).'…';
+            }
+
+            return $m;
+        });
+        $bar->setBarWidth(max(20, $tw - 32));
 
         return $bar;
     }
