@@ -68,8 +68,9 @@ export default class extends Controller {
             return;
         }
         this.setHint('Preparing event…');
-        const { nip19 } = await import('nostr-tools');
-        const link = this.buildParentBech32(nip19);
+        // `nostr-tools` entry pulls @noble/curves (bare spec → breaks in AssetMapper). NIP-19 only needs bech32 helpers.
+        const { naddrEncode, neventEncode } = await import('nostr-tools/nip19');
+        const link = this.buildParentBech32(naddrEncode, neventEncode);
         const blurb = `> Replying to **${this.blurbLabelValue}** — [view parent](nostr:${link})\n\n`;
         const unsigned = {
             kind: 1111,
@@ -135,18 +136,19 @@ export default class extends Controller {
     }
 
     /**
-     * @param {import('nostr-tools').nip19} nip19
+     * @param {function(object): string} naddrEncode
+     * @param {function(object): string} neventEncode
      */
-    buildParentBech32(nip19) {
+    buildParentBech32(naddrEncode, neventEncode) {
         const allZero = /^0{64}$/.test(this.parentIdValue);
         const parts = (this.expectedCoordinateValue || '').split(':');
         const k = parts[0] ? parseInt(parts[0], 10) : 30023;
         const pub = parts[1] || this.authorPubkeyValue;
         const d = parts[2] || '';
         if (allZero && d !== '') {
-            return nip19.naddrEncode({ kind: k, pubkey: pub, identifier: d, relays: [] });
+            return naddrEncode({ kind: k, pubkey: pub, identifier: d, relays: [] });
         }
-        return nip19.neventEncode({
+        return neventEncode({
             id: this.parentIdValue,
             kind: this.parentKindValue,
             pubkey: this.authorPubkeyValue,

@@ -52,6 +52,16 @@ return [
     'nostr-tools' => [
         'version' => '2.10.4',
     ],
+    // Subpath: bech32 only (no @noble/curves) — used by comment_reply_controller for NIP-19 in blurb lines.
+    'nostr-tools/nip19' => [
+        'version' => '2.10.4',
+    ],
+    '@noble/hashes' => [
+        'version' => '1.3.1',
+    ],
+    '@scure/base' => [
+        'version' => '1.1.1',
+    ],
     'quill/dist/quill.core.css' => [
         'version' => '2.0.3',
         'type' => 'css',

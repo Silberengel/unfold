@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Repository\FeaturedAuthorRepository;
 use App\Service\CacheService;
+use App\Service\NostrClient;
 use App\Service\ProfileIdentityLinksBuilder;
 use App\Service\ProfilePaymentLinksBuilder;
 use swentel\nostr\Key\Key;
@@ -23,6 +24,7 @@ final class FeaturedAuthorsController extends AbstractController
     public function index(
         FeaturedAuthorRepository $featuredAuthorRepository,
         CacheService $cacheService,
+        NostrClient $nostrClient,
         ProfileIdentityLinksBuilder $profileIdentityLinks,
         ProfilePaymentLinksBuilder $profilePaymentLinks,
         ParameterBagInterface $params,
@@ -37,11 +39,17 @@ final class FeaturedAuthorsController extends AbstractController
             $author = $bundle['content'];
             $kind0Tags = $bundle['kind0_tags'];
             $jumbleProfileHref = $jumbleBase !== '' ? $jumbleBase.'/'.$npub : null;
+            $kind10133 = [];
+            try {
+                $kind10133 = $nostrClient->getKind10133PaymentTargetEventsForNpub($npub, 20);
+            } catch (\Throwable) {
+            }
+            $extraPayto = $profilePaymentLinks->collectPaytoUrisFromNipA3Kind10133Events($kind10133);
             $authors[] = [
                 'author' => $author,
                 'npub' => $npub,
                 'profile_websites' => $profileIdentityLinks->buildWebsites($author, $kind0Tags),
-                'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, []),
+                'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, $extraPayto),
                 'jumble_profile_href' => $jumbleProfileHref,
             ];
         }

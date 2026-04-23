@@ -22,7 +22,7 @@
                 {% for row in profile_websites %}
                     <li class="author-profile__identity-row author-profile__meta-line">
                         <span class="author-profile__identity-type">Website</span>
-                        <a class="author-profile__identity-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                        <a class="author-profile__identity-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">{{ row.label|e }}</a>
                     </li>
                 {% endfor %}
             </ul>
@@ -51,7 +51,7 @@
                     {% for row in profile_payment_links %}
                         <li class="author-profile__payment author-profile__meta-line">
                             <span class="author-profile__payment-type"{% if row.display_type_label|default('')|trim == '' %} aria-hidden="true"{% endif %}>{{ row.display_type_label|default('')|e }}</span>
-                            <a class="author-profile__payment-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                            <a class="author-profile__payment-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">{{ row.label|e }}</a>
                         </li>
                     {% endfor %}
                 </ul>

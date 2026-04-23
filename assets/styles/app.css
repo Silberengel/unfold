@@ -621,21 +621,26 @@ footer a {
     white-space: nowrap;
 }
 
-/* Do not use .author-profile__meta-value on this wrapper: its overflow:hidden clips the ✓. Ellipsis only the link. */
+/* NIP-05: ellipsis long addresses; keep ✓ immediately after the (truncated) text, not at the column edge. */
 .author-profile__nip05-value {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
     min-width: 0;
+    max-width: 100%;
     width: 100%;
 }
 
 .author-profile__nip05-link {
+    flex: 0 1 auto;
     min-width: 0;
+    /* reserve space for the checkmark on the same “line” of layout */
+    max-width: calc(100% - 1.4rem);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1 1 0;
     word-break: normal;
 }
 
@@ -647,6 +652,7 @@ footer a {
     opacity: 0.85;
     user-select: none;
     flex-shrink: 0;
+    flex-grow: 0;
 }
 
 .author-profile__payment-type {
