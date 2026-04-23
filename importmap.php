@@ -63,6 +63,10 @@ return [
     '@noble/hashes/utils' => [
         'version' => '1.3.1',
     ],
+    // Used by @noble/hashes/utils (WebCrypto); without this, dynamic import of nip19 fails in the browser.
+    '@noble/hashes/crypto' => [
+        'version' => '1.3.1',
+    ],
     '@scure/base' => [
         'version' => '1.1.1',
     ],
