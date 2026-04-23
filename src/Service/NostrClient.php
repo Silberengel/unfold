@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\Article;
+use App\Entity\User;
 use App\Entity\Event as PublicationEventEntity;
 use App\Enum\KindsEnum;
 use App\Factory\ArticleFactory;
@@ -27,6 +28,15 @@ class NostrClient
     /** Per-relay WebSocket I/O cap (seconds), applied on each relay’s {@see \WebSocket\Client}. */
     private const RELAY_REQUEST_TIMEOUT_SEC = 15;
 
+    /** When a logged-in user lists this relay, also use {@see self::AGGR_NOSTR_LAND} for comment + profile reads. */
+    private const NOSTR_LAND = 'wss://nostr.land';
+
+    /**
+     * Aggregated / subscription relay (not for anonymous visitors). Only added when the session user
+     * has {@see self::NOSTR_LAND} in their NIP-65-style relay list.
+     */
+    private const AGGR_NOSTR_LAND = 'wss://aggr.nostr.land';
+
     private RelaySet $defaultRelaySet;
 
     /**
@@ -45,6 +55,16 @@ class NostrClient
         private readonly CacheInterface $relayQueryCache,
     ) {
         $this->defaultRelaySet = $this->buildArticleRelaySet();
+    }
+
+    /**
+     * default_relay + article_relays (deduplicated) for publishing user comments.
+     *
+     * @return list<string>
+     */
+    public function getArticleWriteRelayUrls(): array
+    {
+        return $this->configuredArticleRelayUrlList();
     }
 
     /**
@@ -153,6 +173,98 @@ class NostrClient
     }
 
     /**
+     * Suffix to segregate HTTP caches: aggr is only used for some logged-in readers, so results differ.
+     *
+     * @return string empty when aggr is not used, else a short token
+     */
+    public function getNostrLandAggrReaderCacheSuffix(): string
+    {
+        return $this->loggedInUserHasNostrLandInRelayList() ? 'a1' : '';
+    }
+
+    private function loggedInUserHasNostrLandInRelayList(): bool
+    {
+        $token = $this->tokenStorage->getToken();
+        if ($token === null) {
+            return false;
+        }
+        $user = $token->getUser();
+        if (!$user instanceof User) {
+            return false;
+        }
+
+        return $this->userRelayListContainsNostrLand($user->getRelays());
+    }
+
+    /**
+     * @param list<array{0?: string, 1?: string, 2?: string}>|array<array-key, mixed>|null $relays
+     */
+    private function userRelayListContainsNostrLand(?array $relays): bool
+    {
+        if ($relays === null || $relays === []) {
+            return false;
+        }
+        $target = $this->normalizeWssUrlForNostrLandMatch(self::NOSTR_LAND);
+        foreach ($relays as $row) {
+            if (!\is_array($row) || !isset($row[1]) || !\is_string($row[1])) {
+                continue;
+            }
+            if ($this->normalizeWssUrlForNostrLandMatch($row[1]) === $target) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeWssUrlForNostrLandMatch(string $url): string
+    {
+        return rtrim(trim($url), '/');
+    }
+
+    /**
+     * Appends wss://aggr.nostr.land when the current user listed wss://nostr.land (session).
+     *
+     * @param list<string> $urls
+     * @return list<string>
+     */
+    private function withAggrNostrLandIfUserSubscribesNostrLand(array $urls): array
+    {
+        if (!$this->loggedInUserHasNostrLandInRelayList()) {
+            return $urls;
+        }
+        $seen = array_fill_keys($urls, true);
+        if (isset($seen[self::AGGR_NOSTR_LAND])) {
+            return $urls;
+        }
+        $this->logger->debug('nostr.relay.append_aggr_nostr_land', [
+            'user_has_nostr_land' => true,
+        ]);
+        $out = $urls;
+        $out[] = self::AGGR_NOSTR_LAND;
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $urls
+     */
+    private function relaySetFromDistinctUrlList(array $urls): RelaySet
+    {
+        $relaySet = new RelaySet();
+        $seen = [];
+        foreach ($urls as $relayUrl) {
+            if (!\is_string($relayUrl) || $relayUrl === '' || isset($seen[$relayUrl])) {
+                continue;
+            }
+            $seen[$relayUrl] = true;
+            $relaySet->addRelay(new Relay($relayUrl));
+        }
+
+        return $relaySet;
+    }
+
+    /**
      * Get top 3 reputable relays from an author's relay list (cached; avoids a kind-10002 round trip per page view).
      */
     private function getTopReputableRelaysForAuthor(string $pubkey, int $limit = 3): array
@@ -229,7 +341,7 @@ class NostrClient
             $ordered[] = $this->defaultRelayUrl;
         }
 
-        return $ordered;
+        return $this->withAggrNostrLandIfUserSubscribesNostrLand($ordered);
     }
 
     /**
@@ -733,8 +845,11 @@ class NostrClient
             'author_relays' => $authorRelays,
         ]);
 
-        $relaySet = $this->createRelaySet($authorRelays);
-        $plannedRelayUrls = $this->plannedRelayUrlsForSet($authorRelays);
+        $mergedForDiscussion = $this->withAggrNostrLandIfUserSubscribesNostrLand(
+            array_merge($this->configuredArticleRelayUrlList(), $authorRelays)
+        );
+        $relaySet = $this->relaySetFromDistinctUrlList($mergedForDiscussion);
+        $plannedRelayUrls = $mergedForDiscussion;
 
         $filters = $this->createArticleDiscussionFilters($coordinate, $rootEventHexId);
         $subscription = new Subscription();

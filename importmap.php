@@ -49,6 +49,9 @@ return [
     'lodash.isequal' => [
         'version' => '4.5.0',
     ],
+    'nostr-tools' => [
+        'version' => '2.10.4',
+    ],
     'quill/dist/quill.core.css' => [
         'version' => '2.0.3',
         'type' => 'css',

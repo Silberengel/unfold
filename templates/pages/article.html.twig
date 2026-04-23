@@ -120,9 +120,9 @@
     {#    <pre>#}
 {#        {{ article.content }}#}
 {#    </pre>#}
-    {% set article_coordinate = '30023:' ~ article.pubkey ~ ':' ~ article.slug %}
-    {% set comments_query = article.eventId ? { coordinate: article_coordinate, e: article.eventId } : { coordinate: article_coordinate } %}
-    <section class="article-comments-async" aria-label="Comments">
+    {% set article_coordinate = (article.kind ? article.kind.value : 30023) ~ ':' ~ article.pubkey ~ ':' ~ article.slug %}
+    {% set comments_query = { coordinate: article_coordinate, title: article.title|default('') }|merge(article.eventId ? { e: article.eventId } : {}) %}
+    <section class="article-comments-async" id="article-comments" aria-label="Comments">
         <div
             data-controller="article-comments"
             data-article-comments-url-value="{{ path('article_comments_fragment', comments_query)|e('html_attr') }}"

@@ -33,7 +33,8 @@ final readonly class ArticleCommentThreadLoader
     public function load(string $coordinate, ?string $articleEventHexId = null): array
     {
         $t0 = microtime(true);
-        $cacheKey = 'comments_v4_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? ''));
+        $aggrSuffix = $this->nostrClient->getNostrLandAggrReaderCacheSuffix();
+        $cacheKey = 'comments_v5_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? '')."\0".$aggrSuffix);
         $this->logger->info('comments.loader.start', [
             'cache_key_suffix' => substr($cacheKey, -16),
             'coordinate' => $coordinate,

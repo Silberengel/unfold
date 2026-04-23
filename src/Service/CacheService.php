@@ -25,7 +25,8 @@ readonly class CacheService
      */
     public function getMetadata(string $npub): \stdClass
     {
-        $cacheKey = '0_' . $npub;
+        $aggr = $this->nostrClient->getNostrLandAggrReaderCacheSuffix();
+        $cacheKey = $aggr === '' ? '0_'.$npub : '0_'.$aggr.'_'.$npub;
         try {
             return $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub) {
                 $item->expiresAfter(3600); // 1 hour, adjust as needed
