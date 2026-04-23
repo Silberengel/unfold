@@ -7,10 +7,12 @@ namespace App\Controller;
 use App\Entity\Article;
 use App\Enum\EventStatusEnum;
 use App\Repository\ArticleRepository;
+use App\Repository\FeaturedAuthorRepository;
 use App\Service\MagazineContentService;
 use App\Service\MagazineIndexStore;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -28,6 +30,7 @@ final class SeoController extends AbstractController
         private readonly MagazineContentService $magazineContent,
         private readonly MagazineIndexStore $magazineIndexStore,
         private readonly ParameterBagInterface $params,
+        private readonly FeaturedAuthorRepository $featuredAuthorRepository,
     ) {
     }
 
@@ -41,6 +44,8 @@ final class SeoController extends AbstractController
         if ((bool) $this->params->get('community_articles')) {
             $urls[] = ['loc' => $this->absoluteUrlForRoute('articles'), 'lastmod' => null];
         }
+
+        $urls[] = ['loc' => $this->absoluteUrlForRoute('featured_authors'), 'lastmod' => null];
 
         foreach ($this->magazineContent->getCategorySlugsFromStore() as $slug) {
             $urls[] = [
@@ -88,6 +93,65 @@ final class SeoController extends AbstractController
                 'Cache-Control' => 'public, max-age=3600',
             ],
         );
+    }
+
+    /**
+     * NIP-05 well-known: maps site-assigned local-parts to hex pubkeys (featured magazine authors).
+     * Must not redirect. Includes recommended `relays` for clients when profile relay URLs are configured.
+     */
+    #[Route(path: '/.well-known/nostr.json', name: 'nostr_well_known', methods: ['GET', 'HEAD'])]
+    public function nostrWellKnown(): JsonResponse
+    {
+        $rows = $this->featuredAuthorRepository->findAllListedOrderByLocalPart();
+        $names = [];
+        foreach ($rows as $r) {
+            $names[$r->getLocalPart()] = strtolower($r->getPubkeyHex());
+        }
+        $payload = ['names' => $names];
+        $relays = $this->buildRelaysByPubkey($names);
+        if ($relays !== []) {
+            $payload['relays'] = $relays;
+        }
+
+        $headers = [
+            'Content-Type' => 'application/json; charset=UTF-8',
+            'Access-Control-Allow-Origin' => '*',
+            'Cache-Control' => 'public, max-age=120',
+        ];
+
+        return new JsonResponse(
+            $payload,
+            Response::HTTP_OK,
+            $headers
+        );
+    }
+
+    /**
+     * @param array<string, string> $names local-part => hex pubkey
+     *
+     * @return array<string, list<string>>
+     */
+    private function buildRelaysByPubkey(array $names): array
+    {
+        $raw = $this->params->get('profile_relays');
+        if (!\is_array($raw) || $raw === []) {
+            return [];
+        }
+        $urls = [];
+        foreach ($raw as $u) {
+            if (\is_string($u) && (str_starts_with($u, 'wss://') || str_starts_with($u, 'ws://'))) {
+                $urls[] = $u;
+            }
+        }
+        if ($urls === []) {
+            return [];
+        }
+        $out = [];
+        foreach ($names as $hex) {
+            $out[strtolower($hex)] = $urls;
+        }
+
+        return $out;
     }
 
     #[Route('/feeds/magazine.xml', name: 'feed_magazine', methods: ['GET'])]

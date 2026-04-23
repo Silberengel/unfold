@@ -1,15 +1,27 @@
 <div class="site-footer">
-    <div class="site-footer__syndication" aria-label="Sitemap and syndication">
+    <div class="site-footer__syndication">
         <h2 class="site-footer__syndication-title">Sitemap and feeds</h2>
         <p class="site-footer__syndication-hint">For search engines and feed readers. Atom is supported by most clients.</p>
-        <div class="site-footer__syndication-actions">
-            <a class="btn btn-secondary" href="{{ path('sitemap') }}">Sitemap (XML)</a>
-            <a class="btn btn-secondary" href="{{ path('robots_txt') }}">Robots</a>
-            <a class="btn btn-secondary" href="{{ path('feed_magazine') }}">Atom — all articles</a>
-            {% for c in categoriesForFeed %}
-                <a class="btn btn-secondary" href="{{ path('feed_category', {slug: c.slug}) }}">Atom — {{ c.title }}</a>
-            {% endfor %}
-        </div>
+        <nav class="site-footer__nav" aria-label="Sitemap, feeds, and index">
+            <ul class="site-footer__syndication-list">
+                <li><a class="site-footer__link" href="{{ path('featured_authors') }}">Featured authors</a></li>
+                <li><a class="site-footer__link" href="{{ path('sitemap') }}">Sitemap (XML)</a></li>
+                <li><a class="site-footer__link" href="{{ path('robots_txt') }}">Robots</a></li>
+                <li class="site-footer__syndication-list__feeds">
+                    <span class="site-footer__feeds-icon" title="RSS/Atom" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="16" height="16" focusable="false" fill="currentColor">
+                            <circle cx="1.5" cy="6.5" r="1"/>
+                            <path d="M0 3.5A4.5 4.5 0 0 1 4.5 8V6A2.5 2.5 0 0 0 2 3.5H0z"/>
+                            <path d="M0 0A8 8 0 0 1 8 8H6.5A6.5 6.5 0 0 0 0 1.5V0z"/>
+                        </svg>
+                    </span>
+                    <a class="site-footer__link" href="{{ path('feed_magazine') }}">All articles</a>
+                    {% for c in categoriesForFeed %}
+                        <a class="site-footer__link" href="{{ path('feed_category', {slug: c.slug}) }}">{{ c.title }}</a>
+                    {% endfor %}
+                </li>
+            </ul>
+        </nav>
     </div>
     <div class="site-footer__main">
         <div class="footer-links">

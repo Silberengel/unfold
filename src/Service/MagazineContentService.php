@@ -101,6 +101,43 @@ final class MagazineContentService
     }
 
     /**
+     * Distinct author pubkeys (hex) from every category index `a` tag (kind:pubkey:identifier).
+     *
+     * @return list<string>
+     */
+    public function getAllDistinctCategoryAuthorPubkeyHexes(): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($this->getCategorySlugsFromStore() as $slug) {
+            $catIndex = $this->store->getCategory($slug);
+            if ($catIndex === null) {
+                continue;
+            }
+            foreach ($catIndex->getTags() as $tag) {
+                if (!\is_array($tag) || ($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
+                    continue;
+                }
+                $parts = explode(':', (string) $tag[1], 3);
+                if (\count($parts) < 2) {
+                    continue;
+                }
+                $pk = strtolower((string) $parts[1]);
+                if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
+                    continue;
+                }
+                if (isset($seen[$pk])) {
+                    continue;
+                }
+                $seen[$pk] = true;
+                $out[] = $pk;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Title from cached category index event tags, or the slug when missing.
      */
     public function getCategoryDisplayTitle(string $slug): string

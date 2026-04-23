@@ -23,6 +23,7 @@ final class MagazineRefresher
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
         private readonly CacheItemPoolInterface $appCache,
+        private readonly FeaturedAuthorSync $featuredAuthorSync,
     ) {
     }
 
@@ -103,6 +104,14 @@ final class MagazineRefresher
                     'slug' => $slug,
                 ]);
             }
+        }
+
+        try {
+            $this->featuredAuthorSync->syncNewAuthorsFromMagazineCategories();
+        } catch (\Throwable $e) {
+            $this->logger->warning('MagazineRefresher: featured author sync failed', [
+                'message' => $e->getMessage(),
+            ]);
         }
 
         $this->touchLastRelayTime();

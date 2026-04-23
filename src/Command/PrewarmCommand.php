@@ -8,6 +8,7 @@ use App\Entity\Article;
 use App\Repository\ArticleRepository;
 use App\Service\ArticleCommentThreadLoader;
 use App\Service\CacheService;
+use App\Service\FeaturedAuthorSync;
 use App\Service\MagazineContentService;
 use App\Service\MagazineRefresher;
 use App\Service\Nip09DeletionApplier;
@@ -43,6 +44,7 @@ final class PrewarmCommand extends Command
         private readonly ArticleCommentThreadLoader $commentThreadLoader,
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
+        private readonly FeaturedAuthorSync $featuredAuthorSync,
     ) {
         parent::__construct();
     }
@@ -115,6 +117,15 @@ final class PrewarmCommand extends Command
             }
         } else {
             $io->note('Skipping magazine (--no-magazine).');
+            try {
+                $fa = $this->featuredAuthorSync->syncNewAuthorsFromMagazineCategories();
+                if ($fa > 0) {
+                    $io->writeln(sprintf('   Featured authors: added <info>%d</info> new NIP-05 row(s) from the cached category index.', $fa));
+                }
+            } catch (\Throwable $e) {
+                $this->logger->warning('app:prewarm featured author sync (no-magazine)', ['e' => $e->getMessage()]);
+                $io->warning('Featured author sync failed: '.$e->getMessage());
+            }
         }
 
         $io->section('Long-form in DB (category `a` tags missing from MySQL)');

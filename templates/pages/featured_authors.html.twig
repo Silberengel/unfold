@@ -1,0 +1,43 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div class="featured-authors">
+        <header class="featured-authors__intro">
+            <h1>Featured authors</h1>
+            <p class="text-subtle">
+                Authors whose long-form has been placed in a magazine category receive a
+                <abbr title="NIP-05">NIP-05</abbr> identifier
+                {% if nip05_domain|default('')|trim != '' %}
+                    under <strong>{{ nip05_domain|e }}</strong>
+                {% endif %}
+                for easier discovery. Verification uses <code>/.well-known/nostr.json</code>.
+            </p>
+        </header>
+
+        {% for row in authors %}
+            {% set _fa_label = row.author.name|default('')|trim != '' ? row.author.name : (row.npub|shortenNpub) %}
+            <article class="featured-authors__card" aria-label="{{ _fa_label|e('html_attr') }}">
+                <div class="author-profile author-profile--featured">
+                    {% include 'partial/author_profile_header.html.twig' with {
+                        author: row.author,
+                        npub: row.npub,
+                        header_tag: 'h2',
+                        profile_websites: row.profile_websites,
+                        profile_nip05: row.profile_nip05,
+                        profile_payment_links: row.profile_payment_links,
+                        jumble_profile_href: row.jumble_profile_href,
+                        site_nip05: row.site_nip05,
+                    } only %}
+                </div>
+                <p class="featured-authors__more">
+                    <a class="btn btn-secondary" href="{{ path('author-profile', { npub: row.npub }) }}">Full profile</a>
+                </p>
+            </article>
+        {% else %}
+            <p class="text-subtle">No featured authors are listed yet. They appear when authors are added to magazine category indices and synced.</p>
+        {% endfor %}
+    </div>
+{% endblock %}
+
+{% block aside %}
+{% endblock %}

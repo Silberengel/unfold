@@ -1,0 +1,70 @@
+{# Shared author “header” + about (no article list). Expects: author, npub, profile_*, jumble_profile_href; optional site_nip05 #}
+    {% set author_pic = null %}
+    {% if author.picture is defined and author.picture %}
+        {% set author_pic = author.picture %}
+    {% elseif author.image is defined and author.image %}
+        {% set author_pic = author.image %}
+    {% endif %}
+    {% set author_label = author.display_name|default(author.name|default(npub|shortenNpub)) %}
+
+        {% if author_pic %}
+            <div class="author-profile__avatar">
+                <img src="{{ author_pic }}" alt="{{ author_label }}" loading="lazy" decoding="async" onerror="this.parentElement.remove()" />
+            </div>
+        {% endif %}
+
+        {% set header_tag = header_tag|default('h1') %}
+        <{{ header_tag }} class="author-profile__title"><twig:Atoms:NameOrNpub :author="author" :npub="npub"></twig:Atoms:NameOrNpub></{{ header_tag }}>
+
+        <div class="author-profile__header-meta">
+        {% if profile_websites is not empty %}
+            <ul class="author-profile__identity" aria-label="Websites">
+                {% for row in profile_websites %}
+                    <li class="author-profile__identity-row">
+                        <span class="author-profile__identity-type">Website</span>
+                        <a class="author-profile__identity-link" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% if site_nip05|default('')|trim != '' %}
+            <ul class="author-profile__identity" aria-label="Magazine NIP-05">
+                <li class="author-profile__identity-row">
+                    <span class="author-profile__identity-type">Magazine</span>
+                    <span class="author-profile__site-nip05 text-subtle">{{ site_nip05|e }}</span>
+                </li>
+            </ul>
+        {% endif %}
+        {% if profile_nip05 is not empty %}
+            <ul class="author-profile__identity" aria-label="NIP-05">
+                {% for row in profile_nip05 %}
+                    <li class="author-profile__identity-row">
+                        <span class="author-profile__identity-type">NIP-05</span>
+                        <a class="author-profile__identity-link" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener" title="NIP-05 verification document">{{ row.label|e }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% if profile_payment_links is not empty %}
+            <ul class="author-profile__payments" aria-label="Payment options">
+                {% for row in profile_payment_links %}
+                    <li class="author-profile__payment">
+                        <span class="author-profile__payment-type">{{ row.type_label }}</span>
+                        <a class="author-profile__payment-link" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        </div>
+
+        <div class="author-profile__about">
+            {% if author.about is defined %}
+                {{ author.about|markdown_to_html|mentionify|linkify  }}
+            {% endif %}
+        </div>
+
+        {% if jumble_profile_href is not null and jumble_profile_href != '' %}
+            <p class="author-profile__jumble">
+                <a class="btn btn-secondary" href="{{ jumble_profile_href|e('html_attr') }}" rel="nofollow noopener">View on Jumble</a>
+            </p>
+        {% endif %}

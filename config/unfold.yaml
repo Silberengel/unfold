@@ -31,6 +31,8 @@ parameters:
     npub: 'npub1m4ny6hjqzepn4rxknuq94c2gpqzr29ufkkw7ttcxyak7v43n6vvsajc2jl'
     d_tag: 'newsroom-magazine-on-imwald-by-laeserin'
     community_articles: true
+    # Domain for site-assigned NIP-05 for featured (magazine category) authors; must match the host serving /.well-known/nostr.json
+    nip05_domain: 'blog.imwald.eu'
     # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).
     jumble_profile_users_base: 'https://jumble.imwald.eu/users'
     external_links:

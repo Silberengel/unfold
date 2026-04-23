@@ -278,7 +278,13 @@ class ArticleController  extends AbstractController
     /**
      * @throws InvalidArgumentException|CommonMarkException
      */
-    #[Route('/article/d/{slug}', name: 'article-slug')]
+    // Slug is the NIP-33 d-identifier and may contain "/"; default [^/]++ would break sitemap/URL generation.
+    #[Route(
+        path: '/article/d/{slug}',
+        name: 'article-slug',
+        requirements: ['slug' => '.+'],
+        options: ['utf8' => true],
+    )]
     public function article(
         $slug,
         EntityManagerInterface $entityManager,

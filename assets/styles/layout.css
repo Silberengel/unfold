@@ -255,10 +255,78 @@ footer {
     max-width: 40rem;
 }
 
-.site-footer__syndication-actions {
+.site-footer__nav {
+    max-width: 44rem;
+}
+
+.site-footer__syndication-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem 0.6rem;
+    align-items: baseline;
+    row-gap: 0.4rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.site-footer__syndication-list > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.45rem;
+}
+
+.site-footer__syndication-list > li + li::before {
+    content: "·";
+    color: var(--color-text-mid, #666);
+    font-weight: 300;
+    align-self: center;
+    padding: 0 0.1rem 0 0;
+}
+
+.site-footer__link {
+    color: var(--color-footer-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 400;
+}
+
+.site-footer__link:hover {
+    color: var(--color-text);
+}
+
+.site-footer__link:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+
+/* RSS + category feed links in one cell */
+.site-footer__syndication-list__feeds {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.45rem;
+    max-width: 100%;
+}
+
+/* Dots between feed links (skip first <a> = "All articles"). */
+.site-footer__syndication-list__feeds a:not(:first-of-type)::before {
+    content: "·";
+    color: var(--color-text-mid, #666);
+    font-weight: 300;
+    margin-right: 0.45rem;
+    text-decoration: none;
+    display: inline;
+}
+
+.site-footer__feeds-icon {
+    display: flex;
+    flex-shrink: 0;
+    line-height: 0;
+    color: var(--color-text-mid, #666);
+    opacity: 0.72;
 }
 
 .site-footer__main {
@@ -295,6 +363,38 @@ footer {
 
 footer .footer-links {
     margin: 0 0 0.5rem;
+}
+
+.featured-authors {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: 0 0.5rem 2rem;
+}
+
+.featured-authors__intro {
+    margin-bottom: 2rem;
+}
+
+.featured-authors__intro h1 {
+    margin-top: 0;
+}
+
+.featured-authors__card {
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.featured-authors__card:last-of-type {
+    border-bottom: none;
+}
+
+.author-profile--featured .author-profile__title {
+    font-size: 1.5rem;
+}
+
+.featured-authors__more {
+    margin: 0.75rem 0 0;
 }
 
 .footer-links a {
