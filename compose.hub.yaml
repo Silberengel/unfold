@@ -5,6 +5,9 @@
 #   docker compose -f compose.hub.yaml up -d
 #   docker compose -f compose.hub.yaml exec php php bin/console doctrine:migrations:migrate --no-interaction
 #
+# Services: `php` (web), `database` (MySQL), `prewarm` (same image; `app:prewarm` every 10 min — see README).
+# Optional: PREWARM_FLAGS in .env (same as dev `cron` service), then `docker compose up -d --force-recreate prewarm`.
+#
 # Required in .env: APP_SECRET. Set MYSQL_* (or replace DATABASE_URL after editing this file) if you
 # use the bundled database. For TLS in front, set TRUSTED_PROXIES to include your reverse proxy CIDR.
 #
@@ -35,8 +38,45 @@ services:
       - caddy_config:/config
     ports:
       - "${HTTP_PUBLISH:-9080}:80/tcp"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/", "-o", "/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 120s
     depends_on:
       database:
+        condition: service_healthy
+
+  prewarm:
+    image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:latest}
+    pull_policy: always
+    restart: unless-stopped
+    working_dir: /app
+    # Same app image as `php`, but not FrankenPHP: wait for DB + `php` healthy (migrations done), then
+    # run `app:prewarm` every 10 minutes (dev `docker/cron` uses the same interval).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until php bin/console dbal:run-sql -q "SELECT 1" 2>/dev/null; do
+          echo "prewarm: waiting for database..."
+          sleep 2
+        done
+        while true; do
+          sleep 600
+          php bin/console app:prewarm $${PREWARM_FLAGS-} || true
+        done
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_SECRET: ${APP_SECRET}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
+      SERVER_NAME: ${SERVER_NAME:-:80}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0}&charset=${MYSQL_CHARSET:-utf8mb4}
+      PREWARM_FLAGS: ${PREWARM_FLAGS:-}
+    depends_on:
+      database:
+        condition: service_healthy
+      php:
         condition: service_healthy
 
   database:
