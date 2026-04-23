@@ -19,6 +19,7 @@ VOLUME /app/var/
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	acl \
+	curl \
 	file \
 	gettext \
 	git \
@@ -55,7 +56,9 @@ COPY --link frankenphp/Caddyfile /etc/caddy/Caddyfile
 
 ENTRYPOINT ["docker-entrypoint"]
 
-HEALTHCHECK --start-period=60s CMD curl -f http://localhost:2019/metrics || exit 1
+# Hit the public HTTP server, not Caddy :2019 admin (not always available the same way in all setups).
+HEALTHCHECK --interval=10s --timeout=5s --retries=6 --start-period=120s \
+	CMD curl -fsS http://127.0.0.1/ -o /dev/null || exit 1
 CMD [ "frankenphp", "run", "--config", "/etc/caddy/Caddyfile" ]
 
 # Dev FrankenPHP image

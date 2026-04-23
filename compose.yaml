@@ -4,6 +4,14 @@ services:
     build:
         context: .
         dockerfile: Dockerfile
+    # Overrides Dockerfile HEALTHCHECK: verify Caddy/FrankenPHP serves the app (not Caddy :2019 admin,
+    # which is unreliable for “ready”). `docker compose up --wait` requires this to pass.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/", "-o", "/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 120s
     environment:
       APP_ENV: ${APP_ENV:-dev}
       # Caddy site address: :80 accepts any Host (needed when the app is reached via localhost:HTTP_PORT).
