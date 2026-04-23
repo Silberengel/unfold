@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\Article;
 use App\Entity\Event;
+use App\Enum\EventStatusEnum;
 use App\Repository\ArticleRepository;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
@@ -221,5 +222,59 @@ final class MagazineContentService
             'list' => $list,
             'category' => $category,
         ];
+    }
+
+    /**
+     * Union of every article referenced by a category index (root 30040). Use this for magazine-wide
+     * Atom and comment prewarm so "newest" tracks the magazine, not the generic community list.
+     *
+     * Dedupes by slug (newest {@see Article::getCreatedAt} wins). Only PUBLISHED/ARCHIVED rows.
+     *
+     * @return list<Article> Newest first
+     */
+    public function getAllMagazineCategoryArticlesForSyndication(): array
+    {
+        $bySlug = [];
+        foreach ($this->getCategorySlugsFromStore() as $catSlug) {
+            $data = $this->getCategoryPageData($catSlug);
+            foreach ($data['list'] as $article) {
+                $s = $article->getEventStatus();
+                if ($s === null || ($s !== EventStatusEnum::PUBLISHED && $s !== EventStatusEnum::ARCHIVED)) {
+                    continue;
+                }
+                $slug = \trim((string) $article->getSlug());
+                if ($slug === '') {
+                    continue;
+                }
+                $c = $article->getCreatedAt();
+                if (!isset($bySlug[$slug])) {
+                    $bySlug[$slug] = $article;
+
+                    continue;
+                }
+                $prev = $bySlug[$slug]->getCreatedAt();
+                if ($c !== null && (null === $prev || $c > $prev)) {
+                    $bySlug[$slug] = $article;
+                }
+            }
+        }
+        $list = \array_values($bySlug);
+        usort($list, static function (Article $a, Article $b): int {
+            $ca = $a->getCreatedAt();
+            $cb = $b->getCreatedAt();
+            if ($ca === null && $cb === null) {
+                return 0;
+            }
+            if ($ca === null) {
+                return 1;
+            }
+            if ($cb === null) {
+                return -1;
+            }
+
+            return $cb <=> $ca;
+        });
+
+        return $list;
     }
 }

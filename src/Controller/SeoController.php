@@ -94,24 +94,7 @@ final class SeoController extends AbstractController
     public function feedMagazine(Request $request): Response
     {
         $site = (string) $this->params->get('name');
-        $articles = $this->articleRepository->findPublishedForSyndication(8000);
-        $bySlug = $this->dedupeArticlesByLatestRevision($articles);
-        $list = \array_values($bySlug);
-        usort($list, static function (Article $a, Article $b): int {
-            $ca = $a->getCreatedAt();
-            $cb = $b->getCreatedAt();
-            if ($ca === null && $cb === null) {
-                return 0;
-            }
-            if ($ca === null) {
-                return 1;
-            }
-            if ($cb === null) {
-                return -1;
-            }
-
-            return $cb <=> $ca;
-        });
+        $list = $this->magazineContent->getAllMagazineCategoryArticlesForSyndication();
         $list = \array_slice($list, 0, self::FEED_MAX_ITEMS);
         $feedUrl = $this->absoluteUrlForRoute('feed_magazine');
         $homeUrl = $this->absoluteUrlForRoute('home');
@@ -119,7 +102,7 @@ final class SeoController extends AbstractController
         $updated = $this->newestArticleUpdate($list);
 
         $body = $this->buildAtomFeed(
-            $site.': all articles',
+            $site.': all categories',
             (string) $this->params->get('description'),
             $selfId,
             $feedUrl,

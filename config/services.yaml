@@ -36,6 +36,7 @@ services:
             $defaultRelayUrl: '%default_relay%'
             $articleRelayUrls: '%article_relays%'
             $profileRelayUrls: '%profile_relays%'
+            $projectDir: '%kernel.project_dir%'
     App\Twig\FooterLinksExtension:
         arguments:
             $footerLinksPath: '%footer_links%'

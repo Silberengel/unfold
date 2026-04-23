@@ -19,6 +19,8 @@ use swentel\nostr\Relay\Relay;
 use swentel\nostr\Relay\RelaySet;
 use swentel\nostr\Request\Request;
 use swentel\nostr\Subscription\Subscription;
+use Symfony\Component\Process\PhpExecutableFinder;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -27,6 +29,9 @@ class NostrClient
 {
     /** Per-relay WebSocket I/O cap (seconds), applied on each relay’s {@see \WebSocket\Client}. */
     private const RELAY_REQUEST_TIMEOUT_SEC = 15;
+
+    /** Extra wall time for {@see bin/nostr_relay_request_worker.php} process vs. WebSocket timeout. */
+    private const DISCUSSION_WORKER_GRACE_SEC = 5.0;
 
     /** When a logged-in user lists this relay, also use {@see self::AGGR_NOSTR_LAND} for comment + profile reads. */
     private const NOSTR_LAND = 'wss://nostr.land';
@@ -53,6 +58,7 @@ class NostrClient
         private readonly array $articleRelayUrls,
         private readonly array $profileRelayUrls,
         private readonly CacheInterface $relayQueryCache,
+        private readonly string $projectDir,
     ) {
         $this->defaultRelaySet = $this->buildArticleRelaySet();
     }
@@ -65,6 +71,51 @@ class NostrClient
     public function getArticleWriteRelayUrls(): array
     {
         return $this->configuredArticleRelayUrlList();
+    }
+
+    /**
+     * Relays to publish a kind-1111 reply: site defaults plus NIP-65 (kind-10002) for the
+     * article author and, when the direct parent is another pubkey (nested comment), that
+     * author’s relays as well.
+     *
+     * @param string $articleCoordinate         kind:pubkey:identifier
+     * @param string $parentEventAuthorHex      64-char hex of the event being replied to
+     *
+     * @return list<string>
+     */
+    public function getRelayUrlsForCommentPublish(string $articleCoordinate, string $parentEventAuthorHex): array
+    {
+        $base = $this->configuredArticleRelayUrlList();
+        $parts = explode(':', $articleCoordinate, 3);
+        $articlePk = \count($parts) >= 2 ? strtolower((string) $parts[1]) : '';
+        if (64 !== \strlen($articlePk) || !ctype_xdigit($articlePk)) {
+            $articlePk = '';
+        }
+        $parentPk = strtolower(trim($parentEventAuthorHex));
+        if (64 !== \strlen($parentPk) || !ctype_xdigit($parentPk)) {
+            $parentPk = '';
+        }
+        $pubkeys = [];
+        if ($articlePk !== '') {
+            $pubkeys[] = $articlePk;
+        }
+        if ($parentPk !== '' && $parentPk !== $articlePk) {
+            $pubkeys[] = $parentPk;
+        }
+
+        $seen = array_fill_keys($base, true);
+        $out = $base;
+        foreach ($pubkeys as $pk) {
+            foreach ($this->getAuthorNip65RelaysList($pk) as $wss) {
+                if (!\is_string($wss) || $wss === '' || isset($seen[$wss])) {
+                    continue;
+                }
+                $seen[$wss] = true;
+                $out[] = $wss;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -265,38 +316,65 @@ class NostrClient
     }
 
     /**
-     * Get top 3 reputable relays from an author's relay list (cached; avoids a kind-10002 round trip per page view).
+     * Full NIP-65 (kind-10002) wss:// list for a hex pubkey, cached. Used for comment fetches; prefer
+     * {@see getTopReputableRelaysForAuthor} when you only need a few relays.
+     *
+     * @return list<string>
      */
-    private function getTopReputableRelaysForAuthor(string $pubkey, int $limit = 3): array
+    private function getAuthorNip65RelaysList(string $pubkey): array
     {
-        $cacheKey = 'nostr_author_relays_'.hash('sha256', $pubkey);
+        $cacheKey = 'nostr_kind10002_relays_v1_'.hash('sha256', $pubkey);
 
-        return $this->relayQueryCache->get($cacheKey, function (ItemInterface $item) use ($pubkey, $limit): array {
+        return $this->relayQueryCache->get($cacheKey, function (ItemInterface $item) use ($pubkey): array {
             $item->expiresAfter(3600);
             try {
                 $authorRelays = $this->getNpubRelays($pubkey);
             } catch (\Exception $e) {
-                $this->logger->error('Error getting author relays', [
+                $this->logger->error('Error getting author NIP-65 relay list', [
                     'pubkey' => $pubkey,
                     'error' => $e->getMessage(),
                 ]);
                 $authorRelays = [];
             }
+            $authorRelays = array_values(array_filter(
+                is_array($authorRelays) ? $authorRelays : [],
+                static function ($relay): bool {
+                    return \is_string($relay)
+                        && str_starts_with($relay, 'wss:')
+                        && !str_contains($relay, 'localhost');
+                }
+            ));
             if ($authorRelays === []) {
-                return [$this->defaultRelayUrl];
+                return [];
+            }
+            $seen = [];
+            $out = [];
+            foreach ($authorRelays as $u) {
+                if (isset($seen[$u])) {
+                    continue;
+                }
+                $seen[$u] = true;
+                $out[] = $u;
             }
 
-            $authorRelays = array_filter($authorRelays, static function ($relay): bool {
-                return \is_string($relay)
-                    && str_starts_with($relay, 'wss:')
-                    && !str_contains($relay, 'localhost');
-            });
-            if ($authorRelays === []) {
-                return [$this->defaultRelayUrl];
-            }
-
-            return array_values(array_slice($authorRelays, 0, $limit));
+            return $out;
         });
+    }
+
+    /**
+     * A short prefix of the author NIP-65 list (or default relay) for queries that do not need every home relay.
+     */
+    private function getTopReputableRelaysForAuthor(string $pubkey, int $limit = 3): array
+    {
+        $all = $this->getAuthorNip65RelaysList($pubkey);
+        if ($all === []) {
+            return [$this->defaultRelayUrl];
+        }
+        if ($limit < 1) {
+            $limit = 1;
+        }
+
+        return \array_values(\array_slice($all, 0, $limit));
     }
 
     /**
@@ -883,23 +961,22 @@ class NostrClient
         $pubkey = $parts[1];
 
         $tRelays = microtime(true);
-        $authorRelays = $this->getTopReputableRelaysForAuthor($pubkey, 1);
+        $authorRelays = $this->getAuthorNip65RelaysList($pubkey);
         $this->logger->info('nostr.article_discussion.author_relays_ready', [
             'elapsed_ms' => (int) round((microtime(true) - $tRelays) * 1000),
-            'author_relays' => $authorRelays,
+            'author_relay_count' => \count($authorRelays),
         ]);
 
+        $baseForDiscussion = $this->configuredArticleRelayUrlList();
         $mergedForDiscussion = $this->withAggrNostrLandIfUserSubscribesNostrLand(
-            array_merge($this->configuredArticleRelayUrlList(), $authorRelays)
+            array_merge($baseForDiscussion, $authorRelays)
         );
-        $relaySet = $this->relaySetFromDistinctUrlList($mergedForDiscussion);
-        $plannedRelayUrls = $mergedForDiscussion;
+        $plannedRelayUrls = array_values(array_unique($mergedForDiscussion, \SORT_REGULAR));
 
         $filters = $this->createArticleDiscussionFilters($coordinate, $rootEventHexId);
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $requestMessage = new RequestMessage($subscriptionId, $filters);
-        $request = $this->newTimedRequest($relaySet, $requestMessage);
 
         $this->logger->info('nostr.article_discussion.req_sending', [
             'subscription_id' => $subscriptionId,
@@ -911,7 +988,20 @@ class NostrClient
         $byId = [];
         try {
             $tSend = microtime(true);
-            $response = $request->send();
+            $workerPath = $this->projectDir.'/bin/nostr_relay_request_worker.php';
+            if (!\is_file($workerPath) || \count($plannedRelayUrls) <= 1) {
+                $response = $this->sendArticleDiscussionToRelaysSequential($plannedRelayUrls, $requestMessage);
+            } else {
+                try {
+                    $response = $this->sendArticleDiscussionToRelaysParallel($plannedRelayUrls, $requestMessage);
+                } catch (\Throwable $e) {
+                    $this->logger->warning('nostr.article_discussion.parallel_failed', [
+                        'message' => $e->getMessage(),
+                        'exception_class' => \get_class($e),
+                    ]);
+                    $response = $this->sendArticleDiscussionToRelaysSequential($plannedRelayUrls, $requestMessage);
+                }
+            }
             $sendMs = (int) round((microtime(true) - $tSend) * 1000);
             $this->logger->info('nostr.article_discussion.req_response_envelope', [
                 'elapsed_ms' => $sendMs,
@@ -992,6 +1082,105 @@ class NostrClient
         ]);
 
         return ['thread' => $thread, 'quotes' => $quotes];
+    }
+
+    /**
+     * One {@see Request} over all relays (library visits each wss:// in series).
+     *
+     * @param list<string> $relayUrls
+     *
+     * @return array<string, mixed> Same shape as {@see Request::send()} (relay url → message list)
+     */
+    private function sendArticleDiscussionToRelaysSequential(array $relayUrls, RequestMessage $requestMessage): array
+    {
+        $relaySet = $this->relaySetFromDistinctUrlList($relayUrls);
+        $request = $this->newTimedRequest($relaySet, $requestMessage);
+
+        return $request->send();
+    }
+
+    /**
+     * One short-lived CLI worker per relay so WebSocket I/O is parallel (vs. a single in-process
+     * {@see Request::send() loop).
+     *
+     * @param list<string> $relayUrls
+     *
+     * @return array<string, mixed> Same shape as {@see Request::send()}
+     */
+    private function sendArticleDiscussionToRelaysParallel(array $relayUrls, RequestMessage $requestMessage): array
+    {
+        $worker = $this->projectDir.'/bin/nostr_relay_request_worker.php';
+        $phpBinary = (new PhpExecutableFinder())->find() ?: 'php';
+        $timeout = self::RELAY_REQUEST_TIMEOUT_SEC + (int) self::DISCUSSION_WORKER_GRACE_SEC;
+
+        $rawPayload = serialize($requestMessage);
+        $tmp = tempnam(sys_get_temp_dir(), 'nrq_');
+        if ($tmp === false) {
+            throw new \RuntimeException('tempnam failed for Nostr discussion payload');
+        }
+        try {
+            if (file_put_contents($tmp, $rawPayload) === false) {
+                throw new \RuntimeException('Could not write Nostr discussion temp payload');
+            }
+
+            /** @var array<string, Process> $procs */
+            $procs = [];
+            foreach ($relayUrls as $wss) {
+                if (!\is_string($wss) || $wss === '') {
+                    continue;
+                }
+                $p = new Process(
+                    [$phpBinary, $worker, $wss, $tmp],
+                    $this->projectDir,
+                    null,
+                    null,
+                    (float) $timeout
+                );
+                $p->start();
+                $procs[$wss] = $p;
+            }
+
+            $merged = [];
+            foreach ($procs as $wss => $p) {
+                $p->wait();
+                if (!$p->isSuccessful()) {
+                    $err = $p->getErrorOutput();
+                    $this->logger->warning('nostr.article_discussion.relay_worker_failed', [
+                        'relay' => $wss,
+                        'exit_code' => $p->getExitCode(),
+                        'stderr' => $err !== '' ? $err : null,
+                    ]);
+                    $merged[$wss] = [];
+
+                    continue;
+                }
+                $out = trim($p->getOutput());
+                if ($out === '') {
+                    $merged[$wss] = [];
+
+                    continue;
+                }
+                $decoded = base64_decode($out, true);
+                if ($decoded === false || $decoded === '') {
+                    $merged[$wss] = [];
+
+                    continue;
+                }
+                $chunk = unserialize($decoded, ['allowed_classes' => true]);
+                if (!\is_array($chunk)) {
+                    $merged[$wss] = [];
+
+                    continue;
+                }
+                $merged = array_replace($merged, $chunk);
+            }
+
+            return $merged;
+        } finally {
+            if (\is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
     }
 
     /**

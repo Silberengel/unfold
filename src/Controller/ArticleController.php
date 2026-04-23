@@ -33,8 +33,10 @@ class ArticleController  extends AbstractController
     #[Route('/fragment/comments', name: 'article_comments_fragment', methods: ['GET'])]
     public function commentsFragment(Request $request, ArticleCommentThreadLoader $loader, LoggerInterface $logger): Response
     {
-        // Article body may raise the global limit; keep this sub-request bounded so relay I/O cannot hit max_execution_time (500).
-        set_time_limit(45);
+        // {@see NostrClient::getArticleDiscussion} runs per-relay work in parallel CLI workers; allow headroom
+        // for all processes + Symfony (45s was too low and caused an uncatchable max-execution fatal → HTTP 500).
+        @set_time_limit(120);
+        @ini_set('max_execution_time', '120');
 
         $t0 = microtime(true);
         $coordinate = $request->query->getString('coordinate');

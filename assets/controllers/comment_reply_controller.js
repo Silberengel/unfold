@@ -74,6 +74,7 @@ export default class extends Controller {
             expected_coordinate: this.expectedCoordinateValue,
             parent_kind: parseInt(String(this.parentKindValue), 10),
             parent_id: this.parentIdValue,
+            parent_author_pubkey: this.authorPubkeyValue,
             article_event_id: this.articleEventIdValue || null,
             csrf: this.csrfValue,
         };

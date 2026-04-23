@@ -92,7 +92,27 @@ final readonly class CommentReplyService
             return ['ok' => false, 'error' => 'Reply must start with a quote line (>) linking the parent via nostr:nevent1 / naddr1 (reply blurb)', 'code' => 400];
         }
 
-        $relays = $this->nostrClient->getArticleWriteRelayUrls();
+        $rawParentAuthor = isset($payload['parent_author_pubkey']) && \is_string($payload['parent_author_pubkey'])
+            ? strtolower(trim($payload['parent_author_pubkey']))
+            : '';
+        $clientParentOk = 64 === \strlen($rawParentAuthor) && ctype_xdigit($rawParentAuthor);
+        $coordBits = explode(':', $expectedCoordinate, 3);
+        $articleAuthor = \count($coordBits) >= 2 ? strtolower((string) $coordBits[1]) : '';
+        $articleAuthorOk = 64 === \strlen($articleAuthor) && ctype_xdigit($articleAuthor);
+
+        if ((int) $parentKind === KindsEnum::COMMENTS->value) {
+            if (!$clientParentOk) {
+                return ['ok' => false, 'error' => 'parent_author_pubkey (64 hex) is required when replying to a comment', 'code' => 400];
+            }
+            $parentAuthorHex = $rawParentAuthor;
+        } else {
+            $parentAuthorHex = $clientParentOk ? $rawParentAuthor : $articleAuthor;
+            if (!$clientParentOk && !$articleAuthorOk) {
+                return ['ok' => false, 'error' => 'Invalid article coordinate; cannot determine author relays', 'code' => 400];
+            }
+        }
+
+        $relays = $this->nostrClient->getRelayUrlsForCommentPublish($expectedCoordinate, $parentAuthorHex);
         $result = $this->nostrClient->publishEvent($wire, $relays);
         $this->logger->info('comment_reply.published', [
             'id' => $wire->getId(),
