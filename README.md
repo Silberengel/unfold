@@ -53,7 +53,7 @@ make prewarm
 | 1 | `docker compose up -d --wait` — starts **php**, **database**, and **cron** (the `cron` image runs a full `app:prewarm` on a 10 min schedule) |
 | 2 | `doctrine:migrations:migrate` |
 | 3 | `articles:get -- '-2 month' 'now'` — sync long-form into MySQL for that window |
-| 4 | `app:prewarm` — magazine **30040**, **kind-0** profiles, **comment** cache (default **`--comments-max=20`**, newest by `createdAt`) |
+| 4 | `app:prewarm` — magazine **30040**, **kind-0** profiles, **comment** cache (default **`--comments-max=10`**, newest by `createdAt`) |
 
 `make prewarm` brings the stack (including `cron`) up so scheduled prewarm is active. **Optional** extra arguments for the **cron**-scheduled `app:prewarm` go in **`.env`** as **`PREWARM_FLAGS`** (same as you might pass to `php bin/console app:prewarm …`); Compose passes them into the `cron` container. Example: `PREWARM_FLAGS="--metadata-limit=50 --no-magazine"`. **Restart** the `cron` service after changing `PREWARM_FLAGS` so the container reloads the env. Hub / `compose.hub.yaml` has no `cron` service; use a host timer or `exec` if you need the same there.
 
@@ -79,7 +79,7 @@ make prewarm
 | `--no-comments` | off | Skip comment thread cache |
 | `--metadata-limit` | `0` (all authors) | Cap distinct author pubkeys |
 | `--metadata-batch` | `50` | Pubkeys per batched Nostr `REQ` |
-| `--comments-max` | `20` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
+| `--comments-max` | `10` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
 | `--comments-budget` | `600` | Max wall seconds for the whole comments phase (Nostr is slow; raise e.g. `1200` if you need more articles in one run) |
 | `--magazine-budget` | `30` | Max wall seconds for magazine refresh |
 
