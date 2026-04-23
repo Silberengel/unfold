@@ -38,12 +38,14 @@ services:
       - caddy_config:/config
     ports:
       - "${HTTP_PUBLISH:-9080}:80/tcp"
+    # Caddy/FrankenPHP only listen after the entrypoint finishes DB wait + migrations — allow a slow
+    # first MySQL + migrate on a small host (avoids "unhealthy" + failed `up` for dependents).
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1/", "-o", "/dev/null"]
       interval: 10s
       timeout: 5s
-      retries: 6
-      start_period: 120s
+      retries: 10
+      start_period: 180s
     depends_on:
       database:
         condition: service_healthy
@@ -53,14 +55,14 @@ services:
     pull_policy: always
     restart: unless-stopped
     working_dir: /app
-    # Same app image as `php`, but not FrankenPHP: wait for DB + `php` healthy (migrations done), then
-    # run `app:prewarm` every 10 minutes (dev `docker/cron` uses the same interval).
+    # Do not `depends_on: php: service_healthy`: Compose can time out the stack while `php` is still
+    # starting (DB retries + migrations); `prewarm` waits in-script for http://php:80/ = same as ready.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        until php bin/console dbal:run-sql -q "SELECT 1" 2>/dev/null; do
-          echo "prewarm: waiting for database..."
-          sleep 2
+        echo "prewarm: waiting for app at http://php/ (Caddy + migrations)…"
+        until curl -fsS "http://php/" -o /dev/null 2>/dev/null; do
+          sleep 3
         done
         while true; do
           sleep 600
@@ -77,7 +79,7 @@ services:
       database:
         condition: service_healthy
       php:
-        condition: service_healthy
+        condition: service_started
 
   database:
     image: mysql:${MYSQL_VERSION:-8.0}

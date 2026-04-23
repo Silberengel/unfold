@@ -170,7 +170,7 @@ Adjust the **articles:get** window as needed.
 
 ### Scheduled `app:prewarm` on hub
 
-The **`prewarm`** service in `compose.hub.yaml` uses the **same** image as `php` and runs **`app:prewarm` every 10 minutes** (same cadence as dev’s `docker/cron`). It starts only after the **database** is healthy and the **`php`** service passes its healthcheck (so migrations from the `php` entrypoint have typically completed). **Optional** `PREWARM_FLAGS` in `.env` is passed into that container; after changing it, run:
+The **`prewarm`** service uses the **same** image as `php` and runs **`app:prewarm` every 10 minutes** (same cadence as dev’s `docker/cron`). It waits in an **entrypoint loop** until **`http://php/`** returns (Caddy up after DB + migrations), so the first boot is not blocked on Compose’s `php` healthcheck timing. **Optional** `PREWARM_FLAGS` in `.env` is passed into that container; after changing it, run:
 
 ```bash
 docker compose -f compose.hub.yaml up -d --force-recreate prewarm
