@@ -15,6 +15,7 @@ class Header
     public function __construct(
         private readonly MagazineContentService $magazineContent,
     ) {
-        $this->cats = $this->magazineContent->getHomeCategoryIndexTags();
+        // Store only: never block the response on relay I/O (cron/pre-warm updates the store).
+        $this->cats = $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly();
     }
 }

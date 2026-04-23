@@ -1,7 +1,5 @@
 {% extends 'base.html.twig' %}
 
-{% block magazine_sync_page %}{% if app.request.attributes.get('_route') == 'articles' %}articles{% else %}category{% endif %}{% endblock %}
-{% block magazine_sync_slug %}{{ (sync_slug|default(''))|e('html_attr') }}{% endblock %}
 
 {% block title %}{{ (category.title|default(''))|trim != '' ? category.title|trim ~ ' — ' ~ website_name : website_name }}{% endblock %}
 
@@ -31,7 +29,7 @@
 {% endblock %}
 
 {% block body %}
-    <div class="category-body" data-magazine-sync-target="pageBody">
+    <div class="category-body">
         <twig:Organisms:CardList :list="list" class="article-list" />
     </div>
 {% endblock %}

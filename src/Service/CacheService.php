@@ -35,8 +35,9 @@ readonly class CacheService
      */
     public function getMetadataBundle(string $npub): array
     {
-        $aggr = $this->nostrClient->getNostrLandAggrReaderCacheSuffix();
-        $cacheKey = $aggr === '' ? '0_'.$npub : '0_'.$aggr.'_'.$npub;
+        // One key per author: do not split on Nostr.Land / aggr (see comment thread cache). Otherwise
+        // prewarm and anonymous hits do not match logged-in readers → cold Nostr on every article view.
+        $cacheKey = '0_'.$npub;
         try {
             $cached = $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub) {
                 $item->expiresAfter(3600); // 1 hour, adjust as needed

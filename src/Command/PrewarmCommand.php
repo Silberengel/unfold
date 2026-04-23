@@ -117,6 +117,19 @@ final class PrewarmCommand extends Command
             $io->note('Skipping magazine (--no-magazine).');
         }
 
+        $io->section('Long-form in DB (category `a` tags missing from MySQL)');
+        try {
+            $n = $this->magazineContent->ingestMissingLongformForAllMagazineCategories();
+            if ($n === 0) {
+                $io->note('No missing long-form rows for category `a` coordinates (or empty magazine store).');
+            } else {
+                $io->writeln(sprintf('Fetched or attempted ingest for <info>%d</info> missing coordinate(s).', $n));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('app:prewarm longform ingest failed', ['e' => $e]);
+            $io->warning('Long-form backfill failed: '.$e->getMessage());
+        }
+
         // MagazineRefresher sets max_execution_time (e.g. 60 for budget 30); restore before metadata.
         $this->disableCliExecutionTimeLimit();
 

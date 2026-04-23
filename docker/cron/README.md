@@ -1,6 +1,6 @@
 # `cron` service (Docker)
 
-The `cron` image runs a single job: **`php bin/console app:prewarm` every 10 minutes**, against the app tree bind-mounted at `/var/www/html`.
+The `cron` image runs a single job: **`php bin/console app:prewarm` every 10 minutes**, against the app tree bind-mounted at `/var/www/html`. Magazine **30040** indices, **MySQL backfill** for category `a` long-form rows, profile metadata, and comment cache are updated here (or by running `app:prewarm` manually)—not from a browser request.
 
 - **Flags:** set **`PREWARM_FLAGS`** in the project `.env` (Compose injects it). Example: `PREWARM_FLAGS="--metadata-limit=30 --no-magazine"`. After editing, run `docker compose up -d --force-recreate cron` (or `docker compose up -d cron`) so the container gets the new value. If unset, `app:prewarm` uses its **built-in defaults** (same idea as running the console with no args).
 

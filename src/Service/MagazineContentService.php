@@ -11,18 +11,13 @@ use App\Repository\ArticleRepository;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
- * Magazine index events for templates. Reads {@see MagazineIndexStore} first; on a cold cache or when
- * the last successful relay sync is older than {@see self::ROOT_REVALIDATE_SECONDS}, the service
- * calls {@see MagazineRefresher} so the root index (and nav) can pick up new categories.
+ * Magazine index for templates. Reads {@see MagazineIndexStore} only on HTTP; relay refresh and DB
+ * backfill for category long-form are done by `app:prewarm` (cron) / CLI.
  */
 final class MagazineContentService
 {
-    /** Re-fetch root from relays at most this often so new `a` tags appear in the header. */
-    private const ROOT_REVALIDATE_SECONDS = 300;
-
     public function __construct(
         private readonly MagazineIndexStore $store,
-        private readonly MagazineRefresher $refresher,
         private readonly ParameterBagInterface $params,
         private readonly ArticleRepository $articleRepository,
         private readonly NostrClient $nostrClient,
@@ -30,26 +25,18 @@ final class MagazineContentService
     }
 
     /**
-     * "indices" for the home template: Nostr `a` tag rows for each category.
+     * @deprecated use {@see getHomeCategoryAIndexTagsFromStoreOnly} (identical; no blocking relay I/O)
      *
      * @return list<array<int, string>>
      */
     public function getHomeCategoryIndexTags(): array
     {
-        $npub = (string) $this->params->get('npub');
-        $dTag = (string) $this->params->get('d_tag');
-        if ($this->store->getRoot($npub, $dTag) === null) {
-            $this->refresher->refreshFromRelays(20, []);
-        } elseif ($this->shouldRevalidateRootFromRelay()) {
-            $this->refresher->refreshFromRelays(20, []);
-        }
-
         return $this->getHomeCategoryAIndexTagsFromStoreOnly();
     }
 
     /**
-     * Category `a` tags from the persisted root only (no relay). Used after /ux/magazine-sync
-     * has already called {@see MagazineRefresher::refreshFromRelays}.
+     * Category `a` tags from the persisted root only (no relay). The store is filled by
+     * `app:prewarm` / cron ({@see MagazineRefresher::refreshFromRelays}), not from HTTP.
      *
      * @return list<array<int, string>>
      */
@@ -84,16 +71,6 @@ final class MagazineContentService
         });
 
         return array_values($cats);
-    }
-
-    private function shouldRevalidateRootFromRelay(): bool
-    {
-        $age = $this->refresher->getSecondsSinceLastRelayRun();
-        if ($age === null) {
-            return true;
-        }
-
-        return $age > self::ROOT_REVALIDATE_SECONDS;
     }
 
     /**
@@ -145,15 +122,14 @@ final class MagazineContentService
     }
 
     /**
+     * Category listing from the persisted 30040 index and DB only. Does not call relays.
+     * Missing `Article` rows (not yet in MySQL) appear until `app:prewarm` backfills.
+     *
      * @return array{list: list<Article>, category: array{title: string, summary: string}}
      */
     public function getCategoryPageData(string $slug): array
     {
         $catIndex = $this->store->getCategory($slug);
-        if ($catIndex === null) {
-            $this->refresher->refreshFromRelays(20, [$slug]);
-            $catIndex = $this->store->getCategory($slug);
-        }
         $list = [];
         $coordinates = [];
         $category = [];
@@ -188,21 +164,6 @@ final class MagazineContentService
                 ];
             }
             $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
-            $missing = [];
-            foreach ($coordinates as $coordinate) {
-                $parts = explode(':', (string) $coordinate, 3);
-                if (\count($parts) < 3) {
-                    continue;
-                }
-                $k = (string) $parts[1]."\0".trim((string) $parts[2]);
-                if (!isset($byAddress[$k])) {
-                    $missing[] = (string) $coordinate;
-                }
-            }
-            if ($missing !== []) {
-                $this->nostrClient->ingestMissingLongformForCategoryCoordinates($missing);
-                $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
-            }
             foreach ($coordinates as $coordinate) {
                 $parts = explode(':', (string) $coordinate, 3);
                 if (\count($parts) < 3) {
@@ -222,6 +183,77 @@ final class MagazineContentService
             'list' => $list,
             'category' => $category,
         ];
+    }
+
+    /**
+     * For every category in the root index, fetch Nostr long-form for `a` tags missing in MySQL.
+     * Nostr I/O; intended for {@see PrewarmCommand} / cron only.
+     */
+    public function ingestMissingLongformForAllMagazineCategories(): int
+    {
+        $n = 0;
+        foreach ($this->getCategorySlugsFromStore() as $catSlug) {
+            $missing = $this->findMissingLongformCoordinatesForCategory($catSlug);
+            if ($missing === []) {
+                continue;
+            }
+            $this->nostrClient->ingestMissingLongformForCategoryCoordinates($missing);
+            $n += \count($missing);
+        }
+
+        return $n;
+    }
+
+    /**
+     * @return list<string> Nostr coordinates kind:pubkey:identifier
+     */
+    private function findMissingLongformCoordinatesForCategory(string $slug): array
+    {
+        $catIndex = $this->store->getCategory($slug);
+        if ($catIndex === null) {
+            return [];
+        }
+        $coordinates = [];
+        foreach ($catIndex->getTags() as $tag) {
+            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
+                $coordinates[] = (string) $tag[1];
+            }
+        }
+        if ($coordinates === []) {
+            return [];
+        }
+        $pairs = [];
+        foreach ($coordinates as $coordinate) {
+            $parts = explode(':', (string) $coordinate, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $slugPart = trim((string) $parts[2]);
+            if ($slugPart === '') {
+                continue;
+            }
+            $pairs[] = [
+                'pubkey' => (string) $parts[1],
+                'slug' => $slugPart,
+            ];
+        }
+        if ($pairs === []) {
+            return [];
+        }
+        $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
+        $missing = [];
+        foreach ($coordinates as $coordinate) {
+            $parts = explode(':', (string) $coordinate, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $k = (string) $parts[1]."\0".trim((string) $parts[2]);
+            if (!isset($byAddress[$k])) {
+                $missing[] = (string) $coordinate;
+            }
+        }
+
+        return $missing;
     }
 
     /**

@@ -22,7 +22,7 @@ class DefaultController extends AbstractController
     public function index(): Response
     {
         return $this->render('home.html.twig', [
-            'indices' => $this->magazineContent->getHomeCategoryIndexTags(),
+            'indices' => $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly(),
         ]);
     }
 

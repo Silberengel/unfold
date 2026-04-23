@@ -11,7 +11,7 @@
         <button class="hamburger btn btn-secondary" data-action="click->menu#toggle" aria-label="Menu">&#9776;</button>
     </div>
     <div class="header__categories"  data-menu-target="menu">
-        <ul data-magazine-sync-target="headerNav">
+        <ul>
             {% for category in cats %}
                 <li><twig:Molecules:CategoryLink :category="category" /></li>
             {% endfor %}

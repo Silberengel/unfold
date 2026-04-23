@@ -6,8 +6,6 @@
     <meta name="description" content="{{ website_description|e('html_attr') }}">
 {% endblock %}
 
-{% block magazine_sync_page %}home{% endblock %}
-
 {% block ogtags %}
     {% set _og_image = absolute_url(asset('og-image.jpg')) %}
     <link rel="canonical" href="{{ url('home') }}">
@@ -28,7 +26,7 @@
 {% endblock %}
 
 {% block body %}
-    <div class="home-body" data-magazine-sync-target="pageBody">
+    <div class="home-body">
         {% for item in indices %}
             <twig:Organisms:FeaturedList :category="item" class="featured-list"/>
         {% endfor %}

@@ -10,7 +10,7 @@ use Psr\Cache\InvalidArgumentException;
 
 /**
  * Read/write persisted magazine Nostr index events (kinds 30040) without callback-based relay I/O
- * on the request path. Updated by {@see MagazineRefresher} or the /ux/magazine-sync action.
+ * on the request path. Updated by {@see MagazineRefresher} (via `app:prewarm` / cron, or explicit CLI use).
  */
 final class MagazineIndexStore
 {
