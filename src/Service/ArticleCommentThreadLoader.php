@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use Psr\Cache\CacheItemPoolInterface;
+use Psr\Cache\InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -13,12 +15,50 @@ use Symfony\Contracts\Cache\ItemInterface;
  */
 final readonly class ArticleCommentThreadLoader
 {
+    /** PSR-6 pool backing {@see $cache}; used for true cache-only reads (SSR) without invoking Nostr. */
     public function __construct(
         private NostrClient $nostrClient,
         private NostrLinkParser $nostrLinkParser,
         private CacheInterface $cache,
+        private CacheItemPoolInterface $appCachePool,
         private LoggerInterface $logger,
     ) {
+    }
+
+    /**
+     * @return array{
+     *     list: array<int, object>,
+     *     quotes: array<int, object>,
+     *     commentLinks: array<string, array<int, mixed>>,
+     *     quoteLinks: array<string, array<int, mixed>>,
+     *     processedContent: array<string, string>
+     * }|null
+     */
+    public function tryLoadFromCacheOnly(string $coordinate, ?string $articleEventHexId = null): ?array
+    {
+        $key = $this->cacheKeyForThread($coordinate, $articleEventHexId);
+        try {
+            $item = $this->appCachePool->getItem($key);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+        if (!$item->isHit()) {
+            return null;
+        }
+        $discussion = $item->get();
+        if (!\is_array($discussion)) {
+            return null;
+        }
+        if (($discussion['thread'] ?? []) === [] && ($discussion['quotes'] ?? []) === []) {
+            $this->logger->info('comments.loader.cache_hit_empty', ['coordinate' => $coordinate]);
+        } else {
+            $this->logger->info('comments.loader.cache_hit_only', [
+                'coordinate' => $coordinate,
+                'thread' => \count($discussion['thread'] ?? []),
+            ]);
+        }
+
+        return $this->expandFromDiscussion($discussion, microtime(true));
     }
 
     /**
@@ -33,8 +73,7 @@ final readonly class ArticleCommentThreadLoader
     public function load(string $coordinate, ?string $articleEventHexId = null): array
     {
         $t0 = microtime(true);
-        $aggrSuffix = $this->nostrClient->getNostrLandAggrReaderCacheSuffix();
-        $cacheKey = 'comments_v5_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? '')."\0".$aggrSuffix);
+        $cacheKey = $this->cacheKeyForThread($coordinate, $articleEventHexId);
         $this->logger->info('comments.loader.start', [
             'cache_key_suffix' => substr($cacheKey, -16),
             'coordinate' => $coordinate,
@@ -43,7 +82,8 @@ final readonly class ArticleCommentThreadLoader
 
         try {
             $discussion = $this->cache->get($cacheKey, function (ItemInterface $item) use ($coordinate, $articleEventHexId, $t0): array {
-                $item->expiresAfter(120);
+                // Prewarm + HTTP should share the same key; 2m expiry caused cold misses during normal use.
+                $item->expiresAfter(86400);
                 $this->logger->info('comments.loader.cache_miss', [
                     'elapsed_since_load_start_ms' => (int) round((microtime(true) - $t0) * 1000),
                 ]);
@@ -66,6 +106,31 @@ final readonly class ArticleCommentThreadLoader
             $discussion = ['thread' => [], 'quotes' => []];
         }
 
+        return $this->expandFromDiscussion($discussion, $t0);
+    }
+
+    /**
+     * Same key for CLI prewarm, anonymous, and logged-in readers so cached threads are shared.
+     * (Relay selection for misses may still add aggr for signed-in users in {@see NostrClient::getArticleDiscussion}.)
+     */
+    private function cacheKeyForThread(string $coordinate, ?string $articleEventHexId): string
+    {
+        return 'comments_v5_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? ''));
+    }
+
+    /**
+     * @param array{thread: array<int, object>, quotes: array<int, object>} $discussion
+     *
+     * @return array{
+     *     list: array<int, object>,
+     *     quotes: array<int, object>,
+     *     commentLinks: array<string, array<int, mixed>>,
+     *     quoteLinks: array<string, array<int, mixed>>,
+     *     processedContent: array<string, string>
+     * }
+     */
+    private function expandFromDiscussion(array $discussion, float $t0): array
+    {
         $list = $discussion['thread'] ?? [];
         $quotes = $discussion['quotes'] ?? [];
         $this->logger->info('comments.loader.cache_resolved', [

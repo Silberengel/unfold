@@ -204,15 +204,76 @@ dt {
 footer {
     background-color: var(--color-footer-bg);
     color: var(--color-footer-text);
-    text-align: center;
-    padding: 1em 0;
+    padding: 1.25rem 1rem 1.5rem;
     position: relative;
     width: 100%;
     border-top: 1px solid var(--color-border);
 }
 
+.site-footer {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.75rem;
+    text-align: left;
+}
+
+.site-footer__syndication-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.35rem;
+}
+
+.site-footer__syndication-hint {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    color: var(--color-text);
+    opacity: 0.9;
+    max-width: 40rem;
+}
+
+.site-footer__syndication-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.6rem;
+}
+
+.site-footer__main {
+    text-align: center;
+}
+
+.site-footer__legal {
+    margin: 1rem 0 0;
+    font-size: 0.95rem;
+}
+
+@media (min-width: 900px) {
+    .site-footer {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 2rem 3rem;
+    }
+
+    .site-footer__syndication {
+        flex: 0 1 50%;
+    }
+
+    .site-footer__main {
+        flex: 0 1 auto;
+        min-width: min(20rem, 100%);
+        text-align: right;
+    }
+
+    .site-footer__legal {
+        text-align: right;
+    }
+}
+
 footer .footer-links {
-    margin: 24px 0;
+    margin: 0 0 0.5rem;
 }
 
 .footer-links a {

@@ -28,18 +28,6 @@
 {% endblock %}
 
 {% block body %}
-    <div class="home-subscribe" aria-label="Sitemap and syndication">
-        <h2 class="home-subscribe__title">Sitemap and feeds</h2>
-        <p class="home-subscribe__hint">For search engines and feed readers. Atom is supported by most clients.</p>
-        <div class="home-subscribe__actions">
-            <a class="btn btn-secondary" href="{{ path('sitemap') }}">Sitemap (XML)</a>
-            <a class="btn btn-secondary" href="{{ path('robots_txt') }}">Robots</a>
-            <a class="btn btn-secondary" href="{{ path('feed_magazine') }}">Atom — all articles</a>
-            {% for c in categories_for_feed %}
-                <a class="btn btn-secondary" href="{{ path('feed_category', {slug: c.slug}) }}">Atom — {{ c.title }}</a>
-            {% endfor %}
-        </div>
-    </div>
     <div class="home-body" data-magazine-sync-target="pageBody">
         {% for item in indices %}
             <twig:Organisms:FeaturedList :category="item" class="featured-list"/>

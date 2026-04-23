@@ -35,8 +35,8 @@ class ArticleController  extends AbstractController
     {
         // {@see NostrClient::getArticleDiscussion} runs per-relay work in parallel CLI workers; allow headroom
         // for all processes + Symfony (45s was too low and caused an uncatchable max-execution fatal → HTTP 500).
-        @set_time_limit(120);
-        @ini_set('max_execution_time', '120');
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
 
         $t0 = microtime(true);
         $coordinate = $request->query->getString('coordinate');
@@ -56,35 +56,6 @@ class ArticleController  extends AbstractController
         if (strlen($articleTitle) > 200) {
             $articleTitle = substr($articleTitle, 0, 200);
         }
-        $coordparts = explode(':', $coordinate, 3);
-        $articleKind = isset($coordparts[0]) && ctype_digit($coordparts[0]) ? (int) $coordparts[0] : 30023;
-        $articleAuthorPubkey = $coordparts[1] ?? '';
-
-        $articleReplyTags = null;
-        if ($articleAuthorPubkey !== '' && 64 === \strlen($articleAuthorPubkey) && ctype_xdigit($articleAuthorPubkey)) {
-            $articleReplyTags = Nip22CommentTags::forReplyToArticle($coordinate, $articleAuthorPubkey);
-        }
-
-        $parentIdForNaddr = str_repeat('0', 64);
-        $articleParentId = $articleEventId ?? $parentIdForNaddr;
-        if ($articleEventId !== null && 64 === \strlen($articleEventId) && ctype_xdigit($articleEventId)) {
-            $articleParentId = $articleEventId;
-        } else {
-            $articleParentId = $parentIdForNaddr;
-        }
-
-        $threadReplyRows = [];
-        $userMayReply = $this->isGranted('ROLE_USER');
-        if ($userMayReply && $articleReplyTags !== null) {
-            $threadReplyRows[] = [
-                'mode' => 'article',
-                'blurbLabel' => $articleTitle !== '' ? $articleTitle : 'Article',
-                'parentKind' => $articleKind,
-                'parentId' => $articleParentId,
-                'authorPubkey' => $articleAuthorPubkey,
-                'expectedTags' => $articleReplyTags,
-            ];
-        }
 
         $logger->info('http.fragment.comments_start', [
             'coordinate' => $coordinate,
@@ -98,69 +69,17 @@ class ArticleController  extends AbstractController
 
         try {
             $data = $loader->load($coordinate, $articleEventId);
-            if ($userMayReply && $articleReplyTags !== null) {
-                /** @var array<int, object> $list */
-                $list = $data['list'] ?? [];
-                foreach ($list as $row) {
-                    if (!\is_object($row)) {
-                        continue;
-                    }
-                    $k = (int) ($row->kind ?? 0);
-                    if ($k !== KindsEnum::COMMENTS->value) {
-                        continue;
-                    }
-                    $cid = (string) ($row->id ?? '');
-                    $cpk = (string) ($row->pubkey ?? '');
-                    if ($cid === '' || 64 !== \strlen($cid) || !ctype_xdigit($cid)) {
-                        continue;
-                    }
-                    if ($cpk === '' || 64 !== \strlen($cpk) || !ctype_xdigit($cpk)) {
-                        continue;
-                    }
-                    $rawTags = json_decode(json_encode($row->tags ?? []), true);
-                    if (!\is_array($rawTags)) {
-                        $rawTags = [];
-                    }
-                    $snippet = trim((string) ($row->content ?? ''));
-                    if (strlen($snippet) > 120) {
-                        $snippet = substr($snippet, 0, 117).'…';
-                    }
-                    if ($snippet === '') {
-                        $snippet = 'Comment';
-                    }
-                    try {
-                        $expectedTags = Nip22CommentTags::forReplyToComment($cid, $cpk, $k, $rawTags);
-                    } catch (\Throwable) {
-                        continue;
-                    }
-                    $threadReplyRows[] = [
-                        'mode' => 'comment',
-                        'blurbLabel' => $snippet,
-                        'parentKind' => $k,
-                        'parentId' => $cid,
-                        'authorPubkey' => $cpk,
-                        'expectedTags' => $expectedTags,
-                    ];
-                }
-            }
+            $data = $this->enrichCommentDataWithReplyContext(
+                $data,
+                $coordinate,
+                $articleEventId,
+                $articleTitle
+            );
             $logger->info('http.fragment.comments_after_load', [
                 'elapsed_ms' => (int) round((microtime(true) - $t0) * 1000),
             ]);
 
             $tRender = microtime(true);
-            $fragmentQuery = ['coordinate' => $coordinate, 'title' => $articleTitle];
-            if ($articleEventId !== null) {
-                $fragmentQuery['e'] = $articleEventId;
-            }
-            $data['comment_reply_context'] = [
-                'can_publish' => $userMayReply,
-                'coordinate' => $coordinate,
-                'article_event_id' => $articleEventId,
-                'parent_kind' => $articleKind,
-                'rows' => $threadReplyRows,
-                'fragment_url' => $this->generateUrl('article_comments_fragment', $fragmentQuery),
-            ];
-
             $response = $this->render('components/Organisms/Comments.html.twig', $data, new Response(
                 '',
                 Response::HTTP_OK,
@@ -181,6 +100,127 @@ class ArticleController  extends AbstractController
 
             return new Response('<div class="comments"></div>', Response::HTTP_OK, $headers);
         }
+    }
+
+    /**
+     * Adds `comment_reply_context` for the reply composer (same data as the HTML fragment, used for full-page SSR when cache hits).
+     *
+     * @param array{
+     *     list: array<int, object>,
+     *     quotes: array<int, object>,
+     *     commentLinks: array<string, array<int, mixed>>,
+     *     quoteLinks: array<string, array<int, mixed>>,
+     *     processedContent: array<string, string>
+     * } $data
+     *
+     * @return array{
+     *     list: array<int, object>,
+     *     quotes: array<int, object>,
+     *     commentLinks: array<string, array<int, mixed>>,
+     *     quoteLinks: array<string, array<int, mixed>>,
+     *     processedContent: array<string, string>,
+     *     comment_reply_context: array{
+     *         can_publish: bool,
+     *         coordinate: string,
+     *         article_event_id: ?string,
+     *         parent_kind: int,
+     *         rows: array<int, array<string, mixed>>,
+     *         fragment_url: string
+     *     }
+     * }
+     */
+    private function enrichCommentDataWithReplyContext(
+        array $data,
+        string $coordinate,
+        ?string $articleEventId,
+        string $articleTitle
+    ): array {
+        $coordparts = explode(':', $coordinate, 3);
+        $articleKind = isset($coordparts[0]) && ctype_digit($coordparts[0]) ? (int) $coordparts[0] : 30023;
+        $articleAuthorPubkey = $coordparts[1] ?? '';
+
+        $articleReplyTags = null;
+        if ($articleAuthorPubkey !== '' && 64 === \strlen($articleAuthorPubkey) && ctype_xdigit($articleAuthorPubkey)) {
+            $articleReplyTags = Nip22CommentTags::forReplyToArticle($coordinate, $articleAuthorPubkey);
+        }
+
+        $parentIdForNaddr = str_repeat('0', 64);
+        if ($articleEventId !== null && 64 === \strlen($articleEventId) && ctype_xdigit($articleEventId)) {
+            $articleParentId = $articleEventId;
+        } else {
+            $articleParentId = $parentIdForNaddr;
+        }
+
+        $threadReplyRows = [];
+        $userMayReply = $this->isGranted('ROLE_USER');
+        if ($userMayReply && $articleReplyTags !== null) {
+            $threadReplyRows[] = [
+                'mode' => 'article',
+                'blurbLabel' => $articleTitle !== '' ? $articleTitle : 'Article',
+                'parentKind' => $articleKind,
+                'parentId' => $articleParentId,
+                'authorPubkey' => $articleAuthorPubkey,
+                'expectedTags' => $articleReplyTags,
+            ];
+            /** @var array<int, object> $list */
+            $list = $data['list'] ?? [];
+            foreach ($list as $row) {
+                if (!\is_object($row)) {
+                    continue;
+                }
+                $k = (int) ($row->kind ?? 0);
+                if ($k !== KindsEnum::COMMENTS->value) {
+                    continue;
+                }
+                $cid = (string) ($row->id ?? '');
+                $cpk = (string) ($row->pubkey ?? '');
+                if ($cid === '' || 64 !== \strlen($cid) || !ctype_xdigit($cid)) {
+                    continue;
+                }
+                if ($cpk === '' || 64 !== \strlen($cpk) || !ctype_xdigit($cpk)) {
+                    continue;
+                }
+                $rawTags = json_decode(json_encode($row->tags ?? []), true);
+                if (!\is_array($rawTags)) {
+                    $rawTags = [];
+                }
+                $snippet = trim((string) ($row->content ?? ''));
+                if (strlen($snippet) > 120) {
+                    $snippet = substr($snippet, 0, 117).'…';
+                }
+                if ($snippet === '') {
+                    $snippet = 'Comment';
+                }
+                try {
+                    $expectedTags = Nip22CommentTags::forReplyToComment($cid, $cpk, $k, $rawTags);
+                } catch (\Throwable) {
+                    continue;
+                }
+                $threadReplyRows[] = [
+                    'mode' => 'comment',
+                    'blurbLabel' => $snippet,
+                    'parentKind' => $k,
+                    'parentId' => $cid,
+                    'authorPubkey' => $cpk,
+                    'expectedTags' => $expectedTags,
+                ];
+            }
+        }
+
+        $fragmentQuery = ['coordinate' => $coordinate, 'title' => $articleTitle];
+        if ($articleEventId !== null) {
+            $fragmentQuery['e'] = $articleEventId;
+        }
+        $data['comment_reply_context'] = [
+            'can_publish' => $userMayReply,
+            'coordinate' => $coordinate,
+            'article_event_id' => $articleEventId,
+            'parent_kind' => $articleKind,
+            'rows' => $threadReplyRows,
+            'fragment_url' => $this->generateUrl('article_comments_fragment', $fragmentQuery),
+        ];
+
+        return $data;
     }
 
     private static function isValidNostrCoordinate(string $coordinate): bool
@@ -243,7 +283,8 @@ class ArticleController  extends AbstractController
         EntityManagerInterface $entityManager,
         CacheService $cacheService,
         CacheItemPoolInterface $articlesCache,
-        Converter $converter
+        Converter $converter,
+        ArticleCommentThreadLoader $commentThreadLoader
     ): Response
     {
 
@@ -282,12 +323,34 @@ class ArticleController  extends AbstractController
         $npub = $key->convertPublicKeyToBech32($article->getPubkey());
         $author = $cacheService->getMetadata($npub);
 
+        $kind = $article->getKind()?->value ?? 30023;
+        $pubkey = (string) $article->getPubkey();
+        $articleSlug = (string) ($article->getSlug() ?? $slug);
+        $coordinate = $kind.':'.$pubkey.':'.$articleSlug;
+        $eid = $article->getEventId();
+        $eid = ($eid !== null && $eid !== '' && self::isValidHexEventId($eid)) ? $eid : null;
+        $articleTitle = (string) ($article->getTitle() ?? '');
+
+        $commentsData = null;
+        $commentsPreloaded = false;
+        $cached = $commentThreadLoader->tryLoadFromCacheOnly($coordinate, $eid);
+        if (null !== $cached) {
+            $commentsData = $this->enrichCommentDataWithReplyContext(
+                $cached,
+                $coordinate,
+                $eid,
+                $articleTitle
+            );
+            $commentsPreloaded = true;
+        }
 
         return $this->render('pages/article.html.twig', [
             'article' => $article,
             'author' => $author,
             'npub' => $npub,
             'content' => $cacheItem->get(),
+            'comments_data' => $commentsData,
+            'comments_preloaded' => $commentsPreloaded,
         ]);
     }
 
@@ -450,6 +513,7 @@ class ArticleController  extends AbstractController
             'article' => $article,
             'content' => $content,
             'author' => $user->getMetadata(),
+            'comments_preloaded' => false,
         ]);
     }
 

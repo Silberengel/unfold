@@ -37,6 +37,9 @@ services:
             $articleRelayUrls: '%article_relays%'
             $profileRelayUrls: '%profile_relays%'
             $projectDir: '%kernel.project_dir%'
+    App\Service\ArticleCommentThreadLoader:
+        arguments:
+            $appCachePool: '@cache.app'
     App\Twig\FooterLinksExtension:
         arguments:
             $footerLinksPath: '%footer_links%'

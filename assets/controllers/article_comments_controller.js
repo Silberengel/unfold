@@ -6,12 +6,24 @@ import { Controller } from '@hotwired/stimulus';
 export default class extends Controller {
     static values = {
         url: String,
+        preloaded: { type: Boolean, default: false },
     };
 
     static targets = ['container'];
 
     connect() {
         if (!this.hasContainerTarget || !this.urlValue) {
+            return;
+        }
+        if (this.preloadedValue) {
+            const run = () => {
+                void this.load();
+            };
+            if (typeof requestIdleCallback !== 'undefined') {
+                requestIdleCallback(run, { timeout: 15_000 });
+            } else {
+                setTimeout(run, 2_000);
+            }
             return;
         }
         void this.load();
