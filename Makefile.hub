@@ -1,0 +1,72 @@
+# Hub / remote server (compose.hub.yaml only — no full repo needed).
+# Copy this file next to compose.hub.yaml and .env, then e.g.:
+#   make -f Makefile.hub pull
+#   make -f Makefile.hub up
+#   make -f Makefile.hub migrate
+#
+# Override compose file:  make -f Makefile.hub HUB_COMPOSE=compose.custom.yaml up
+
+HUB_COMPOSE ?= compose.hub.yaml
+COMPOSE := docker compose -f $(HUB_COMPOSE)
+
+ARTICLES_FROM ?= -2 month
+ARTICLES_TO ?= now
+
+.DEFAULT_GOAL := help
+
+.PHONY: help pull up down ps restart migrate prewarm-once articles-get backfill shell logs-php logs-prewarm logs-db
+
+help:
+	@echo "Hub deploy (use: make -f Makefile.hub <target>)"
+	@echo "  pull          - docker compose pull"
+	@echo "  up            - start stack (detached)"
+	@echo "  down          - stop stack"
+	@echo "  restart       - down then up"
+	@echo "  ps            - service status"
+	@echo "  migrate       - run Doctrine migrations in php"
+	@echo "  prewarm-once  - one-shot app:prewarm in php (scheduled prewarm = prewarm service)"
+	@echo "  articles-get  - Nostr backfill (ARTICLES_FROM / ARTICLES_TO, see below)"
+	@echo "  backfill      - migrate + articles:get + prewarm-once (like dev make prewarm)"
+	@echo "  shell         - shell in php container"
+	@echo "  logs-php      - follow php logs"
+	@echo "  logs-prewarm  - follow prewarm sidecar logs"
+	@echo "  logs-db       - follow MySQL logs"
+	@echo "Variables: HUB_COMPOSE, ARTICLES_FROM (default: $(ARTICLES_FROM)), ARTICLES_TO (default: $(ARTICLES_TO))"
+
+pull:
+	$(COMPOSE) pull
+
+up:
+	$(COMPOSE) up -d
+
+down:
+	$(COMPOSE) down
+
+ps:
+	$(COMPOSE) ps
+
+restart: down up
+
+migrate:
+	$(COMPOSE) exec -T php php bin/console doctrine:migrations:migrate --no-interaction
+
+prewarm-once:
+	$(COMPOSE) exec -T php php bin/console app:prewarm
+
+articles-get:
+	$(COMPOSE) exec -T php php bin/console articles:get -- '$(ARTICLES_FROM)' '$(ARTICLES_TO)'
+
+backfill: up migrate articles-get prewarm-once
+	@echo "Backfill done."
+
+shell:
+	$(COMPOSE) exec php sh
+
+logs-php:
+	$(COMPOSE) logs -f php
+
+logs-prewarm:
+	$(COMPOSE) logs -f prewarm
+
+logs-db:
+	$(COMPOSE) logs -f database

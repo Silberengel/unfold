@@ -150,6 +150,20 @@ docker compose -f compose.hub.yaml exec php php bin/console doctrine:migrations:
 
 After code changes: **`pull` → `up -d`**; run **migrations** when the repo added new migration files.
 
+### `Makefile.hub` (on the server)
+
+Copy **`Makefile.hub`** into the same directory as **`compose.hub.yaml`** and **`.env`** (no full clone required). You get short commands like the dev **`Makefile`**, all using `docker compose -f compose.hub.yaml` under the hood:
+
+```bash
+make -f Makefile.hub help      # list targets
+make -f Makefile.hub pull
+make -f Makefile.hub up
+make -f Makefile.hub migrate
+make -f Makefile.hub prewarm-once
+make -f Makefile.hub articles-get    # optional: ARTICLES_FROM='-1 year' ARTICLES_TO=now
+make -f Makefile.hub backfill        # up + migrate + articles-get + prewarm-once (closest to dev `make prewarm`)
+```
+
 **Optional image / tag** (in `.env` or one-shot):
 
 ```bash
@@ -159,14 +173,14 @@ docker compose -f compose.hub.yaml up -d
 
 ### One-time Nostr backfill (equivalent to `make prewarm` on dev)
 
-`compose.hub` has no bind-mounted repo, so run the same commands **inside the `php` container** (after the stack is up and migrations have run):
+Use **`make -f Makefile.hub backfill`**, or run the same **inside the `php` container**:
 
 ```bash
 docker compose -f compose.hub.yaml exec -T php php bin/console articles:get -- '-2 month' 'now'
 docker compose -f compose.hub.yaml exec -T php php bin/console app:prewarm
 ```
 
-Adjust the **articles:get** window as needed.
+Adjust the **articles:get** window as needed (see **`Makefile.hub`** / `ARTICLES_FROM` / `ARTICLES_TO`).
 
 ### Scheduled `app:prewarm` on hub
 

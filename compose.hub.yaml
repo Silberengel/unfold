@@ -4,6 +4,7 @@
 #   docker compose -f compose.hub.yaml pull
 #   docker compose -f compose.hub.yaml up -d
 #   docker compose -f compose.hub.yaml exec php php bin/console doctrine:migrations:migrate --no-interaction
+# Optional: copy Makefile.hub into the same directory, then: make -f Makefile.hub help
 #
 # Services: `php` (web), `database` (MySQL), `prewarm` (same image; `app:prewarm` every 10 min — see README).
 # Optional: PREWARM_FLAGS in .env (same as dev `cron` service), then `docker compose up -d --force-recreate prewarm`.
