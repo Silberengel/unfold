@@ -13,7 +13,11 @@ use swentel\nostr\Key\Key;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
- * Applies NIP-09 (kind 5) deletion requests to local MySQL articles and magazine 30040 cache.
+ * Applies NIP-09 (kind 5) deletion requests to:
+ * - MySQL: long-form articles ({@see KindsEnum::LONGFORM} 30023, {@see KindsEnum::LONGFORM_DRAFT} 30024)
+ * - Magazine cache: publication indices ({@see KindsEnum::PUBLICATION_INDEX} 30040) in {@see MagazineIndexStore}
+ *
+ * Both are handled for `e` tags (with `k` when present) and for NIP-33 `a` tags.
  *
  * Relays are not authoritative; we only remove data we can validate (same pubkey as deletion request).
  * For cached 30040 category indices (keyed by `d` only), we require the stored event’s author
@@ -65,7 +69,12 @@ final class Nip09DeletionApplier
                 }
                 $declared = $eKinds[$i] ?? null;
                 if ($declared !== null
-                    && !\in_array($declared, [30023, 30024, 30040, 1], true)) {
+                    && !\in_array($declared, [
+                        KindsEnum::LONGFORM->value,
+                        KindsEnum::LONGFORM_DRAFT->value,
+                        KindsEnum::PUBLICATION_INDEX->value,
+                        1, // NIP-09 may include kind 1; we do not store notes, but must not treat k as “unknown”
+                    ], true)) {
                     // Other kinds: we do not mirror in this app; skip.
                     continue;
                 }
@@ -77,8 +86,12 @@ final class Nip09DeletionApplier
                     ++$articlesPendingFlush;
                     continue;
                 }
-                // No article row: 30040 index (or mis-tagged kind); only skip unrelated kinds.
-                if ($declared === null || \in_array($declared, [30023, 30024, 30040], true)) {
+                // No DB row: try kind 30040 magazine index by event id; also 30023/24 if not mirrored in DB.
+                if ($declared === null || \in_array($declared, [
+                    KindsEnum::LONGFORM->value,
+                    KindsEnum::LONGFORM_DRAFT->value,
+                    KindsEnum::PUBLICATION_INDEX->value,
+                ], true)) {
                     $mag = $this->tryRemoveMagazine30040ByEventId($eId, $deletionPubkey);
                     if ($mag === 1) {
                         ++$roots;

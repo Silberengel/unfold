@@ -167,7 +167,7 @@ final class PrewarmCommand extends Command
                 try {
                     $st = $this->nip09DeletionApplier->apply($kind5);
                     $io->writeln(sprintf(
-                        'Kind 5 events: <info>%d</info> (deduped). Articles removed: <info>%d</info>; magazine root/category cache entries removed: <info>%d</info> / <info>%d</info>.',
+                        'Kind 5 events: <info>%d</info> (deduped). NIP-23 long-form in DB (30023/30024) removed: <info>%d</info>. Magazine index in cache (30040) removed: root <info>%d</info>, category <info>%d</info>.',
                         \count($kind5),
                         $st['articles_removed'],
                         $st['magazine_roots'],
