@@ -54,14 +54,22 @@ services:
     image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:latest}
     pull_policy: always
     restart: unless-stopped
+    # The app image healthchecks HTTP on :80; this service is CLI-only (no Caddy in this container).
+    healthcheck:
+      disable: true
     working_dir: /app
-    # Do not `depends_on: php: service_healthy`: Compose can time out the stack while `php` is still
-    # starting (DB retries + migrations); `prewarm` waits in-script for http://php:80/ = same as ready.
+    # Do not wait on `curl http://php/`: Caddy in the `php` container is often only reachable on
+    # 127.0.0.1 from *inside* that container, so cross-container HTTP can hang. Wait on the same MySQL
+    # instead: `php` runs migrations in its entrypoint; the migration table is the readiness signal.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        echo "prewarm: waiting for app at http://php/ (Caddy + migrations)…"
-        until curl -fsS "http://php/" -o /dev/null 2>/dev/null; do
+        until php bin/console dbal:run-sql -q "SELECT 1" 2>/dev/null; do
+          echo "prewarm: waiting for database…"
+          sleep 2
+        done
+        until php bin/console dbal:run-sql -q "SELECT 1 FROM doctrine_migration_versions LIMIT 1" 2>/dev/null; do
+          echo "prewarm: waiting for migrations (php entrypoint)…"
           sleep 3
         done
         while true; do
