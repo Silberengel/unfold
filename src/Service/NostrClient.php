@@ -317,6 +317,65 @@ class NostrClient
     }
 
     /**
+     * NIP-09 kind 5 deletion requests in $since..$until (unix), batched by author pubkey (hex).
+     *
+     * @param list<string>        $authorPubkeyHex
+     * @return list<stdClass>     Deduplicated by event `id` (highest {@see created_at} kept)
+     */
+    public function fetchKind5DeletionEventsForAuthors(
+        array $authorPubkeyHex,
+        int $since,
+        int $until,
+        int $authorsPerRequest = 40,
+    ): array {
+        $authorPubkeyHex = \array_values(\array_unique(\array_filter(
+            $authorPubkeyHex,
+            static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
+        )));
+        if ($authorPubkeyHex === [] || $since >= $until) {
+            return [];
+        }
+        $authorsPerRequest = max(1, min(100, $authorsPerRequest));
+        $byId = [];
+        foreach (array_chunk($authorPubkeyHex, $authorsPerRequest) as $chunk) {
+            $request = $this->createNostrRequest(
+                kinds: [KindsEnum::DELETION_REQUEST],
+                filters: [
+                    'authors' => $chunk,
+                    'since' => $since,
+                    'until' => $until,
+                ],
+            );
+            $t0 = microtime(true);
+            $events = $this->processResponse(
+                $request->send(),
+                static fn (object $event) => $event,
+            );
+            $this->logger->info('nostr.nip09.kind5_chunk', [
+                'authors' => \count($chunk),
+                'raw_events' => \count($events),
+                'ms' => (int) round((microtime(true) - $t0) * 1000),
+            ]);
+            foreach ($events as $ev) {
+                if (!\is_object($ev) || (int) ($ev->kind ?? 0) !== KindsEnum::DELETION_REQUEST->value) {
+                    continue;
+                }
+                $id = (string) ($ev->id ?? '');
+                if (64 !== \strlen($id)) {
+                    continue;
+                }
+                $t = (int) ($ev->created_at ?? 0);
+                if (isset($byId[$id]) && $t <= (int) ($byId[$id]->created_at ?? 0)) {
+                    continue;
+                }
+                $byId[$id] = $ev;
+            }
+        }
+
+        return array_values($byId);
+    }
+
+    /**
      * @throws \Exception
      */
     public function getNpubMetadata($npub): \stdClass

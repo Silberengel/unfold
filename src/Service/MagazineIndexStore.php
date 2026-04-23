@@ -73,6 +73,29 @@ final class MagazineIndexStore
         $this->pool->save($item);
     }
 
+    /**
+     * Remove a cached category index (NIP-09 / local invalidation).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function deleteCategory(string $slug): void
+    {
+        if ($slug === '') {
+            return;
+        }
+        $this->pool->deleteItem(self::CAT_PREFIX.$slug);
+    }
+
+    /**
+     * Remove the cached root magazine index for this npub + d_tag.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function deleteRoot(string $npub, string $dTag): void
+    {
+        $this->pool->deleteItem($this->rootKey($npub, $dTag));
+    }
+
     private function rootKey(string $npub, string $dTag): string
     {
         return self::ROOT_PREFIX.hash('sha256', $npub."\0".$dTag);

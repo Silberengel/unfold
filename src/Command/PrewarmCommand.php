@@ -9,6 +9,7 @@ use App\Repository\ArticleRepository;
 use App\Service\ArticleCommentThreadLoader;
 use App\Service\CacheService;
 use App\Service\MagazineRefresher;
+use App\Service\Nip09DeletionApplier;
 use App\Service\NostrClient;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
@@ -26,12 +27,13 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
  */
 #[AsCommand(
     name: 'app:prewarm',
-    description: 'Refresh magazine indices, profile metadata cache, and comment thread caches (use --no-comments to skip comments)',
+    description: 'Refresh magazine indices, NIP-09 deletions, profile metadata, and comment caches',
 )]
 final class PrewarmCommand extends Command
 {
     public function __construct(
         private readonly MagazineRefresher $magazineRefresher,
+        private readonly Nip09DeletionApplier $nip09DeletionApplier,
         private readonly CacheService $cacheService,
         private readonly NostrClient $nostrClient,
         private readonly ArticleRepository $articleRepository,
@@ -46,6 +48,8 @@ final class PrewarmCommand extends Command
     {
         $this
             ->addOption('no-magazine', null, InputOption::VALUE_NONE, 'Skip magazine 30040 index fetch')
+            ->addOption('no-deletions', null, InputOption::VALUE_NONE, 'Skip NIP-09 kind 5 deletion sync (30023/30024 DB + 30040 magazine cache)')
+            ->addOption('deletion-since', null, InputOption::VALUE_REQUIRED, 'strtotime() window start for kind 5 fetch', '-2 month')
             ->addOption('no-metadata', null, InputOption::VALUE_NONE, 'Skip Nostr profile metadata cache')
             ->addOption('no-comments', null, InputOption::VALUE_NONE, 'Skip comment thread cache')
             ->addOption('magazine-budget', null, InputOption::VALUE_REQUIRED, 'Seconds wall time for magazine relay refresh', '30')
@@ -77,6 +81,59 @@ final class PrewarmCommand extends Command
         }
 
         // MagazineRefresher sets max_execution_time (e.g. 60 for budget 30); restore before metadata.
+        $this->disableCliExecutionTimeLimit();
+
+        if (!$input->getOption('no-deletions')) {
+            $io->section('NIP-09 deletions (kind 5 → 30023/30024 / 30040)');
+            $sinceStr = (string) $input->getOption('deletion-since');
+            $since = strtotime($sinceStr);
+            if ($since === false) {
+                $since = strtotime('-2 month');
+            }
+            $until = time();
+            $deletionPubkeys = [];
+            foreach ($this->articleRepository->findDistinctAuthorPubkeys() as $pk) {
+                if (\is_string($pk) && 64 === \strlen($pk)) {
+                    $deletionPubkeys[] = $pk;
+                }
+            }
+            $npubParam = (string) $this->params->get('npub');
+            if (str_starts_with($npubParam, 'npub')) {
+                try {
+                    $sitePk = $keys->convertToHex($npubParam);
+                    if ($sitePk !== '' && 64 === \strlen($sitePk) && !\in_array($sitePk, $deletionPubkeys, true)) {
+                        $deletionPubkeys[] = $sitePk;
+                    }
+                } catch (\Throwable) {
+                }
+            }
+            if ($deletionPubkeys === []) {
+                $io->note('No author pubkeys; skipping kind 5 deletion fetch.');
+            } else {
+                try {
+                    $kind5 = $this->nostrClient->fetchKind5DeletionEventsForAuthors(
+                        $deletionPubkeys,
+                        $since,
+                        $until,
+                        40
+                    );
+                    $st = $this->nip09DeletionApplier->apply($kind5);
+                    $io->writeln(sprintf(
+                        'Kind 5 events: <info>%d</info> (deduped). Articles removed: <info>%d</info>; magazine root/category cache entries removed: <info>%d</info> / <info>%d</info>.',
+                        \count($kind5),
+                        $st['articles_removed'],
+                        $st['magazine_roots'],
+                        $st['magazine_categories']
+                    ));
+                } catch (\Throwable $e) {
+                    $this->logger->error('app:prewarm NIP-09 failed', ['exception' => $e]);
+                    $io->warning('NIP-09 step failed: '.$e->getMessage());
+                }
+            }
+        } else {
+            $io->note('Skipping NIP-09 deletions (--no-deletions).');
+        }
+
         $this->disableCliExecutionTimeLimit();
 
         if (!$input->getOption('no-metadata')) {

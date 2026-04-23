@@ -125,6 +125,11 @@ class ArticleRepository extends ServiceEntityRepository
             ->getSingleColumnResult();
     }
 
+    public function findOneByEventId(string $eventId): ?Article
+    {
+        return $this->findOneBy(['eventId' => $eventId]);
+    }
+
     /**
      * Find articles by author's public key
      */

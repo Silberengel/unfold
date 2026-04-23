@@ -5,6 +5,7 @@ namespace App\Enum;
 enum KindsEnum: int
 {
     case METADATA = 0; // metadata, NIP-01
+    case DELETION_REQUEST = 5; // NIP-09
     case TEXT_NOTE = 1; // text note, NIP-01, will not implement
     case FOLLOWS = 3;
     case REPOST = 6; // Only wraps kind 1, NIP-18, will not implement
