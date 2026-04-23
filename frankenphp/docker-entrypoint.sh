@@ -52,6 +52,13 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		if [ "$( find ./migrations -iname '*.php' -print -quit )" ]; then
 			php bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing
 		fi
+
+		# Optional: warm magazine index + metadata cache on container start (does not run articles:get).
+		# Prefer ./scripts/docker-prewarm.sh or `make prewarm` for full DB + relay backfill from the host.
+		if [ "${PREWARM_ON_START:-0}" = "1" ]; then
+			echo "PREWARM_ON_START=1: running app:prewarm..."
+			php bin/console app:prewarm || true
+		fi
 	fi
 
 	setfacl -R -m u:www-data:rwX -m u:"$(whoami)":rwX var

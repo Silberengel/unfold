@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "35730266c171fc5bbbe90ce2c0781509",
+    "content-hash": "bd231af493534154dcbc0c3f059f329e",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -1404,6 +1404,64 @@
             "time": "2025-01-24T11:45:48+00:00"
         },
         {
+            "name": "dsbaars/chacha20",
+            "version": "0.3.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/dsbaars/PHP-ChaCha20.git",
+                "reference": "4edfef042c329313935a3dd516278e27c2939b5f"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/dsbaars/PHP-ChaCha20/zipball/4edfef042c329313935a3dd516278e27c2939b5f",
+                "reference": "4edfef042c329313935a3dd516278e27c2939b5f",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-deprecation-rules": "^2.0",
+                "phpunit/phpunit": "~12.4"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "lib/functions.php"
+                ],
+                "psr-4": {
+                    "ChaCha20\\": "lib"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Leigh",
+                    "homepage": "https://github.com/lt"
+                },
+                {
+                    "name": "Djuri Baars",
+                    "homepage": "https://github.com/dsbaars"
+                }
+            ],
+            "description": "Pure PHP implementation of the ChaCha20 encryption algorithm.",
+            "homepage": "https://github.com/dsbaars/PHP-ChaCha20",
+            "keywords": [
+                "cipher",
+                "encryption",
+                "security",
+                "stream"
+            ],
+            "support": {
+                "source": "https://github.com/dsbaars/PHP-ChaCha20/tree/0.3.0"
+            },
+            "time": "2025-11-28T16:51:46+00:00"
+        },
+        {
             "name": "embed/embed",
             "version": "v4.4.17",
             "source": {
@@ -2111,59 +2169,6 @@
                 }
             ],
             "time": "2024-12-08T08:18:47+00:00"
-        },
-        {
-            "name": "leigh/chacha20",
-            "version": "0.2.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/lt/PHP-ChaCha20.git",
-                "reference": "7aeffd53228be384b4a8986c9a8d9578acb171a4"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/lt/PHP-ChaCha20/zipball/7aeffd53228be384b4a8986c9a8d9578acb171a4",
-                "reference": "7aeffd53228be384b4a8986c9a8d9578acb171a4",
-                "shasum": ""
-            },
-            "require": {
-                "php": ">=7.0"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "~5.0"
-            },
-            "type": "library",
-            "autoload": {
-                "files": [
-                    "lib/functions.php"
-                ],
-                "psr-4": {
-                    "ChaCha20\\": "lib"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Leigh",
-                    "homepage": "https://github.com/lt"
-                }
-            ],
-            "description": "Pure PHP implementation of the ChaCha20 encryption algorithm.",
-            "homepage": "https://github.com/lt/PHP-ChaCha20",
-            "keywords": [
-                "cipher",
-                "encryption",
-                "security",
-                "stream"
-            ],
-            "support": {
-                "issues": "https://github.com/lt/PHP-ChaCha20/issues",
-                "source": "https://github.com/lt/PHP-ChaCha20/tree/0.2.0"
-            },
-            "time": "2016-01-14T11:24:17+00:00"
         },
         {
             "name": "masterminds/html5",
@@ -3888,25 +3893,25 @@
         },
         {
             "name": "swentel/nostr-php",
-            "version": "1.9.2",
+            "version": "1.9.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nostrver-se/nostr-php.git",
-                "reference": "8fb8337354b2e9d48a901276c7814d7fa7b25653"
+                "reference": "e502540ea811199443e1fffcbdaef9048940399c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nostrver-se/nostr-php/zipball/8fb8337354b2e9d48a901276c7814d7fa7b25653",
-                "reference": "8fb8337354b2e9d48a901276c7814d7fa7b25653",
+                "url": "https://api.github.com/repos/nostrver-se/nostr-php/zipball/e502540ea811199443e1fffcbdaef9048940399c",
+                "reference": "e502540ea811199443e1fffcbdaef9048940399c",
                 "shasum": ""
             },
             "require": {
                 "bitwasp/bech32": "^0.0.1",
+                "dsbaars/chacha20": "^0.3.0",
                 "ext-gmp": "*",
                 "ext-xml": "*",
-                "leigh/chacha20": "^0.2.0",
                 "paragonie/ecc": "^2.4",
-                "php": ">=8.1 <8.5",
+                "php": ">=8.2 <8.6",
                 "phrity/websocket": "^3.0",
                 "simplito/elliptic-php": "^1.0"
             },
@@ -3947,9 +3952,9 @@
                 "chat": "https://t.me/nostr_php",
                 "issue": "https://github.com/swentel/nostr-php/issues",
                 "issues": "https://github.com/nostrver-se/nostr-php/issues",
-                "source": "https://github.com/nostrver-se/nostr-php/tree/1.9.2"
+                "source": "https://github.com/nostrver-se/nostr-php/tree/1.9.4"
             },
-            "time": "2025-06-04T14:51:06+00:00"
+            "time": "2026-02-03T11:13:00+00:00"
         },
         {
             "name": "symfony/asset",
@@ -11316,5 +11321,5 @@
         "ext-openssl": "*"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }

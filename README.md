@@ -1,128 +1,130 @@
-# Unfold
+# Unfold: Imwald
 
-Unfold is a customizable framework for your Nostr-based magazine.
+<p align="center">
+  <img src="assets/laeserin_logo.png" alt="Imwald" width="150">
+</p>
 
-(This is the **Imwald** edition of Unfold.)
+A Symfony + FrankenPHP site that **reads Nostr long-form articles (kind 30023)** and related data from relays, stores articles in **MySQL**, and serves pages with Twig. **Comments and profile metadata** are **cache-backed** (not the full source of truth in the DB).
 
-## Setup
+---
 
-### Clone the repository
+## Requirements
 
-```bash
-git clone https://github.com/decent-newsroom/unfold.git
-cd unfold
-```
+| Requirement | Version / notes |
+|------------|-----------------|
+| PHP        | **≥ 8.3.13** (see `composer.json`) |
+| Docker     | Optional; recommended for local dev and production images |
+| Database   | MySQL **8.0** (configurable) |
 
-### Create the .env file
+---
 
-Copy the example file `.env.dist` and replace placeholders with your actual configuration.
+## Local development (Docker)
 
-If you have your own MySQL database, comment out the database service in `compose.yaml` and skip root password in `.env`. 
-There are additional comments to that effect in the files.
+1. **Env:** copy `.env.dist` to `.env` and adjust if needed (especially `APP_SECRET` outside dev).
+2. **Start stack**
 
-### Configure `config/unfold.yaml`
+   ```bash
+   docker compose up -d
+   ```
 
-Before running the application, review and update `config/unfold.yaml` to match your desired magazine settings, theme, and external links. This file controls:
-- Magazine name, short name, and description
-- Theme and color settings
-- Community articles feature
-- External footer links
-- Other project-specific configuration
+3. **App URL (default):** [http://127.0.0.1:9080](http://127.0.0.1:9080)  
+   Port comes from `HTTP_PORT` in `.env` and `compose.override.yaml` (loopback only).
 
-Edit the values in `config/unfold.yaml` as needed for your deployment.
+4. **First-time DB:** migrations run on **php** container start when `migrations/` contains PHP files (see `frankenphp/docker-entrypoint.sh`).
 
-### Customizing Theme and Icons
+| Service | Role |
+|--------|------|
+| `php`  | FrankenPHP + Caddy, Symfony app, console |
+| `database` | MySQL; dev exposes `127.0.0.1:3307 → 3306` for local clients |
+| `cron` | Runs full **`app:prewarm` every 10 minutes**; repo bind-mounted at `/var/www/html` (see `docker/cron/`) |
 
-You can override the default theme and icons by adding your own files to `/assets/theme/local/`. To do this:
-- Copy the structure and file names from `/assets/theme/default/`.
-- Place your custom `theme.css` and icon files in your theme folder.
-- Update your configuration in `config/unfold.yaml` to reference your custom theme if needed.
+---
 
-This allows you to easily switch or update the look and feel of your magazine without modifying the default assets.
+## Backfill articles + warm caches (recommended)
 
-
-### Build the Docker containers
-
-For development:
-```bash
-docker compose build
-```
-
-For production (using production overrides), set `APP_ENV=prod` in your `.env` file, set a strong **`APP_SECRET`**, and run:
+To **migrate**, **import articles from Nostr** for a time window, then **prewarm** magazine indices, author metadata, and comment caches:
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml build
+make prewarm
 ```
 
-`compose.override.yaml` is meant for local development. For production, always pass **both** compose files for `up` as well, otherwise Docker Compose still merges the dev override (FrankenPHP dev image, port `9080`, etc.):
+| Step (script order) | Command / effect |
+|---------------------|------------------|
+| 1 | `docker compose up -d --wait` — starts **php**, **database**, and **cron** (the `cron` image runs a full `app:prewarm` on a 10 min schedule) |
+| 2 | `doctrine:migrations:migrate` |
+| 3 | `articles:get -- '-2 month' 'now'` — sync long-form into MySQL for that window |
+| 4 | `app:prewarm` — magazine **30040**, **kind-0** profiles, **comment** cache (default **`--comments-max=20`**, newest by `createdAt`) |
 
-```bash
-docker compose -f compose.yaml -f compose.prod.yaml up -d
-```
+`make prewarm` brings the stack (including `cron`) up so scheduled prewarm is active. **Optional** extra arguments for the **cron**-scheduled `app:prewarm` go in **`.env`** as **`PREWARM_FLAGS`** (same as you might pass to `php bin/console app:prewarm …`); Compose passes them into the `cron` container. Example: `PREWARM_FLAGS="--metadata-limit=50 --no-magazine"`. **Restart** the `cron` service after changing `PREWARM_FLAGS` so the container reloads the env. Hub / `compose.hub.yaml` has no `cron` service; use a host timer or `exec` if you need the same there.
 
-The production compose file publishes the app on **host port `80`** → container `80` (FrankenPHP / Caddy). Put **TLS and your public hostname** (e.g. `https://blog.imwald.eu`) in front with Apache or nginx as a reverse proxy to `http://127.0.0.1:80` on that host (or another port if you change `compose.prod.yaml`).
+---
 
-Set **`TRUSTED_PROXIES`** to the CIDR of your reverse proxy (defaults in `compose.prod.yaml` cover Docker and private nets; include the proxy’s address if it is elsewhere). In **`APP_ENV=prod`**, `config/packages/framework.yaml` enables **`trusted_proxies`** from that env var so Symfony trusts `X-Forwarded-Proto` / `X-Forwarded-For` from the proxy; adjust the value if generated URLs or secure cookies are wrong behind HTTPS.
+## Console commands (overview)
 
-### Docker Hub (pre-built image)
+| Command | Purpose |
+|---------|---------|
+| `articles:get <from> <to>` | Pull long-form articles from Nostr for the time range, persist to DB |
+| `app:prewarm` | Magazine relay refresh + metadata cache + comment cache warm |
+| `doctrine:migrations:migrate` | Apply SQL migrations |
+| `user:elevate` | (If used) user elevation helper |
 
-To build the production FrankenPHP image and push it (example registry: [`silberengel/unfold`](https://hub.docker.com/r/silberengel/unfold)):
+`php bin/console list` and `… -h` for full options.
 
-```bash
-docker login
-# If the server is linux/amd64 and your builder is ARM, set --platform (omit if arch matches).
-docker build --platform linux/amd64 --target frankenphp_prod -t silberengel/unfold:latest .
-docker push silberengel/unfold:latest
-```
+### `app:prewarm` (notable options)
 
-Tag a release when you want a pinned version:
+| Option | Default | Meaning |
+|--------|---------|--------|
+| `--no-magazine` | off | Skip magazine 30040 index |
+| `--no-metadata` | off | Skip Nostr kind-0 / profile cache |
+| `--no-comments` | off | Skip comment thread cache |
+| `--metadata-limit` | `0` (all authors) | Cap distinct author pubkeys |
+| `--metadata-batch` | `50` | Pubkeys per batched Nostr `REQ` |
+| `--comments-max` | `20` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
+| `--comments-budget` | `120` | Max wall seconds for the comments phase |
+| `--magazine-budget` | `30` | Max wall seconds for magazine refresh |
 
-```bash
-docker tag silberengel/unfold:latest silberengel/unfold:1.0.0
-docker push silberengel/unfold:1.0.0
-```
+Prewarm clears the PHP **CLI** execution time limit for that run; relay work can be slow.
 
-**On the remote server** you only need `compose.hub.yaml`, a `.env` with at least **`APP_SECRET`** (and `MYSQL_*` / `MYSQL_ROOT_PASSWORD` if you use the bundled MySQL), and Docker Compose. Copy `compose.hub.yaml` from the repo (or clone once and take that file). The stack publishes the app on **host port `9080`** → container `80` by default (so **`:80` stays free** for Apache/nginx). Point your reverse proxy at `http://127.0.0.1:9080`. To bind only loopback, set **`HTTP_PUBLISH=127.0.0.1:9080`**; to use host port **80** instead, set **`HTTP_PUBLISH=80`**. Override the image with **`UNFOLD_DOCKER_IMAGE=myuser/unfold:1.0.0`** if you use another name or tag.
+### `PREWARM_ON_START` (optional)
 
-```bash
-docker compose -f compose.hub.yaml pull
-docker compose -f compose.hub.yaml up -d
-docker compose -f compose.hub.yaml exec php php bin/console doctrine:migrations:migrate --no-interaction
-```
+| Variable | Set where | Effect |
+|----------|------------|--------|
+| `PREWARM_ON_START=1` | **Compose `environment` on the `php` service** (not only Symfony `.env` inside the container) | After DB is up and migrations run, executes **`app:prewarm` once** on start. **Does not** run `articles:get`. |
 
-The production image must include **compiled asset mapper files** under `public/assets/` (the Docker build runs `asset-map:compile`). If you ever see JS modules blocked because the MIME type is `text/html`, the static files are missing: rebuild and push the image, or run once on the server:
+For a full **Nostr backfill** + one-shot prewarm, use **`make prewarm`** (or a host **cron** / **systemd** timer) instead of relying on **`PREWARM_ON_START` alone**.
 
-`docker compose -f compose.hub.yaml exec php php bin/console asset-map:compile --no-debug`
+---
 
-The default `compose.hub.yaml` stack includes the **MySQL** service like the main compose file. If you use an external database, remove the `database` service and the `depends_on` block from `compose.hub.yaml`, and set **`DATABASE_URL`** in the `php` service `environment` to your connection string.
+## Configuration
 
-**MySQL `1045 Access denied` for `unfold_user`:** The official MySQL image only applies **`MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` on the first start** of an empty data volume. If you change passwords in `.env` later, the files inside the **`database_data` volume** still hold the old users. Either set **`.env`** back to the **original** passwords, or stop the stack and remove the named volume (e.g. `docker compose -f compose.hub.yaml down` then `docker volume rm unfold_database_data` — **this deletes all DB data**), then **`up -d`** again with the passwords you want and run **migrations** again.
+| What | File |
+|------|------|
+| Site title, `npub`, `d_tag`, **relays** (`default_relay`, `article_relays`, `profile_relays`), theme | `config/unfold.yaml` (imported as Symfony parameters) |
+| `DATABASE_URL`, `APP_SECRET`, `HTTP_PORT`, `MYSQL_*`, optional **`PREWARM_FLAGS`** (for the Docker `cron` service) | `.env` / `.env.local` (see `.env.dist`) |
+| Service wiring (e.g. cache, `NostrClient` args) | `config/services.yaml` |
 
-The repo’s **`cron`** service still expects a local build and bind-mounted source; for Hub deploys, run **`articles:get`** (and any other jobs) from a host **cron** or **systemd timer** calling `docker compose -f compose.hub.yaml exec -T php php bin/console …`.
+**Relays (short):** `default_relay` and `article_relays` drive article sync and many queries; `profile_relays` are used **first** for kind-0 / profile fetches, then the merged default + article set (see `NostrClient`).
 
-### Start the Docker containers (development)
+---
 
-```bash
-docker compose up -d
-```
+## Production / Hub image
 
+| Topic | Notes |
+|-------|--------|
+| `compose.hub.yaml` | Runs a **pulled** image (default `silberengel/unfold:latest`), no local PHP app build. Override with `UNFOLD_DOCKER_IMAGE`. |
+| HTTP publish | `HTTP_PUBLISH` in `.env` (default **9080** → container **80**). Set `TRUSTED_PROXIES` behind a reverse proxy. |
+| Secrets | Set `APP_SECRET` and DB credentials in **real** env; do not commit production secrets. |
 
-### Run Database Migrations
+File header in `compose.hub.yaml` lists pull, migrate, and optional build/push one-liners.
 
-Before fetching or displaying articles, make sure your database schema is up to date. Run:
+---
 
-```bash
-docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction
-```
+## License
 
-If you use **`compose.hub.yaml`**, prefix commands with `docker compose -f compose.hub.yaml` (for example `docker compose -f compose.hub.yaml exec php php bin/console …`).
+**MIT** — see [`LICENSE`](LICENSE).
 
-### Fetching Articles
+---
 
-To fetch articles from the default relay for the last two months, run:
+## Project links (example)
 
-```bash
-docker compose exec php php bin/console articles:get -- '-2 month' 'now'
-```
-
-You can adjust the date range as needed. This command will import articles into the local database.
+Configurable under `parameters.external_links` in `config/unfold.yaml` (e.g. Unfold on GitHub, Decent Newsroom). Adjust for your deployment.

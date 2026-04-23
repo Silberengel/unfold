@@ -47,27 +47,18 @@ final readonly class ArticleCommentThreadLoader
                     'elapsed_since_load_start_ms' => (int) round((microtime(true) - $t0) * 1000),
                 ]);
                 $tNostr = microtime(true);
-                try {
-                    $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId);
-                    $this->logger->info('comments.loader.nostr_ok', [
-                        'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
-                        'thread' => \count($out['thread'] ?? []),
-                        'quotes' => \count($out['quotes'] ?? []),
-                    ]);
+                // On failure, let this throw: Symfony cache will not store a value, so a prior good thread is not replaced by [].
+                $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId);
+                $this->logger->info('comments.loader.nostr_ok', [
+                    'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
+                    'thread' => \count($out['thread'] ?? []),
+                    'quotes' => \count($out['quotes'] ?? []),
+                ]);
 
-                    return $out;
-                } catch (\Throwable $e) {
-                    $this->logger->error('comments.loader.nostr_failed', [
-                        'message' => $e->getMessage(),
-                        'exception_class' => \get_class($e),
-                        'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
-                    ]);
-
-                    return ['thread' => [], 'quotes' => []];
-                }
+                return $out;
             });
         } catch (\Throwable $e) {
-            $this->logger->error('comments.loader.cache_failed', [
+            $this->logger->error('comments.loader.cache_or_nostr_failed', [
                 'message' => $e->getMessage(),
                 'exception_class' => \get_class($e),
             ]);

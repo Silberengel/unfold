@@ -44,8 +44,12 @@ services:
       context: ./docker/cron
     volumes:
       - .:/var/www/html
+    environment:
+      # Passed through from the host .env (Compose substitution); crond jobs read /run/cron-prewarm.env at runtime.
+      PREWARM_FLAGS: ${PREWARM_FLAGS:-}
     depends_on:
-      - php
+      database:
+        condition: service_healthy
 
 volumes:
   caddy_data:

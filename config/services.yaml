@@ -35,6 +35,7 @@ services:
         arguments:
             $defaultRelayUrl: '%default_relay%'
             $articleRelayUrls: '%article_relays%'
+            $profileRelayUrls: '%profile_relays%'
     App\Twig\FooterLinksExtension:
         arguments:
             $footerLinksPath: '%footer_links%'
@@ -44,5 +45,8 @@ services:
         arguments:
             $pool: '@cache.app'
     App\Service\MagazineRefresher:
+        arguments:
+            $appCache: '@cache.app'
+    App\Service\CacheService:
         arguments:
             $appCache: '@cache.app'

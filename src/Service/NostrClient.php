@@ -24,10 +24,14 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 class NostrClient
 {
+    /** Per-relay WebSocket I/O cap (seconds), applied on each relay’s {@see \WebSocket\Client}. */
+    private const RELAY_REQUEST_TIMEOUT_SEC = 15;
+
     private RelaySet $defaultRelaySet;
 
     /**
      * @param list<string> $articleRelayUrls extra relays for the default set (default_relay is always first)
+     * @param list<string> $profileRelayUrls  kind-0 / profile; merged for metadata (see {@see profileMetadataQueryRelayUrlList()})
      */
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -37,6 +41,7 @@ class NostrClient
         private readonly LoggerInterface $logger,
         private readonly string $defaultRelayUrl,
         private readonly array $articleRelayUrls,
+        private readonly array $profileRelayUrls,
         private readonly CacheInterface $relayQueryCache,
     ) {
         $this->defaultRelaySet = $this->buildArticleRelaySet();
@@ -87,6 +92,45 @@ class NostrClient
         $rs->addRelay(new Relay($wssUrl));
 
         return $rs;
+    }
+
+    /**
+     * Host (or full URL) for log messages so console output shows which relay without opening context.
+     */
+    private static function relayLogLabel(string $relayUrl): string
+    {
+        $host = parse_url($relayUrl, \PHP_URL_HOST);
+        if (\is_string($host) && $host !== '') {
+            return $host;
+        }
+
+        return $relayUrl;
+    }
+
+    private function newTimedRequest(RelaySet $relaySet, RequestMessage $requestMessage): Request
+    {
+        $request = new Request($relaySet, $requestMessage);
+        // 1.9.4+: Request::setTimeout() drives getResponseFromRelay(). Older: only WebSocket client on Relay.
+        if (method_exists($request, 'setTimeout')) {
+            $request->setTimeout(self::RELAY_REQUEST_TIMEOUT_SEC);
+        } else {
+            $this->applyRelaySocketTimeoutToSet($relaySet);
+        }
+
+        return $request;
+    }
+
+    /**
+     * Set per-relay WebSocket I/O cap. {@see RelaySet::send()} bypasses {@see Request}; use this there too.
+     */
+    private function applyRelaySocketTimeoutToSet(RelaySet $relaySet): void
+    {
+        foreach ($relaySet->getRelays() as $relay) {
+            $client = $relay->getClient();
+            if (method_exists($client, 'setTimeout')) {
+                $client->setTimeout(self::RELAY_REQUEST_TIMEOUT_SEC);
+            }
+        }
     }
 
     /**
@@ -144,33 +188,164 @@ class NostrClient
     }
 
     /**
+     * @return list<string> Deduplicated profile relay URLs from config
+     */
+    private function profileRelayUrlList(): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($this->profileRelayUrls as $url) {
+            if (!\is_string($url) || $url === '' || isset($seen[$url])) {
+                continue;
+            }
+            if (!str_starts_with($url, 'wss:')) {
+                continue;
+            }
+            $seen[$url] = true;
+            $out[] = $url;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Profile (kind-0) queries: {@see profileRelayUrlList()} first (Damus, nos.lol, …), then default + article set.
+     * Order matters: {@see Request::send()} walks relays sequentially.
+     *
+     * @return list<string>
+     */
+    private function profileMetadataQueryRelayUrlList(): array
+    {
+        $seen = [];
+        $ordered = [];
+        foreach (array_merge($this->profileRelayUrlList(), $this->configuredArticleRelayUrlList()) as $u) {
+            if (!\is_string($u) || $u === '' || isset($seen[$u])) {
+                continue;
+            }
+            $seen[$u] = true;
+            $ordered[] = $u;
+        }
+        if ($ordered === []) {
+            $ordered[] = $this->defaultRelayUrl;
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * Same relays for kind-0 metadata, without mutating {@see $this->defaultRelaySet}.
+     */
+    private function relaySetForProfileMetadataFetch(): RelaySet
+    {
+        $relaySet = new RelaySet();
+        foreach ($this->profileMetadataQueryRelayUrlList() as $url) {
+            $relaySet->addRelay(new Relay($url));
+        }
+
+        return $relaySet;
+    }
+
+    /**
+     * Batched kind-0 profile fetch: one Nostr REQ per chunk with multiple "authors" (hex pubkeys).
+     *
+     * @param list<string> $authorPubkeyHex
+     * @return array<string, \stdClass> Newest kind-0 JSON per pubkey, keyed by hex
+     */
+    public function fetchKind0MetadataForAuthors(array $authorPubkeyHex, int $authorsPerRequest = 50): array
+    {
+        $authorPubkeyHex = \array_values(\array_unique(\array_filter(
+            $authorPubkeyHex,
+            static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
+        )));
+        if ($authorPubkeyHex === []) {
+            return [];
+        }
+        $authorsPerRequest = max(1, min(200, $authorsPerRequest));
+        $byPub = [];
+        $relaysTried = $this->profileMetadataQueryRelayUrlList();
+        $relaysTriedStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
+        $relaySet = $this->relaySetForProfileMetadataFetch();
+        $chunks = array_chunk($authorPubkeyHex, $authorsPerRequest);
+        foreach ($chunks as $i => $chunk) {
+            $t0 = microtime(true);
+            $request = $this->createNostrRequest(
+                kinds: [KindsEnum::METADATA],
+                filters: ['authors' => $chunk],
+                relaySet: $relaySet
+            );
+            $events = $this->processResponse(
+                $request->send(),
+                static fn ($ev) => $ev,
+            );
+            $this->logger->info('nostr.metadata.batch_chunk', [
+                'chunk' => 1 + $i,
+                'of' => \count($chunks),
+                'authors' => \count($chunk),
+                'events' => \count($events),
+                'relays' => $relaysTriedStr,
+                'ms' => (int) round((microtime(true) - $t0) * 1000),
+            ]);
+            $newest = [];
+            foreach ($events as $ev) {
+                if (!\is_object($ev) || !isset($ev->pubkey, $ev->content)) {
+                    continue;
+                }
+                $pk = (string) $ev->pubkey;
+                if (64 !== \strlen($pk)) {
+                    continue;
+                }
+                $ts = (int) ($ev->created_at ?? 0);
+                if (isset($newest[$pk]) && $ts <= $newest[$pk]['t']) {
+                    continue;
+                }
+                $newest[$pk] = ['ev' => $ev, 't' => $ts];
+            }
+            foreach ($newest as $pk => $row) {
+                $ev = $row['ev'];
+                try {
+                    $data = \json_decode((string) $ev->content, false, 512, \JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    continue;
+                }
+                if (\is_object($data)) {
+                    $byPub[$pk] = $data;
+                }
+            }
+        }
+
+        return $byPub;
+    }
+
+    /**
      * @throws \Exception
      */
     public function getNpubMetadata($npub): \stdClass
     {
-        $relaySet = $this->defaultRelaySet;
-        $relaySet->addRelay(new Relay('wss://profiles.nostr1.com')); // profile aggregator
-        $this->logger->info('Getting metadata for npub', ['npub' => $npub]);
-        // Npubs are converted to hex for the request down the line
+        $relaysTried = $this->profileMetadataQueryRelayUrlList();
+        $relaysTriedStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
+        $relaySet = $this->relaySetForProfileMetadataFetch();
+        $this->logger->info(sprintf('Getting metadata for npub (relays: %s)', $relaysTriedStr), ['npub' => $npub, 'relays' => $relaysTried]);
         $request = $this->createNostrRequest(
             kinds: [KindsEnum::METADATA],
             filters: ['authors' => [$npub]],
             relaySet: $relaySet
         );
 
-        $events = $this->processResponse($request->send(), function($received) {
-            $this->logger->info('Getting metadata for npub', ['item' => $received]);
-            return $received;
-        });
+        $events = $this->processResponse(
+            $request->send(),
+            function ($received) {
+                $this->logger->debug('nostr.metadata.relay_event', ['event' => $received]);
 
-        $this->logger->info('Getting metadata for npub', ['response' => $events]);
+                return $received;
+            },
+        );
 
         if (empty($events)) {
-            throw new \Exception('No metadata found for npub: ' . $npub);
+            throw new \Exception('No metadata for npub '.$npub.' (relays: '.$relaysTriedStr.')');
         }
-
         // Sort by date and return newest
-        usort($events, fn($a, $b) => $b->created_at <=> $a->created_at);
+        usort($events, static fn ($a, $b) => (int) ($b->created_at ?? 0) <=> (int) ($a->created_at ?? 0));
+
         return $events[0];
     }
 
@@ -197,7 +372,7 @@ class NostrClient
             }
         }
 
-        $request = new Request($relays, $requestMessage);
+        $request = $this->newTimedRequest($relays, $requestMessage);
 
         $wrappers = $this->processResponse($request->send(), function (object $event) {
             $w = new \stdClass();
@@ -220,6 +395,7 @@ class NostrClient
             $relaySet->addRelay($relay);
         }
         $relaySet->setMessage($eventMessage);
+        $this->applyRelaySocketTimeoutToSet($relaySet);
         // TODO handle responses appropriately
         return $relaySet->send();
     }
@@ -260,7 +436,7 @@ class NostrClient
         $filter->setUntil($until);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
-        $request = new Request($this->defaultRelaySet, $requestMessage);
+        $request = $this->newTimedRequest($this->defaultRelaySet, $requestMessage);
 
         $wrappers = $this->processResponse($request->send(), function (object $event) {
             $w = new \stdClass();
@@ -281,9 +457,12 @@ class NostrClient
         if (empty($relayList)) {
             $topAuthorRelays = $this->getTopReputableRelaysForAuthor($author);
             $authorRelaySet = $this->createRelaySet($topAuthorRelays);
+            $relaysTried = $this->plannedRelayUrlsForSet($topAuthorRelays);
         } else {
             $authorRelaySet = $this->createRelaySet($relayList);
+            $relaysTried = $this->plannedRelayUrlsForSet($relayList);
         }
+        $relaysTriedStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
 
         try {
             // Create request using the helper method for forest relay set
@@ -310,8 +489,9 @@ class NostrClient
                 $this->saveLongFormContent([$wrapper]);
             }
         } catch (\Exception $e) {
-            $this->logger->error('Error querying relays', [
-                'error' => $e->getMessage()
+            $this->logger->error(sprintf('Error querying relays (%s): %s', $relaysTriedStr, $e->getMessage()), [
+                'error' => $e->getMessage(),
+                'relays' => $relaysTried,
             ]);
             throw new \Exception('Error querying relays', 0, $e);
         }
@@ -501,7 +681,7 @@ class NostrClient
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $requestMessage = new RequestMessage($subscriptionId, $filters);
-        $request = new Request($relaySet, $requestMessage);
+        $request = $this->newTimedRequest($relaySet, $requestMessage);
 
         $this->logger->info('nostr.article_discussion.req_sending', [
             'subscription_id' => $subscriptionId,
@@ -521,13 +701,20 @@ class NostrClient
             ]);
             $this->logNostrWireResponseSummary('article_discussion', $response);
         } catch (\Throwable $e) {
-            $this->logger->error('nostr.article_discussion.req_send_failed', [
+            $this->logger->error(sprintf(
+                'nostr.article_discussion.req_send_failed (relays: %s): %s',
+                implode(', ', array_map(self::relayLogLabel(...), $plannedRelayUrls)),
+                $e->getMessage()
+            ), [
                 'coordinate' => $coordinate,
                 'error' => $e->getMessage(),
                 'exception_class' => \get_class($e),
+                'relays' => $plannedRelayUrls,
             ]);
 
-            return ['thread' => [], 'quotes' => []];
+            // Do not return a successful empty shape: callers (e.g. comment cache) must not
+            // persist [] as if relays responded — that would clobber a previously good thread.
+            throw new \RuntimeException('Nostr request failed for article discussion', 0, $e);
         }
 
         $tParse = microtime(true);
@@ -620,7 +807,11 @@ class NostrClient
     {
         foreach ($response as $relayUrl => $relayRes) {
             if ($relayRes instanceof \Throwable) {
-                $this->logger->warning('nostr.wire.relay_throwable', [
+                $this->logger->warning(sprintf(
+                    'nostr.wire.relay_throwable [%s]: %s',
+                    self::relayLogLabel($relayUrl),
+                    $relayRes->getMessage()
+                ), [
                     'context' => $context,
                     'relay' => $relayUrl,
                     'message' => $relayRes->getMessage(),
@@ -630,7 +821,11 @@ class NostrClient
                 continue;
             }
             if (!\is_iterable($relayRes)) {
-                $this->logger->warning('nostr.wire.relay_not_iterable', [
+                $this->logger->warning(sprintf(
+                    'nostr.wire.relay_not_iterable [%s]: %s',
+                    self::relayLogLabel($relayUrl),
+                    \get_debug_type($relayRes)
+                ), [
                     'context' => $context,
                     'relay' => $relayUrl,
                     'php_type' => \get_debug_type($relayRes),
@@ -660,7 +855,7 @@ class NostrClient
                     ++$counts['other'];
                 }
             }
-            $this->logger->info('nostr.wire.relay_messages', [
+            $this->logger->info(sprintf('nostr.wire.relay_messages [%s]', self::relayLogLabel($relayUrl)), [
                 'context' => $context,
                 'relay' => $relayUrl,
                 'counts' => $counts,
@@ -921,12 +1116,24 @@ class NostrClient
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
         try {
-            $request = new Request($this->defaultRelaySet, $requestMessage);
+            $request = $this->newTimedRequest($this->defaultRelaySet, $requestMessage);
             $response = $request->send();
             $hasEvents = false;
 
             // Check if we got any events
-            foreach ($response as $value) {
+            foreach ($response as $relayUrl => $value) {
+                if ($value instanceof \Throwable) {
+                    $this->logger->warning(sprintf(
+                        '[%s] getArticles: %s',
+                        self::relayLogLabel($relayUrl),
+                        $value->getMessage()
+                    ), ['relay' => $relayUrl]);
+
+                    continue;
+                }
+                if (!\is_iterable($value)) {
+                    continue;
+                }
                 foreach ($value as $item) {
                     if ($item->type === 'EVENT') {
                         if (!isset($articles[$item->event->id])) {
@@ -941,31 +1148,58 @@ class NostrClient
             if (!$hasEvents && !empty($slugs)) {
                 $this->logger->info('No results from theforest, trying default relays');
 
-                $request = new Request($this->defaultRelaySet, $requestMessage);
+                $request = $this->newTimedRequest($this->defaultRelaySet, $requestMessage);
                 $response = $request->send();
 
-                foreach ($response as $value) {
+                foreach ($response as $relayUrl => $value) {
+                    if ($value instanceof \Throwable) {
+                        $this->logger->warning(sprintf(
+                            '[%s] getArticles: %s',
+                            self::relayLogLabel($relayUrl),
+                            $value->getMessage()
+                        ), ['relay' => $relayUrl]);
+
+                        continue;
+                    }
+                    if (!\is_iterable($value)) {
+                        continue;
+                    }
                     foreach ($value as $item) {
                         if ($item->type === 'EVENT') {
                             if (!isset($articles[$item->event->id])) {
                                 $articles[$item->event->id] = $item->event;
                             }
-                        } elseif (in_array($item->type, ['AUTH', 'ERROR', 'NOTICE'])) {
-                            $this->logger->error('An error while getting articles.', ['response' => $item]);
+                        } elseif (in_array($item->type, ['AUTH', 'ERROR', 'NOTICE'], true)) {
+                            $msg = (string) ($item->message ?? '');
+                            $this->logger->error(sprintf(
+                                '[%s] %s while getting articles: %s',
+                                self::relayLogLabel($relayUrl),
+                                $item->type,
+                                $msg !== '' ? $msg : '(no message)'
+                            ), ['relay' => $relayUrl, 'response' => $item]);
                         }
                     }
                 }
             }
         } catch (\Exception $e) {
-            $this->logger->error('Error querying relays', [
-                'error' => $e->getMessage()
+            $relaysTried = $this->configuredArticleRelayUrlList();
+            $relaysStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
+            $this->logger->error(sprintf('Error querying relays (%s): %s', $relaysStr, $e->getMessage()), [
+                'error' => $e->getMessage(),
+                'relays' => $relaysTried,
             ]);
 
             // Fall back to default relay set
-            $request = new Request($this->defaultRelaySet, $requestMessage);
+            $request = $this->newTimedRequest($this->defaultRelaySet, $requestMessage);
             $response = $request->send();
 
-            foreach ($response as $value) {
+            foreach ($response as $relayUrl => $value) {
+                if ($value instanceof \Throwable) {
+                    continue;
+                }
+                if (!\is_iterable($value)) {
+                    continue;
+                }
                 foreach ($value as $item) {
                     if ($item->type === 'EVENT') {
                         if (!isset($articles[$item->event->id])) {
@@ -1034,14 +1268,28 @@ class NostrClient
             $filter->setAuthors([$pubkey]);
             $filter->setTag('#d', [$slug]);
             $requestMessage = new RequestMessage($subscriptionId, [$filter]);
+            $relaysForLog = $this->plannedRelayUrlsForSet($relayList);
+            $relaysLogStr = implode(', ', array_map(self::relayLogLabel(...), $relaysForLog));
 
             try {
-                $request = new Request($relaySet, $requestMessage);
+                $request = $this->newTimedRequest($relaySet, $requestMessage);
                 $response = $request->send();
                 $found = false;
 
                 // Check responses from each relay
-                foreach ($response as $value) {
+                foreach ($response as $relayUrl => $value) {
+                    if ($value instanceof \Throwable) {
+                        $this->logger->warning(sprintf(
+                            '[%s] getArticlesByCoordinates: %s',
+                            self::relayLogLabel($relayUrl),
+                            $value->getMessage()
+                        ), ['coordinate' => $coordinate, 'relay' => $relayUrl]);
+
+                        continue;
+                    }
+                    if (!\is_iterable($value)) {
+                        continue;
+                    }
                     foreach ($value as $item) {
                         if ($item->type === 'EVENT') {
                             $articlesMap[$coordinate] = $item->event;
@@ -1057,10 +1305,22 @@ class NostrClient
                         'coordinate' => $coordinate
                     ]);
 
-                    $request = new Request($this->defaultRelaySet, $requestMessage);
+                    $request = $this->newTimedRequest($this->defaultRelaySet, $requestMessage);
                     $response = $request->send();
 
-                    foreach ($response as $value) {
+                    foreach ($response as $relayUrl => $value) {
+                        if ($value instanceof \Throwable) {
+                            $this->logger->warning(sprintf(
+                                '[%s] getArticlesByCoordinates: %s',
+                                self::relayLogLabel($relayUrl),
+                                $value->getMessage()
+                            ), ['coordinate' => $coordinate, 'relay' => $relayUrl]);
+
+                            continue;
+                        }
+                        if (!\is_iterable($value)) {
+                            continue;
+                        }
                         foreach ($value as $item) {
                             if ($item->type === 'EVENT') {
                                 $articlesMap[$coordinate] = $item->event;
@@ -1070,9 +1330,14 @@ class NostrClient
                     }
                 }
             } catch (\Exception $e) {
-                $this->logger->error('Error fetching article', [
+                $this->logger->error(sprintf(
+                    'Error fetching article (relays: %s): %s',
+                    $relaysLogStr,
+                    $e->getMessage()
+                ), [
                     'coordinate' => $coordinate,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
+                    'relays' => $relaysForLog,
                 ]);
             }
         }
@@ -1102,24 +1367,27 @@ class NostrClient
 
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
-        return new Request($relaySet ?? $this->defaultRelaySet, $requestMessage);
+        return $this->newTimedRequest($relaySet ?? $this->defaultRelaySet, $requestMessage);
     }
 
     private function processResponse(array $response, callable $eventHandler): array
     {
         $results = [];
         foreach ($response as $relayUrl => $relayRes) {
-            // Skip if the relay response is an Exception
-            if ($relayRes instanceof \Exception) {
-                $this->logger->error('Relay error', [
+            if ($relayRes instanceof \Throwable) {
+                $this->logger->error(sprintf(
+                    'Relay error at %s: %s',
+                    self::relayLogLabel($relayUrl),
+                    $relayRes->getMessage()
+                ), [
                     'relay' => $relayUrl,
-                    'error' => $relayRes->getMessage()
+                    'error' => $relayRes->getMessage(),
                 ]);
                 continue;
             }
 
             $itemEstimate = \is_countable($relayRes) ? \count($relayRes) : null;
-            $this->logger->debug('Processing relay response', [
+            $this->logger->debug(sprintf('Processing relay response from %s', self::relayLogLabel($relayUrl)), [
                 'relay' => $relayUrl,
                 'item_count' => $itemEstimate,
             ]);
@@ -1127,18 +1395,21 @@ class NostrClient
             foreach ($relayRes as $item) {
                 try {
                     if (!is_object($item)) {
-                        $this->logger->warning('Invalid response item', [
+                        $this->logger->warning(sprintf(
+                            'Invalid response item from %s',
+                            self::relayLogLabel($relayUrl)
+                        ), [
                             'relay' => $relayUrl,
-                            'item' => $item
+                            'item' => $item,
                         ]);
                         continue;
                     }
 
                     switch ($item->type) {
                         case 'EVENT':
-                            $this->logger->debug('Processing event', [
+                            $this->logger->debug(sprintf('Processing event from %s', self::relayLogLabel($relayUrl)), [
                                 'relay' => $relayUrl,
-                                'event_id' => $item->event->id ?? 'unknown'
+                                'event_id' => $item->event->id ?? 'unknown',
                             ]);
                             $result = $eventHandler($item->event);
                             if ($result !== null) {
@@ -1146,24 +1417,37 @@ class NostrClient
                             }
                             break;
                         case 'AUTH':
-                            $this->logger->warning('Relay requires authentication', [
+                            $this->logger->warning(sprintf(
+                                'Relay %s requires authentication',
+                                self::relayLogLabel($relayUrl)
+                            ), [
                                 'relay' => $relayUrl,
-                                'response' => $item
+                                'response' => $item,
                             ]);
                             break;
                         case 'ERROR':
                         case 'NOTICE':
-                            $this->logger->warning('Relay error/notice', [
+                            $msg = (string) ($item->message ?? 'No message');
+                            $this->logger->warning(sprintf(
+                                '[%s] %s: %s',
+                                self::relayLogLabel($relayUrl),
+                                $item->type,
+                                $msg
+                            ), [
                                 'relay' => $relayUrl,
                                 'type' => $item->type,
-                                'message' => $item->message ?? 'No message'
+                                'message' => $msg,
                             ]);
                             break;
                     }
                 } catch (\Exception $e) {
-                    $this->logger->error('Error processing event from relay', [
+                    $this->logger->error(sprintf(
+                        'Error processing event from relay %s: %s',
+                        self::relayLogLabel($relayUrl),
+                        $e->getMessage()
+                    ), [
                         'relay' => $relayUrl,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ]);
                     continue; // Skip this item but continue processing others
                 }
@@ -1299,32 +1583,42 @@ class NostrClient
      */
     public function getMagazineIndex(mixed $npub, mixed $dTag): ?PublicationEventEntity
     {
-        $entity = $this->queryMagazineIndex($npub, $dTag, $this->buildSingleRelaySet($this->defaultRelayUrl));
+        $entity = $this->queryMagazineIndex(
+            $npub,
+            $dTag,
+            $this->buildSingleRelaySet($this->defaultRelayUrl),
+            self::relayLogLabel($this->defaultRelayUrl)
+        );
         if ($entity !== null) {
             return $entity;
         }
         if (\count($this->configuredArticleRelayUrlList()) <= 1) {
-            $this->logger->warning('No magazine index found', ['npub' => $npub, 'dTag' => $dTag]);
+            $this->logger->warning(sprintf(
+                'No magazine index found (tried %s)',
+                self::relayLogLabel($this->defaultRelayUrl)
+            ), ['npub' => $npub, 'dTag' => $dTag, 'relay' => $this->defaultRelayUrl]);
 
             return null;
         }
         $this->logger->notice('Magazine index not on default relay, falling back to full relay set', [
             'dTag' => $dTag,
         ]);
+        $fullListStr = implode(', ', array_map(self::relayLogLabel(...), $this->configuredArticleRelayUrlList()));
 
-        return $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet);
+        return $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet, $fullListStr);
     }
 
-    private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet): ?PublicationEventEntity
+    private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet, string $relaysForLog): ?PublicationEventEntity
     {
         $request = $this->createNostrRequest(
             [KindsEnum::PUBLICATION_INDEX],
             ['authors' => [(string) $npub], 'tag' => ['#d', [(string) $dTag]]],
             $relaySet,
         );
-        $this->logger->info('Magazine index query', [
+        $this->logger->info(sprintf('Magazine index query (relays: %s)', $relaysForLog), [
             'npub' => $npub,
             'dTag' => $dTag,
+            'relays' => $relaysForLog,
         ]);
         $response = $request->send();
         $events = $this->processResponse($response, function ($received) {
@@ -1392,9 +1686,14 @@ class NostrClient
                     return null;
                 });
             } catch (\Throwable $e) {
-                $this->logger->error('ingestMissingLongformForCategoryCoordinates', [
+                $this->logger->error(sprintf(
+                    'ingestMissingLongformForCategoryCoordinates [%s]: %s',
+                    self::relayLogLabel($this->defaultRelayUrl),
+                    $e->getMessage()
+                ), [
                     'message' => $e->getMessage(),
                     'pubkey' => $g['pubkey'] ?? null,
+                    'relay' => $this->defaultRelayUrl,
                 ]);
             }
         }

@@ -12,6 +12,11 @@ parameters:
     # Extra wss:// URLs for article sync (articles:get), comment threads (NIP-22 / getArticleDiscussion),
     # and any request that merges the default set with author-specific relays. default_relay is first; duplicates ignored.
     article_relays: ['wss://christpill.nostr1.com', 'wss://nostr.land', 'wss://nostr.wine', 'wss://nostr21.com', 'wss://nostr.sovbit.host']
+    # Kind-0 / profile fetches (author metadata, prewarm). Tried first, then default + article_relays (deduped).
+    profile_relays:
+        - 'wss://relay.damus.io'
+        - 'wss://nos.lol'
+        - 'wss://profiles.nostr1.com'
     # Example:
     # article_relays:
     #   - 'wss://nos.lol'

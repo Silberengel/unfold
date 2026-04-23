@@ -1,30 +1,21 @@
-FROM php:8.2-cli
+FROM php:8.3-cli
 
-# Install cron and Redis PHP extension dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
     cron \
-    libzip-dev \
-    libicu-dev \
-    libpq-dev \
-    libonig-dev
+    && rm -rf /var/lib/apt/lists/*
 
+ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+RUN chmod +x /usr/local/bin/install-php-extensions \
+    && install-php-extensions pdo_mysql intl opcache zip gmp
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Install Symfony CLI tools (optional)
-# RUN curl -sS https://get.symfony.com/cli/installer | bash
+COPY crontab /etc/cron.d/unfold-prewarm
+COPY prewarm_cron.sh /prewarm_cron.sh
+COPY entry-cron.sh /entry-cron.sh
 
-# Copy cron and script
-COPY crontab /etc/cron.d/app-cron
-COPY index_articles.sh /index_articles.sh
+RUN chmod 0644 /etc/cron.d/unfold-prewarm \
+    && chmod +x /prewarm_cron.sh /entry-cron.sh
 
-# Set permissions
-RUN chmod 0644 /etc/cron.d/app-cron && \
-    chmod +x /index_articles.sh
-
-# Apply cron job
-RUN crontab /etc/cron.d/app-cron
-
-# Run cron in the foreground
-CMD ["cron", "-f"]
+CMD ["/entry-cron.sh"]

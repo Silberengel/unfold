@@ -1,1 +1,1 @@
-*/5 * * * * /index_articles.sh >> /var/log/cron.log 2>&1
+*/10 * * * * root /prewarm_cron.sh >>/var/log/cron.log 2>&1

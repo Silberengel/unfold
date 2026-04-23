@@ -42,10 +42,17 @@ final class MagazineRefresher
         // (e.g. slow TLS) and can fatal. Cap once with headroom; the $deadline loop limits work.
         $this->applyExecutionTimeCap($budgetSeconds);
 
+        $defaultRelay = (string) $this->params->get('default_relay');
+        $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
+
         $root = $this->nostrClient->getMagazineIndex($npub, $dTag);
         if ($root === null) {
-            $this->logger->warning('MagazineRefresher: root index not returned from relay', [
+            $this->logger->warning(sprintf(
+                'MagazineRefresher: root index not returned (tried from %s)',
+                $relayLabel
+            ), [
                 'd_tag' => $dTag,
+                'relay' => $defaultRelay,
             ]);
 
             return;
@@ -67,9 +74,14 @@ final class MagazineRefresher
                     $this->store->putCategory($slug, $cat);
                 }
             } catch (\Throwable $e) {
-                $this->logger->error('MagazineRefresher: category fetch failed', [
+                $this->logger->error(sprintf(
+                    'MagazineRefresher: category fetch failed (relays from %s): %s',
+                    $relayLabel,
+                    $e->getMessage()
+                ), [
                     'slug' => $slug,
                     'message' => $e->getMessage(),
+                    'relay' => $defaultRelay,
                 ]);
             }
         }

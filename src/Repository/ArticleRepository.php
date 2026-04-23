@@ -110,6 +110,22 @@ class ArticleRepository extends ServiceEntityRepository
     }
 
     /**
+     * Distinct hex pubkeys for prewarming Nostr profile cache.
+     *
+     * @return list<string>
+     */
+    public function findDistinctAuthorPubkeys(): array
+    {
+        return $this->createQueryBuilder('a')
+            ->select('a.pubkey')
+            ->distinct()
+            ->where('a.pubkey IS NOT NULL')
+            ->andWhere("a.pubkey != ''")
+            ->getQuery()
+            ->getSingleColumnResult();
+    }
+
+    /**
      * Find articles by author's public key
      */
     public function findByPubkey(string $pubkey, int $limit = 25): array
