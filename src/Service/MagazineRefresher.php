@@ -33,7 +33,7 @@ final class MagazineRefresher
      *
      * @param (callable(string, array<string, int|string|bool|null>): void)|null $onProgress
      *        Phases: `before_root`, `after_root` (total_steps, step, slug_count, slugs: list<string>),
-     *        `category_fetched` (step, total_steps, slug)
+     *        `category_fetched` (step, total_steps, category_index, category_total, slug)
      */
     public function refreshFromRelays(int $budgetSeconds = 8, array $preferSlugs = [], ?callable $onProgress = null): void
     {
@@ -76,6 +76,8 @@ final class MagazineRefresher
             'slugs' => $slugs,
         ]);
         $step = 1;
+        $catTotal = \count($slugs);
+        $catIndex = 0;
         foreach ($slugs as $slug) {
             if (microtime(true) >= $deadline) {
                 $this->logger->notice('MagazineRefresher: stopped at time budget; some categories not fetched', [
@@ -100,9 +102,12 @@ final class MagazineRefresher
                 ]);
             } finally {
                 ++$step;
+                ++$catIndex;
                 $onProgress?->__invoke('category_fetched', [
                     'step' => $step,
                     'total_steps' => $totalSteps,
+                    'category_index' => $catIndex,
+                    'category_total' => $catTotal,
                     'slug' => $slug,
                 ]);
             }

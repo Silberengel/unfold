@@ -111,6 +111,12 @@ final class PrewarmCommand extends Command
                                     }
                                     $io->writeln(sprintf('   · <info>%s</info>', $s));
                                 }
+                                $io->writeln(sprintf(
+                                    '   <comment>Progress bar: <info>%d</info> steps = <info>1</info> (root) + <info>%d</info> (categor%s).</comment>',
+                                    1 + $n,
+                                    $n,
+                                    $n === 1 ? 'y' : 'ies'
+                                ));
                             }
                             $bar = $this->createPrewarmProgressBar(
                                 $io,
@@ -128,17 +134,28 @@ final class PrewarmCommand extends Command
                             }
                             $bar->setMessage($tSlug !== '' ? 'Category: '.$tSlug : 'Category');
                             if ($tSlug !== '') {
-                                $step = (int) ($p['step'] ?? 0);
-                                $tot = (int) ($p['total_steps'] ?? 0);
-                                if ($tot > 0) {
+                                $ci = (int) ($p['category_index'] ?? 0);
+                                $ct = (int) ($p['category_total'] ?? 0);
+                                if ($ci > 0 && $ct > 0) {
                                     $io->writeln(sprintf(
-                                        '   <info>[%d/%d]</info> <comment>Fetched category index</comment> — <info>%s</info>',
-                                        $step,
-                                        $tot,
+                                        '   <info>[category %d/%d]</info> <comment>Fetched category index</comment> — <info>%s</info>',
+                                        $ci,
+                                        $ct,
                                         $tSlug
                                     ));
                                 } else {
-                                    $io->writeln(sprintf('   <comment>Fetched category index</comment> — <info>%s</info>', $tSlug));
+                                    $st = (int) ($p['step'] ?? 0);
+                                    $tot = (int) ($p['total_steps'] ?? 0);
+                                    if ($tot > 0) {
+                                        $io->writeln(sprintf(
+                                            '   <info>[%d/%d]</info> <comment>Fetched category index</comment> — <info>%s</info>',
+                                            $st,
+                                            $tot,
+                                            $tSlug
+                                        ));
+                                    } else {
+                                        $io->writeln(sprintf('   <comment>Fetched category index</comment> — <info>%s</info>', $tSlug));
+                                    }
                                 }
                             }
                         }
