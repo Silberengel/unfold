@@ -40,6 +40,12 @@ class NostrClient
     private const MAX_DISCUSSION_RELAY_URLS = 10;
 
     /**
+     * {@see Request::send()} hits relays sequentially; profile pages (metadata, long-form list, 10133) used
+     * the full default+article+profile list (~8–9 wss) → 2 slow relays can exceed PHP’s 30s default max_execution_time.
+     */
+    private const MAX_PROFILE_SEQUENTIAL_RELAY_URLS = 3;
+
+    /**
      * {@see sendArticleDiscussionToRelaysSequential} visits relays one after another (~RELAY_REQUEST_TIMEOUT_SEC
      * each). Keep this low so HTTP /fragment/comments and browsers do not hit 60–90s proxy cuts.
      */
@@ -328,6 +334,25 @@ class NostrClient
     }
 
     /**
+     * @param list<string> $urls
+     *
+     * @return list<string>
+     */
+    private function capSequentialRelaysForProfileFetches(array $urls): array
+    {
+        if (\count($urls) <= self::MAX_PROFILE_SEQUENTIAL_RELAY_URLS) {
+            return $urls;
+        }
+        $this->logger->notice('nostr.relay_list_capped', [
+            'context' => 'profile_sequential',
+            'max' => self::MAX_PROFILE_SEQUENTIAL_RELAY_URLS,
+            'had' => \count($urls),
+        ]);
+
+        return \array_values(\array_slice($urls, 0, self::MAX_PROFILE_SEQUENTIAL_RELAY_URLS));
+    }
+
+    /**
      * Full NIP-65 (kind-10002) wss:// list for a hex pubkey, cached. Used for comment fetches; prefer
      * {@see getTopReputableRelaysForAuthor} when you only need a few relays.
      *
@@ -589,9 +614,9 @@ class NostrClient
      */
     public function getNpubMetadata($npub): \stdClass
     {
-        $relaysTried = $this->profileMetadataQueryRelayUrlList();
+        $relaysTried = $this->capSequentialRelaysForProfileFetches($this->profileMetadataQueryRelayUrlList());
         $relaysTriedStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
-        $relaySet = $this->relaySetForProfileMetadataFetch();
+        $relaySet = $this->relaySetFromDistinctUrlList($relaysTried);
         $this->logger->info(sprintf('Getting metadata for npub (relays: %s)', $relaysTriedStr), ['npub' => $npub, 'relays' => $relaysTried]);
         $request = $this->createNostrRequest(
             kinds: [KindsEnum::METADATA],
@@ -624,9 +649,9 @@ class NostrClient
      */
     public function getKind10133PaymentTargetEventsForNpub(string $npub, int $limit = 20): array
     {
-        $relaysTried = $this->profileMetadataQueryRelayUrlList();
+        $relaysTried = $this->capSequentialRelaysForProfileFetches($this->profileMetadataQueryRelayUrlList());
         $relaysTriedStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
-        $relaySet = $this->relaySetForProfileMetadataFetch();
+        $relaySet = $this->relaySetFromDistinctUrlList($relaysTried);
         try {
             $request = $this->createNostrRequest(
                 kinds: [KindsEnum::PAYMENT_TARGETS],
@@ -1527,13 +1552,20 @@ class NostrClient
      */
     public function getLongFormContentForPubkey(string $ident): array
     {
-        // Add user relays to the default set
         $authorRelays = $this->getTopReputableRelaysForAuthor($ident);
-        // Create a RelaySet from the author's relays
-        $relaySet = $this->defaultRelaySet;
-        if (!empty($authorRelays)) {
-            $relaySet = $this->createRelaySet($authorRelays);
+        $base = $this->configuredArticleRelayUrlList();
+        $merged = $authorRelays !== [] ? array_merge($base, $authorRelays) : $base;
+        $seen = [];
+        $deduped = [];
+        foreach ($merged as $url) {
+            if (!\is_string($url) || $url === '' || isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            $deduped[] = $url;
         }
+        $capped = $this->capSequentialRelaysForProfileFetches($deduped);
+        $relaySet = $this->relaySetFromDistinctUrlList($capped);
 
         // Create request using the helper method
         $request = $this->createNostrRequest(

@@ -59,6 +59,10 @@ return [
     '@noble/hashes' => [
         'version' => '1.3.1',
     ],
+    // Required by nostr-tools/nip19 (bytesToHex / hexToBytes / concatBytes); bare @noble/hashes is not enough.
+    '@noble/hashes/utils' => [
+        'version' => '1.3.1',
+    ],
     '@scure/base' => [
         'version' => '1.1.1',
     ],

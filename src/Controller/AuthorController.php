@@ -33,6 +33,11 @@ class AuthorController extends AbstractController
         ProfilePaymentLinksBuilder $profilePaymentLinks,
         ProfileIdentityLinksBuilder $profileIdentityLinks,
     ): Response {
+        // Profile pages chain several sequential Nostr REQ runs; match article pages so a slow relay
+        // set does not hit PHP’s default 30s max_execution_time during Twig render.
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+
         $keys = new Key();
         $pubkey = $keys->convertToHex($npub);
 

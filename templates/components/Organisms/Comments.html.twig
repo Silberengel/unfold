@@ -63,6 +63,7 @@
         {% set cpk = item.pubkey|default('') %}
         {% set cts = item.created_at|default(null) %}
         {% set cdepth = item.unfold_depth|default(0) %}
+        {% set is_nip18_repost = item.kind is defined and (item.kind == 6 or item.kind == 16) %}
         <div class="card comment comment--depth-{{ cdepth }}">
             <div class="metadata">
                 <p>
@@ -70,20 +71,26 @@
                         <span class="ui-badge ui-badge--neutral" title="Legacy text-note reply (pre–NIP-22)">kind 1</span>
                     {% elseif item.kind is defined and item.kind == 1111 %}
                         <span class="ui-badge ui-badge--secondary" title="NIP-22 comment">1111</span>
+                    {% elseif is_nip18_repost %}
+                        <span class="ui-badge ui-badge--neutral" title="NIP-18 repost (body omitted)">repost</span>
                     {% endif %}
                     {% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}
                 </p>
                 <small>{% if cts is not null and cts != '' %}{{ cts|date('F j Y') }}{% endif %}</small>
             </div>
-            {% if item.unfold_reply_blurb|default('')|trim != '' %}
+            {% if not is_nip18_repost and item.unfold_reply_blurb|default('')|trim != '' %}
                 <div class="comment__reply-blurb" role="note" aria-label="Reply context">
                     <twig:Atoms:Content content="{{ item.unfold_reply_blurb }}" />
                 </div>
             {% endif %}
             <div class="card-body">
-                <twig:Atoms:Content content="{{ item.unfold_body|default(item.content|default('')) }}" />
+                {% if is_nip18_repost %}
+                    <p class="text-subtle">Repost</p>
+                {% else %}
+                    <twig:Atoms:Content content="{{ item.unfold_body|default(item.content|default('')) }}" />
+                {% endif %}
             </div>
-            {% if cid != '' and commentLinks[cid] is defined and commentLinks[cid]|length > 0 %}
+            {% if not is_nip18_repost and cid != '' and commentLinks[cid] is defined and commentLinks[cid]|length > 0 %}
                 <div class="card-footer nostr-previews mt-3">
                     <div class="preview-container">
                         {% for link in commentLinks[cid] %}
@@ -161,10 +168,15 @@
             {% set cid = item.id|default('') %}
             {% set cpk = item.pubkey|default('') %}
             {% set cts = item.created_at|default(null) %}
+            {% set q_repost = item.kind is defined and (item.kind == 6 or item.kind == 16) %}
             <div class="card comment comment--quote">
                 <div class="metadata">
                     <p>
-                        <span class="ui-badge ui-badge--neutral">kind {{ item.kind|default('?') }}</span>
+                        {% if q_repost %}
+                            <span class="ui-badge ui-badge--neutral" title="NIP-18 repost (body omitted)">repost (kind {{ item.kind }})</span>
+                        {% else %}
+                            <span class="ui-badge ui-badge--neutral">kind {{ item.kind|default('?') }}</span>
+                        {% endif %}
                         {% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}
                     </p>
                     <small>
@@ -176,9 +188,13 @@
                     </small>
                 </div>
                 <div class="card-body">
-                    <twig:Atoms:Content content="{{ item.content|default('') }}" />
+                    {% if q_repost %}
+                        <p class="text-subtle">Repost</p>
+                    {% else %}
+                        <twig:Atoms:Content content="{{ item.content|default('') }}" />
+                    {% endif %}
                 </div>
-                {% if cid != '' and quoteLinks[cid] is defined and quoteLinks[cid]|length > 0 %}
+                {% if not q_repost and cid != '' and quoteLinks[cid] is defined and quoteLinks[cid]|length > 0 %}
                     <div class="card-footer nostr-previews mt-3">
                         <div class="preview-container">
                             {% for link in quoteLinks[cid] %}

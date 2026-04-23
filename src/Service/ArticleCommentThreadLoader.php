@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Enum\KindsEnum;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use Psr\Log\LoggerInterface;
@@ -162,6 +163,7 @@ final readonly class ArticleCommentThreadLoader
         ]);
 
         $this->enrichThreadListForDisplay($list, $articleEventHexId);
+        $this->stripRepostEventBodies($list, $quotes);
 
         $commentLinks = [];
         $quoteLinks = [];
@@ -192,6 +194,39 @@ final readonly class ArticleCommentThreadLoader
             'quoteLinks' => $quoteLinks,
             'processedContent' => $processedContent,
         ];
+    }
+
+    /**
+     * NIP-18 reposts (kinds 6 and 16) carry a JSON-wrapped copy of the original; we only show who reposted, not the body.
+     *
+     * @param array<int, object> $list
+     * @param array<int, object> $quotes
+     */
+    private function stripRepostEventBodies(array $list, array $quotes): void
+    {
+        $strip = static function (object $ev): void {
+            $k = (int) ($ev->kind ?? 0);
+            if ($k !== KindsEnum::REPOST->value && $k !== KindsEnum::GENERIC_REPOST->value) {
+                return;
+            }
+            $ev->content = '';
+            if (isset($ev->unfold_reply_blurb)) {
+                $ev->unfold_reply_blurb = null;
+            }
+            if (isset($ev->unfold_body)) {
+                $ev->unfold_body = '';
+            }
+        };
+        foreach ($list as $ev) {
+            if (\is_object($ev)) {
+                $strip($ev);
+            }
+        }
+        foreach ($quotes as $ev) {
+            if (\is_object($ev)) {
+                $strip($ev);
+            }
+        }
     }
 
     /**
