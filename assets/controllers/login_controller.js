@@ -30,7 +30,7 @@ export default class extends Controller {
       return 'Authentication Successful';
     })
     if (!!result) {
-      this.component.render();
+      await this.component.render();
       window.dispatchEvent(
         new CustomEvent('unfold:auth-changed', { detail: { loggedIn: true } })
       );

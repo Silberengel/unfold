@@ -65,7 +65,7 @@
         {% set cts = item.created_at|default(null) %}
         {% set cdepth = item.unfold_depth|default(0) %}
         {% set is_nip18_repost = item.kind is defined and (item.kind == 6 or item.kind == 16) %}
-        <div class="card comment comment--depth-{{ cdepth }}">
+        <div class="card comment comment--depth-{{ cdepth }}"{% if cid != '' %} data-event-id="{{ cid|e('html_attr') }}"{% endif %}>
             <div class="metadata">
                 <p>
                     {% if item.kind is defined and item.kind == 1 %}

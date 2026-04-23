@@ -71,7 +71,8 @@ export default class extends Controller {
         // `nostr-tools` entry pulls @noble/curves (bare spec → breaks in AssetMapper). NIP-19 only needs bech32 helpers.
         const { naddrEncode, neventEncode } = await import('nostr-tools/nip19');
         const link = this.buildParentBech32(naddrEncode, neventEncode);
-        const blurb = `> Replying to **${this.blurbLabelValue}** — [view parent](nostr:${link})\n\n`;
+        // NIP-22 quote line: must still mention nostr:… for server validation; UI strips this (see formatReplyBlurbForDisplay).
+        const blurb = `> Replying to **${this.blurbLabelValue}** (nostr:${link})\n\n`;
         const unsigned = {
             kind: 1111,
             created_at: Math.floor(Date.now() / 1000),
@@ -126,8 +127,10 @@ export default class extends Controller {
                 this.toggleBtnTarget.setAttribute('aria-expanded', 'false');
             }
         }
-        if (this.refreshAfterValue && this.fragmentUrlValue) {
-            this.refreshThread();
+        if (this.refreshAfterValue) {
+            const publishedId =
+                typeof data.id === 'string' && data.id ? data.id.toLowerCase() : '';
+            void this.refreshThread(publishedId);
         }
     }
 
@@ -156,7 +159,13 @@ export default class extends Controller {
         });
     }
 
-    refreshThread() {
+    /**
+     * Reload the section HTML from the article comments fragment. After publishing, relays can lag;
+     * if `expectedEventIdHex` is set, re-fetch with backoff until the new note appears (or a cap is hit).
+     *
+     * @param {string} [expectedEventIdHex] lowercase 64-char hex
+     */
+    async refreshThread(expectedEventIdHex = '') {
         const wrap = this.element.closest('[data-article-comments-wrapper]');
         const url =
             wrap?.getAttribute('data-article-comments-url-value') ||
@@ -168,16 +177,42 @@ export default class extends Controller {
             window.location.reload();
             return;
         }
-        const bust = `cb=${Date.now()}`;
-        const u = url.includes('?') ? `${url}&${bust}` : `${url}?${bust}`;
-        void fetch(u, { headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' } })
-            .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
-            .then((html) => {
+        const wantId =
+            expectedEventIdHex && /^[0-9a-f]{64}$/.test(expectedEventIdHex) ? expectedEventIdHex : '';
+        const maxRounds = wantId ? 14 : 1;
+        for (let round = 0; round < maxRounds; round += 1) {
+            if (round > 0) {
+                const delay = Math.min(1400, 200 * 2 ** (round - 1));
+                await new Promise((r) => setTimeout(r, delay));
+            }
+            const bust = `cb=${Date.now()}`;
+            const u = url.includes('?') ? `${url}&${bust}` : `${url}?${bust}`;
+            try {
+                const res = await fetch(u, {
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!res.ok) {
+                    throw new Error(String(res.status));
+                }
+                const html = await res.text();
                 container.innerHTML = html;
-            })
-            .catch(() => {
-                window.location.reload();
-            });
+                if (!wantId) {
+                    return;
+                }
+                if (container.querySelector(`[data-event-id="${wantId}"]`)) {
+                    return;
+                }
+            } catch {
+                if (round === maxRounds - 1) {
+                    window.location.reload();
+                }
+            }
+        }
+        if (wantId) {
+            window.location.reload();
+        }
     }
 
     /**

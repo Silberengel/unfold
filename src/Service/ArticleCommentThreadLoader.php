@@ -313,10 +313,33 @@ final readonly class ArticleCommentThreadLoader
                     }
                 }
             }
-            $ev->unfold_reply_blurb = $blurb;
+            $ev->unfold_reply_blurb = $this->formatReplyBlurbForDisplay($blurb);
             $ev->unfold_body = $split['body'];
             $ev->unfold_depth = $id === '' || !ctype_xdigit($id) ? 0 : $this->threadDepthCapped($id, $parentOf, 3);
         }
+    }
+
+    /**
+     * NIP-22 storage often includes a markdown link to the parent; hide that in the UI and show plain “replying to …” text.
+     */
+    private function formatReplyBlurbForDisplay(?string $blurb): ?string
+    {
+        if ($blurb === null) {
+            return null;
+        }
+        $s = trim($blurb);
+        if ($s === '') {
+            return null;
+        }
+        $s = preg_replace('/\s*\[[^\]]+\]\(nostr:[^)]+\)/u', '', $s) ?? $s;
+        $s = preg_replace('/\s*\(nostr:[^)]+\)/u', '', $s) ?? $s;
+        $s = rtrim($s, " \t");
+        $s = preg_replace('/\s*—\s*$/u', '', $s) ?? $s;
+        $s = rtrim($s, " \t");
+        $s = preg_replace('/\*\*([^*]+)\*\*/u', '$1', $s) ?? $s;
+        $s = trim($s);
+
+        return $s === '' ? null : $s;
     }
 
     /**

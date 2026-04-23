@@ -37,6 +37,12 @@ export default class extends Controller {
         void this.load();
     }
 
+    buildFetchUrl() {
+        const u = this.urlValue;
+        const bust = `cb=${Date.now()}`;
+        return u.includes('?') ? `${u}&${bust}` : `${u}?${bust}`;
+    }
+
     async load() {
         const t0 = performance.now();
         const perAttemptMs = 45_000;
@@ -45,8 +51,11 @@ export default class extends Controller {
             const controller = new AbortController();
             const timer = window.setTimeout(() => controller.abort(), perAttemptMs);
             try {
-                const res = await fetch(this.urlValue, {
+                // Avoid a stale 60s-cached "guest" fragment right after login (see comments fragment headers).
+                const res = await fetch(this.buildFetchUrl(), {
                     signal: controller.signal,
+                    cache: 'no-store',
+                    credentials: 'same-origin',
                     headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
                 });
                 if (!res.ok) {
