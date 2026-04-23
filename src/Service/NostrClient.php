@@ -527,6 +527,43 @@ class NostrClient
         return $events[0];
     }
 
+    /**
+     * NIP-A3 kind 10133: payment target events (replaceable) with `["payto", type, authority, ...]` tags.
+     *
+     * @return list<object>
+     */
+    public function getKind10133PaymentTargetEventsForNpub(string $npub, int $limit = 20): array
+    {
+        $relaysTried = $this->profileMetadataQueryRelayUrlList();
+        $relaysTriedStr = implode(', ', array_map(self::relayLogLabel(...), $relaysTried));
+        $relaySet = $this->relaySetForProfileMetadataFetch();
+        try {
+            $request = $this->createNostrRequest(
+                kinds: [KindsEnum::PAYMENT_TARGETS],
+                filters: ['authors' => [$npub], 'limit' => max(1, min(50, $limit))],
+                relaySet: $relaySet
+            );
+            $events = $this->processResponse(
+                $request->send(),
+                static fn ($ev) => $ev,
+            );
+        } catch (\Throwable $e) {
+            $this->logger->warning('nostr.kind10133.fetch_failed', [
+                'npub' => $npub,
+                'relays' => $relaysTriedStr,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+        if (!\is_array($events) || $events === []) {
+            return [];
+        }
+        usort($events, static fn ($a, $b) => (int) ($b->created_at ?? 0) <=> (int) ($a->created_at ?? 0));
+
+        return array_values($events);
+    }
+
     public function getNpubLongForm($npub): void
     {
         $subscription = new Subscription();

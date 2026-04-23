@@ -20,5 +20,6 @@ enum KindsEnum: int
     case ZAP = 9735; // NIP-57, Zaps
     case HIGHLIGHTS = 9802;
     case RELAY_LIST = 10002; // NIP-65, Relay list metadata
+    case PAYMENT_TARGETS = 10133; // NIP-A3, payto: payment targets (replaceable)
     case APP_DATA = 30078; // NIP-78, Arbitrary custom app data
 }

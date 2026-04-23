@@ -17,6 +17,8 @@ parameters:
         - 'wss://relay.damus.io'
         - 'wss://nos.lol'
         - 'wss://profiles.nostr1.com'
+        - 'wss://thecitadel.nostr1.com'
+        - 'wss://nostr.wine'
     # Example:
     # article_relays:
     #   - 'wss://nos.lol'
@@ -29,6 +31,8 @@ parameters:
     npub: 'npub1m4ny6hjqzepn4rxknuq94c2gpqzr29ufkkw7ttcxyak7v43n6vvsajc2jl'
     d_tag: 'newsroom-magazine-on-imwald-by-laeserin'
     community_articles: true
+    # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).
+    jumble_profile_users_base: 'https://jumble.imwald.eu/users'
     external_links:
       - title: "Unfold"
         url: "https://github.com/decent-newsroom/unfold"

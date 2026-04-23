@@ -25,19 +25,51 @@ readonly class CacheService
      */
     public function getMetadata(string $npub): \stdClass
     {
+        return $this->getMetadataBundle($npub)['content'];
+    }
+
+    /**
+     * Kind-0 content JSON, tags (for payto/website/nip05), and any relay round trip once per cache item.
+     *
+     * @return array{content: \stdClass, kind0_tags: list<list<string>>}
+     */
+    public function getMetadataBundle(string $npub): array
+    {
         $aggr = $this->nostrClient->getNostrLandAggrReaderCacheSuffix();
         $cacheKey = $aggr === '' ? '0_'.$npub : '0_'.$aggr.'_'.$npub;
         try {
-            return $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub) {
+            $cached = $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub) {
                 $item->expiresAfter(3600); // 1 hour, adjust as needed
                 try {
-                    $meta = $this->nostrClient->getNpubMetadata($npub);
+                    $ev = $this->nostrClient->getNpubMetadata($npub);
+                    $tags = self::normalizeEventTagsList($ev->tags ?? null);
+                    try {
+                        $data = \json_decode((string) $ev->content, false, 512, \JSON_THROW_ON_ERROR);
+                    } catch (\JsonException) {
+                        $data = new \stdClass();
+                    }
+                    if (!\is_object($data)) {
+                        $data = new \stdClass();
+                    }
 
-                    return json_decode($meta->content);
+                    return [
+                        'content' => $data,
+                        'kind0_tags' => $tags,
+                    ];
                 } catch (\Exception $e) {
                     throw new MetadataRetrievalException('Failed to retrieve metadata', 0, $e);
                 }
             });
+            if (\is_array($cached) && isset($cached['content']) && $cached['content'] instanceof \stdClass) {
+                return [
+                    'content' => $cached['content'],
+                    'kind0_tags' => \is_array($cached['kind0_tags'] ?? null) ? $cached['kind0_tags'] : [],
+                ];
+            }
+            // Legacy: cache stored only the decoded content object
+            if ($cached instanceof \stdClass) {
+                return ['content' => $cached, 'kind0_tags' => []];
+            }
         } catch (\Exception|InvalidArgumentException $e) {
             $root = $e->getPrevious() ?? $e;
             $this->logger->warning('Profile metadata fetch failed; using npub placeholder.', [
@@ -47,8 +79,50 @@ readonly class CacheService
             $content = new \stdClass();
             $content->name = substr($npub, 0, 8) . '…' . substr($npub, -4);
 
-            return $content;
+            return [
+                'content' => $content,
+                'kind0_tags' => [],
+            ];
         }
+
+        $content = new \stdClass();
+        $content->name = substr($npub, 0, 8) . '…' . substr($npub, -4);
+
+        return [
+            'content' => $content,
+            'kind0_tags' => [],
+        ];
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private static function normalizeEventTagsList(mixed $tags): array
+    {
+        if (!\is_array($tags)) {
+            return [];
+        }
+        $out = [];
+        foreach ($tags as $row) {
+            if (!\is_array($row) && !\is_object($row)) {
+                continue;
+            }
+            $seq = \is_object($row) ? get_object_vars($row) : $row;
+            if ($seq === []) {
+                continue;
+            }
+            $r = array_values(
+                array_map(
+                    static fn (mixed $v): string => (string) $v,
+                    array_values($seq)
+                )
+            );
+            if ($r !== [] && (string) ($r[0] ?? '') !== '') {
+                $out[] = $r;
+            }
+        }
+
+        return $out;
     }
 
     /**

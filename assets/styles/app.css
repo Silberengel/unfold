@@ -534,8 +534,86 @@ footer a {
     margin-top: 0.25em;
 }
 
+.author-profile__header-meta {
+    margin-top: 0.5rem;
+    max-width: 28rem;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+}
+
+.author-profile__identity {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+}
+
+.author-profile__identity-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.5rem;
+    margin: 0.35rem 0;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.author-profile__identity-type {
+    flex: 0 0 7.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text);
+    opacity: 0.75;
+}
+
+.author-profile__identity-link {
+    word-break: break-all;
+    min-width: 0;
+}
+
+.author-profile__payments {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    max-width: 100%;
+    text-align: left;
+}
+
+.author-profile__payment {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.5rem;
+    margin: 0.35rem 0;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.author-profile__payment-type {
+    flex: 0 0 7.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text);
+    opacity: 0.75;
+}
+
+.author-profile__payment-link {
+    word-break: break-all;
+    min-width: 0;
+}
+
+.author-profile__jumble {
+    margin: 1rem 0 0;
+    text-align: center;
+}
+
 .author-profile__about {
     text-align: left;
+    margin-top: 1rem;
 }
 
 .author-profile__divider {
