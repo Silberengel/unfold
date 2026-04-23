@@ -1,4 +1,4 @@
-<header class="header" data-controller="menu" {{ attributes }}>
+<header id="site-header" class="header" data-controller="menu" {{ attributes }}>
     <div class="header__logo">
         <a href="/" class="header__brand">
             <h1 class="brand">
@@ -21,6 +21,9 @@
                 </li>
             {% endif %}
         </ul>
+        <div class="header__mobile-account">
+            <twig:UserMenu :inline="true" />
+        </div>
     </div>
     <div data-controller="progress-bar">
         <div id="progress-bar" data-progress-bar-target="bar"></div>

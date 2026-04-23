@@ -325,16 +325,21 @@ div:nth-child(odd) .featured-list {
     .header__logo .brand {
         font-size: clamp(1rem, 4.2vw, 1.45rem);
         gap: 0.35rem;
-        line-height: 1.2;
+        /* Tight line-height + overflow:hidden on .brand__title clip ascenders; keep room for type. */
+        line-height: 1.35;
         justify-content: flex-start;
         text-align: left;
     }
 
     .brand__title {
         flex: 1;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        line-height: 1.35;
+        /* Padding inside the clipping box so Lobster/serif caps aren’t sheared at the top */
+        padding: 0.2em 0 0.12em;
     }
 
     .header__logo-circle {

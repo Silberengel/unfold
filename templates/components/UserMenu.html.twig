@@ -1,4 +1,4 @@
-<div class="user-menu" {{ attributes.defaults(stimulus_controller('login')) }}>
+<div class="user-menu{{ inline ? ' user-menu--inline' : '' }}" {{ attributes.defaults(stimulus_controller('login')) }}>
     {% if app.user %}
         <div class="notice info">
             <twig:Molecules:UserFromNpub ident="{{ app.user.npub }}" />

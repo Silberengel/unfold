@@ -50,7 +50,9 @@ nav a:hover {
     text-decoration: none;
 }
 
-header {
+/* Only the app chrome in Header.html.twig (#site-header). A bare `header` rule also
+   matched <header class="featured-authors__intro"> and fixed it under the real bar, hiding it. */
+#site-header {
     position: fixed;
     /* Use inset instead of 100vw: 100vw includes the vertical scrollbar and causes horizontal overflow on many viewports. */
     left: 0;
@@ -63,7 +65,7 @@ header {
 /* Desktop: breathing room under the browser chrome. Mobile gets inset via
    .header__logo padding in the max-width block below. */
 @media (min-width: 1025px) {
-    header {
+    #site-header {
         padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
     }
 }
@@ -136,7 +138,8 @@ header {
         justify-content: space-between;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.4rem max(0.65rem, env(safe-area-inset-left)) 0.4rem max(0.65rem, env(safe-area-inset-right));
+        /* Top: safe area (notch) + room so the site title isn’t flush under the browser chrome */
+        padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.65rem, env(safe-area-inset-left)) 0.45rem max(0.65rem, env(safe-area-inset-right));
     }
 
     .header__brand {
@@ -150,6 +153,7 @@ header {
         display: none;
         flex-direction: column;
         padding-top: 10px;
+        padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
     }
 
     .header__categories.active {
@@ -164,6 +168,24 @@ header {
     .header__categories ul {
         flex-direction: column;
         gap: 10px;
+    }
+
+    /* Log in / account block below category links in the hamburger */
+    .header__mobile-account {
+        align-self: stretch;
+        text-align: left;
+        width: 100%;
+        max-width: 32rem;
+        margin: 0 auto;
+        padding: 0.75rem 0.25rem 0;
+        border-top: 1px solid var(--color-border);
+    }
+}
+
+/* Hide the duplicate hamburger user menu on wide screens (sidebar <nav> has the real menu). */
+@media (min-width: 1025px) {
+    .header__mobile-account {
+        display: none;
     }
 }
 
@@ -193,6 +215,16 @@ main {
     .user-menu {
         top: 162px;
     }
+}
+
+/* After .user-menu so this wins: hamburger copy stays in flow, not position:fixed. */
+.user-menu.user-menu--inline {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    top: auto;
+    left: auto;
 }
 
 .user-nav {
@@ -236,8 +268,10 @@ dt {
     aside {
         display: none; /* Hide the sidebars on small screens */
     }
+    /* Fixed header is taller than 90px (safe-area + logo row + title padding). Match it or the first
+       main content (e.g. featured authors intro) sits under the bar and looks “cut off” at the top. */
     main {
-        margin-top: 90px;
+        margin-top: max(7.25rem, calc(4.8rem + env(safe-area-inset-top, 0px)));
         width: 100%;
     }
 }
@@ -281,9 +315,18 @@ footer {
     max-width: 40rem;
 }
 
+/* Footer <nav> must not use the main-column nav rule (width: 21vw), or the list stays ~1/5 of the screen. */
 .site-footer__nav {
-    max-width: min(44rem, 100%);
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
+    flex-shrink: 1;
+    padding: 0;
+    overflow-y: visible;
+}
+
+.site-footer__nav li {
+    margin: 0; /* not nav li { margin: 0.5em 0 } */
 }
 
 .site-footer__syndication {
@@ -305,12 +348,14 @@ footer {
     max-width: 100%;
 }
 
+/* Do not set min-width:0 on <li> — with flex it lets items shrink to a hairline and
+   forces one-word-per-line wrapping. Use natural (content) size per item instead. */
 .site-footer__syndication-list > li {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem 0.45rem;
-    min-width: 0;
+    flex: 0 0 auto;
     max-width: 100%;
 }
 
@@ -346,14 +391,82 @@ footer {
     gap: 0.4rem 0.45rem;
     min-width: 0;
     max-width: 100%;
-    overflow-wrap: anywhere; /* long category names / URLs can’t keep the page wider than the screen */
+    /* Break only unbroken long words; avoid overflow-wrap:anywhere (splits at every symbol). */
     word-break: break-word;
+    overflow-wrap: break-word;
 }
 
-/* Narrow viewports: put feeds on their own row with full line width so links wrap inside the viewport, not off-screen. */
-@media (max-width: 700px) {
+/* Narrow / tablet: feeds row full width; tighter footer so it doesn’t dominate the viewport. */
+@media (max-width: 1024px) {
+    footer {
+        padding: 0.65rem 0.75rem 0.75rem;
+    }
+
+    .site-footer {
+        gap: 0.65rem;
+    }
+
+    .site-footer__syndication-title {
+        font-size: 0.95rem;
+        margin: 0 0 0.15rem;
+    }
+
+    .site-footer__syndication-hint {
+        margin: 0 0 0.35rem;
+        font-size: 0.8rem;
+        line-height: 1.35;
+    }
+
+    .site-footer__syndication-list {
+        row-gap: 0.15rem;
+        font-size: 0.88rem;
+        line-height: 1.35;
+    }
+
+    .site-footer__syndication-list > li {
+        gap: 0.25rem 0.35rem;
+    }
+
     .site-footer__syndication-list__feeds {
-        flex-basis: 100%;
+        flex: 1 1 100%;
+        gap: 0.25rem 0.35rem;
+    }
+
+    .site-footer__main {
+        margin-top: 0;
+    }
+
+    .site-footer__legal {
+        margin: 0.35rem 0 0;
+        font-size: 0.85rem;
+        line-height: 1.35;
+    }
+
+    footer .footer-links {
+        margin: 0 0 0.3rem;
+    }
+
+    .footer-links .footer-link {
+        margin: 0.2rem 0;
+        line-height: 1.35;
+        font-size: 0.88rem;
+    }
+}
+
+/* Single-column footer: center both syndication and main. (900px+ uses side-by-side layout.) */
+@media (max-width: 899px) {
+    .site-footer {
+        text-align: center;
+    }
+
+    .site-footer__syndication-hint {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .site-footer__syndication-list,
+    .site-footer__syndication-list__feeds {
+        justify-content: center;
     }
 }
 
@@ -419,28 +532,131 @@ footer .footer-links {
 
 .featured-authors__intro {
     margin-bottom: 2rem;
+    overflow: visible; /* do not clip heading ascenders */
 }
 
+/* Override global h1 (3.2rem + tight line box); keep full glyphs visible */
 .featured-authors__intro h1 {
-    margin-top: 0;
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.35rem, 2.6vw, 2.05rem);
+    line-height: 1.28;
+    font-weight: 500;
+    font-family: var(--heading-font), serif;
+    color: var(--color-primary);
+    padding: 0.2em 0 0.05em;
+    overflow: visible;
 }
 
 .featured-authors__card {
     margin-bottom: 2.5rem;
     padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--color-border);
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .featured-authors__card:last-of-type {
     border-bottom: none;
 }
 
+/* One shared content width: drop the 40rem cap so label/value grid lines line up with the card edges */
+.featured-authors__card .author-profile.author-profile--featured {
+    max-width: none;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    box-sizing: border-box;
+}
+
+.author-profile--featured .author-profile__header-meta {
+    max-width: none;
+    width: 100%;
+}
+
+/* Same first-column width for section blocks and per-row fields so dividers don’t “jump” between cards */
+.author-profile--featured .author-profile__section--label-value,
+.author-profile--featured .author-profile__meta-line,
+.author-profile--featured .author-profile__identity-row,
+.author-profile--featured .author-profile__payment {
+    grid-template-columns: minmax(5.25rem, 8.5rem) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 0.65rem;
+}
+
 .author-profile--featured .author-profile__title {
     font-size: 1.5rem;
 }
 
-.featured-authors__more {
-    margin: 0.75rem 0 0;
+/* Very narrow: single column so tiny two-column cells don’t look skewed */
+@media (max-width: 30rem) {
+    .author-profile--featured .author-profile__section--label-value,
+    .author-profile--featured .author-profile__meta-line,
+    .author-profile--featured .author-profile__identity-row,
+    .author-profile--featured .author-profile__payment {
+        grid-template-columns: 1fr;
+        row-gap: 0.2rem;
+    }
+
+    .author-profile--featured .author-profile__meta-line,
+    .author-profile--featured .author-profile__identity-row,
+    .author-profile--featured .author-profile__payment {
+        margin: 0.5rem 0;
+    }
+
+    .author-profile--featured .author-profile__meta-value,
+    .author-profile--featured .author-profile__identity-link,
+    .author-profile--featured .author-profile__payment-addr {
+        white-space: normal;
+        word-break: break-word;
+    }
+}
+
+.featured-authors__actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    column-gap: 0.75rem;
+    margin: 1rem 0 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.featured-authors__actions .btn {
+    flex: 0 1 auto;
+    text-align: center;
+}
+
+/* Narrow: smaller page title + intro; flex gap avoids margin collapse with first author card. */
+@media (max-width: 1024px) {
+    .featured-authors {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1.75rem;
+    }
+
+    .featured-authors__intro {
+        margin-bottom: 0;
+        /* Contain the intro <p> margin so it doesn’t collapse with the first author block */
+        display: flow-root;
+    }
+
+    .featured-authors__card {
+        margin-bottom: 0;
+    }
+
+    .featured-authors__intro h1 {
+        /* Slightly smaller in the max-1024 layout; same visible box as the base h1 */
+        font-size: clamp(1.3rem, 4.2vw, 1.95rem);
+    }
+
+    .featured-authors__intro p {
+        font-size: 0.9rem;
+        line-height: 1.45;
+    }
 }
 
 .footer-links a {

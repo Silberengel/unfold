@@ -78,7 +78,7 @@
             {% endif %}
         </div>
 
-        {% if jumble_profile_href is not null and jumble_profile_href != '' %}
+        {% if not omit_jumble_button|default(false) and jumble_profile_href is not null and jumble_profile_href != '' %}
             <p class="author-profile__jumble">
                 <a class="btn btn-secondary" href="{{ jumble_profile_href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">View on Jumble</a>
             </p>
