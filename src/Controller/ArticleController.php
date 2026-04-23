@@ -137,7 +137,7 @@ class ArticleController  extends AbstractController
     ): array {
         $coordparts = explode(':', $coordinate, 3);
         $articleKind = isset($coordparts[0]) && ctype_digit($coordparts[0]) ? (int) $coordparts[0] : 30023;
-        $articleAuthorPubkey = $coordparts[1] ?? '';
+        $articleAuthorPubkey = strtolower(trim((string) ($coordparts[1] ?? '')));
 
         $articleReplyTags = null;
         if ($articleAuthorPubkey !== '' && 64 === \strlen($articleAuthorPubkey) && ctype_xdigit($articleAuthorPubkey)) {
@@ -162,6 +162,9 @@ class ArticleController  extends AbstractController
                 'authorPubkey' => $articleAuthorPubkey,
                 'expectedTags' => $articleReplyTags,
             ];
+        }
+
+        if ($userMayReply) {
             /** @var array<int, object> $list */
             $list = $data['list'] ?? [];
             foreach ($list as $row) {
@@ -172,8 +175,8 @@ class ArticleController  extends AbstractController
                 if ($k !== KindsEnum::COMMENTS->value) {
                     continue;
                 }
-                $cid = (string) ($row->id ?? '');
-                $cpk = (string) ($row->pubkey ?? '');
+                $cid = strtolower(trim((string) ($row->id ?? '')));
+                $cpk = strtolower(trim((string) ($row->pubkey ?? '')));
                 if ($cid === '' || 64 !== \strlen($cid) || !ctype_xdigit($cid)) {
                     continue;
                 }

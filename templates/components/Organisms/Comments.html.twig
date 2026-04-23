@@ -1,5 +1,6 @@
 {% set ctx = comment_reply_context|default(null) %}
-{% if ctx and ctx.can_publish|default(false) and ctx.rows|default([])|length > 0 %}
+{# `rows` can be non-empty for nested replies when the article-level NIP-22 row is missing; do not require length > 0. #}
+{% if ctx and ctx.can_publish|default(false) %}
     {% for row in ctx.rows %}
         {% if row.mode|default('') == 'article' %}
             <div
@@ -59,7 +60,7 @@
 
 <div class="comments">
     {% for item in list %}
-        {% set cid = item.id|default('') %}
+        {% set cid = item.id|default('')|lower %}
         {% set cpk = item.pubkey|default('') %}
         {% set cts = item.created_at|default(null) %}
         {% set cdepth = item.unfold_depth|default(0) %}
