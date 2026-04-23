@@ -16,6 +16,7 @@
 .layout {
     max-width: 100%;
     width: 1200px;
+    min-width: 0; /* flex child of body: allow shrink so children don’t force page width */
     margin: 0 auto;
     display: flex;
     flex-grow: 1;
@@ -51,9 +52,11 @@ nav a:hover {
 
 header {
     position: fixed;
-    width: 100vw;
-    top: 0;
+    /* Use inset instead of 100vw: 100vw includes the vertical scrollbar and causes horizontal overflow on many viewports. */
     left: 0;
+    right: 0;
+    top: 0;
+    width: auto;
     box-sizing: border-box;
 }
 
@@ -228,7 +231,9 @@ dt {
 
 /* Responsive adjustments */
 @media (max-width: 1024px) {
-    nav, aside {
+    /* Only the main column nav, not <nav> in the footer (Sitemap and feeds, etc.) */
+    .layout > nav,
+    aside {
         display: none; /* Hide the sidebars on small screens */
     }
     main {
@@ -244,6 +249,8 @@ footer {
     padding: 1.25rem 1rem 1.5rem;
     position: relative;
     width: 100%;
+    min-width: 0; /* flex child of body column: avoid min-content width wider than the viewport */
+    box-sizing: border-box;
     border-top: 1px solid var(--color-border);
 }
 
@@ -255,6 +262,9 @@ footer {
     align-items: stretch;
     gap: 1.75rem;
     text-align: left;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .site-footer__syndication-title {
@@ -272,7 +282,13 @@ footer {
 }
 
 .site-footer__nav {
-    max-width: 44rem;
+    max-width: min(44rem, 100%);
+    min-width: 0;
+}
+
+.site-footer__syndication {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .site-footer__syndication-list {
@@ -285,6 +301,8 @@ footer {
     padding: 0;
     font-size: 0.95rem;
     line-height: 1.5;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .site-footer__syndication-list > li {
@@ -292,6 +310,8 @@ footer {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem 0.45rem;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .site-footer__syndication-list > li + li::before {
@@ -320,11 +340,21 @@ footer {
 
 /* RSS + category feed links in one cell */
 .site-footer__syndication-list__feeds {
-    display: inline-flex;
+    display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem 0.45rem;
+    min-width: 0;
     max-width: 100%;
+    overflow-wrap: anywhere; /* long category names / URLs can’t keep the page wider than the screen */
+    word-break: break-word;
+}
+
+/* Narrow viewports: put feeds on their own row with full line width so links wrap inside the viewport, not off-screen. */
+@media (max-width: 700px) {
+    .site-footer__syndication-list__feeds {
+        flex-basis: 100%;
+    }
 }
 
 /* Dots between feed links (skip first <a> = "All articles"). */
