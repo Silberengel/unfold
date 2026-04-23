@@ -1,9 +1,17 @@
 {% extends 'base.html.twig' %}
 
+{% block title %}{{ website_name }}{% endblock %}
+
+{% block meta_description %}
+    <meta name="description" content="{{ website_description|e('html_attr') }}">
+{% endblock %}
+
 {% block magazine_sync_page %}home{% endblock %}
 
 {% block ogtags %}
     {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+    <link rel="canonical" href="{{ url('home') }}">
+    <link rel="alternate" type="application/atom+xml" title="{{ website_name|e('html_attr') }} — all articles" href="{{ url('feed_magazine') }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ url('home') }}">
     <meta property="og:title" content="{{ website_name|e('html_attr') }}">
@@ -20,6 +28,18 @@
 {% endblock %}
 
 {% block body %}
+    <div class="home-subscribe" aria-label="Sitemap and syndication">
+        <h2 class="home-subscribe__title">Sitemap and feeds</h2>
+        <p class="home-subscribe__hint">For search engines and feed readers. Atom is supported by most clients.</p>
+        <div class="home-subscribe__actions">
+            <a class="btn btn-secondary" href="{{ path('sitemap') }}">Sitemap (XML)</a>
+            <a class="btn btn-secondary" href="{{ path('robots_txt') }}">Robots</a>
+            <a class="btn btn-secondary" href="{{ path('feed_magazine') }}">Atom — all articles</a>
+            {% for c in categories_for_feed %}
+                <a class="btn btn-secondary" href="{{ path('feed_category', {slug: c.slug}) }}">Atom — {{ c.title }}</a>
+            {% endfor %}
+        </div>
+    </div>
     <div class="home-body" data-magazine-sync-target="pageBody">
         {% for item in indices %}
             <twig:Organisms:FeaturedList :category="item" class="featured-list"/>

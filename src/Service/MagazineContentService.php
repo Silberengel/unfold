@@ -96,6 +96,54 @@ final class MagazineContentService
     }
 
     /**
+     * Category path slugs from the persisted root index (third segment of each category `a` tag).
+     *
+     * @return list<string>
+     */
+    public function getCategorySlugsFromStore(): array
+    {
+        $tags = $this->getHomeCategoryAIndexTagsFromStoreOnly();
+        $out = [];
+        foreach ($tags as $row) {
+            $coord = $row[1] ?? '';
+            if (!\is_string($coord) || $coord === '') {
+                continue;
+            }
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $slug = trim((string) $parts[2]);
+            if ($slug !== '') {
+                $out[] = $slug;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Title from cached category index event tags, or the slug when missing.
+     */
+    public function getCategoryDisplayTitle(string $slug): string
+    {
+        if ($slug === '') {
+            return '';
+        }
+        $catIndex = $this->store->getCategory($slug);
+        if ($catIndex === null) {
+            return $slug;
+        }
+        foreach ($catIndex->getTags() as $tag) {
+            if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
+                return (string) $tag[1];
+            }
+        }
+
+        return $slug;
+    }
+
+    /**
      * @return array{list: list<Article>, category: array{title: string, summary: string}}
      */
     public function getCategoryPageData(string $slug): array

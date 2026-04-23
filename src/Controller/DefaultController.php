@@ -21,8 +21,17 @@ class DefaultController extends AbstractController
     #[Route('/', name: 'home')]
     public function index(): Response
     {
+        $categoriesForFeed = [];
+        foreach ($this->magazineContent->getCategorySlugsFromStore() as $slug) {
+            $categoriesForFeed[] = [
+                'slug' => $slug,
+                'title' => $this->magazineContent->getCategoryDisplayTitle($slug),
+            ];
+        }
+
         return $this->render('home.html.twig', [
             'indices' => $this->magazineContent->getHomeCategoryIndexTags(),
+            'categories_for_feed' => $categoriesForFeed,
         ]);
     }
 

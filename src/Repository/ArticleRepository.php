@@ -3,7 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Article;
-use App\Enum\IndexStatusEnum;
+use App\Enum\EventStatusEnum;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\Exception;
 use Doctrine\Persistence\ManagerRegistry;
@@ -138,6 +138,25 @@ class ArticleRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('a')
             ->where('a.pubkey = :pubkey')
             ->setParameter('pubkey', $pubkey)
+            ->orderBy('a.createdAt', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Published or archived long-form rows for sitemap/Atom (may include multiple rows per slug);
+     * callers should dedupe by slug if URLs are slug-only.
+     *
+     * @return list<Article>
+     */
+    public function findPublishedForSyndication(int $limit = 5000): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.slug IS NOT NULL')
+            ->andWhere("TRIM(a.slug) != ''")
+            ->andWhere('a.eventStatus IN (:st)')
+            ->setParameter('st', [EventStatusEnum::PUBLISHED, EventStatusEnum::ARCHIVED])
             ->orderBy('a.createdAt', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()
