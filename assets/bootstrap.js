@@ -1,6 +1,7 @@
 import { startStimulusApp } from '@symfony/stimulus-bundle';
 import ArticleCommentsController from './controllers/article_comments_controller.js';
 import CommentReplyController from './controllers/comment_reply_controller.js';
+import CopyTextController from './controllers/copy_text_controller.js';
 
 const app = startStimulusApp();
 
@@ -12,6 +13,11 @@ try {
 }
 try {
     app.register('comment-reply', CommentReplyController);
+} catch {
+    /* already registered by the bundle */
+}
+try {
+    app.register('copy-text', CopyTextController);
 } catch {
     /* already registered by the bundle */
 }
