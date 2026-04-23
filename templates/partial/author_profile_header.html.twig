@@ -28,29 +28,34 @@
             </ul>
         {% endif %}
         {% if show_nip05|default(false) and profile_nip05 is not empty %}
-            <ul class="author-profile__identity" aria-label="NIP-05">
-                {% for row in profile_nip05 %}
-                    <li class="author-profile__identity-row author-profile__meta-line">
-                        <span class="author-profile__identity-type">NIP-05</span>
-                        <span class="author-profile__meta-value author-profile__nip05-value">
-                            <a class="author-profile__identity-link" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer" title="Open /.well-known/nostr.json for this name">{{ row.label|e }}</a>
-                            {% if row.verified|default(false) %}
-                                <span class="author-profile__nip05-verified" title="This identifier matches the pubkey in /.well-known/nostr.json" aria-label="Verified NIP-05">✓</span>
-                            {% endif %}
-                        </span>
-                    </li>
-                {% endfor %}
-            </ul>
+            <div class="author-profile__section author-profile__section--label-value" aria-label="NIP-05">
+                <span class="author-profile__section-type">NIP-05</span>
+                <ul class="author-profile__value-stack">
+                    {% for row in profile_nip05 %}
+                        <li class="author-profile__value-stack-line">
+                            <span class="author-profile__nip05-value">
+                                <a class="author-profile__identity-link author-profile__nip05-link" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer" title="Open /.well-known/nostr.json for this name">{{ row.label|e }}</a>
+                                {% if row.verified|default(false) %}
+                                    <span class="author-profile__nip05-verified" title="This identifier matches the pubkey in /.well-known/nostr.json" aria-label="Verified NIP-05">✓</span>
+                                {% endif %}
+                            </span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
         {% endif %}
         {% if profile_payment_links is not empty %}
-            <ul class="author-profile__payments" aria-label="Payment (Lightning and payto)">
-                {% for row in profile_payment_links %}
-                    <li class="author-profile__payment author-profile__meta-line">
-                        <span class="author-profile__payment-type"{% if row.display_type_label|default('')|trim == '' %} aria-hidden="true"{% endif %}>{{ row.display_type_label|default('')|e }}</span>
-                        <a class="author-profile__payment-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
-                    </li>
-                {% endfor %}
-            </ul>
+            <div class="author-profile__section author-profile__section--label-value" aria-label="Payment">
+                <span class="author-profile__section-type">Payment</span>
+                <ul class="author-profile__payments-nested">
+                    {% for row in profile_payment_links %}
+                        <li class="author-profile__payment author-profile__meta-line">
+                            <span class="author-profile__payment-type"{% if row.display_type_label|default('')|trim == '' %} aria-hidden="true"{% endif %}>{{ row.display_type_label|default('')|e }}</span>
+                            <a class="author-profile__payment-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" rel="nofollow noopener">{{ row.label|e }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
         {% endif %}
         </div>
 

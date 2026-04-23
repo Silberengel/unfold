@@ -543,6 +543,48 @@ footer a {
     text-align: left;
 }
 
+/* One main label (NIP-05, Payment) with values stacked in the next column */
+.author-profile__section--label-value {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    column-gap: 0.5rem;
+    align-items: start;
+    margin-top: 0.5rem;
+}
+
+.author-profile__section-type {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text);
+    opacity: 0.75;
+    line-height: 1.35;
+    padding-top: 0.15em;
+}
+
+.author-profile__value-stack {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.author-profile__value-stack-line {
+    margin: 0.35rem 0 0;
+}
+
+.author-profile__value-stack-line:first-child {
+    margin-top: 0;
+}
+
+.author-profile__payments-nested {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
 .author-profile__identity {
     list-style: none;
     margin: 0.5rem 0 0;
@@ -579,17 +621,21 @@ footer a {
     white-space: nowrap;
 }
 
+/* Do not use .author-profile__meta-value on this wrapper: its overflow:hidden clips the ✓. Ellipsis only the link. */
 .author-profile__nip05-value {
     display: flex;
     align-items: center;
     gap: 0.3rem;
     min-width: 0;
-    overflow: hidden;
+    width: 100%;
 }
 
-.author-profile__nip05-value .author-profile__identity-link {
-    flex: 1 1 0;
+.author-profile__nip05-link {
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 0;
     word-break: normal;
 }
 
@@ -600,14 +646,7 @@ footer a {
     line-height: 1;
     opacity: 0.85;
     user-select: none;
-}
-
-.author-profile__payments {
-    list-style: none;
-    margin: 0.5rem 0 0;
-    padding: 0;
-    max-width: 100%;
-    text-align: left;
+    flex-shrink: 0;
 }
 
 .author-profile__payment-type {

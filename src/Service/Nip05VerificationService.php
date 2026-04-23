@@ -54,10 +54,14 @@ final readonly class Nip05VerificationService
             $verified = false;
             try {
                 $item = $this->appCache->getItem($k);
-                if ($item->isHit() && is_bool($item->get())) {
+                if ($item->isHit() && \is_bool($item->get())) {
                     $verified = (bool) $item->get();
+                } else {
+                    // Cold cache: verify now so the profile shows ✓ without a prior prewarm run.
+                    $verified = $this->verifyAndCache($h, $label);
                 }
             } catch (InvalidArgumentException) {
+                $verified = $this->verifyAndCache($h, $label);
             }
             $out[] = [...$r, 'verified' => $verified];
         }

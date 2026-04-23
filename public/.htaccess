@@ -1,0 +1,18 @@
+# See https://symfony.com/doc/current/setup/web_server_configuration.html
+# Required so routes like `/.well-known/nostr.json` (NIP-05) are handled by index.php.
+
+DirectoryIndex index.php
+
+<IfModule mod_negotiation.c>
+    Options -MultiViews
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Authorization header (e.g. API)
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%0]
+    # Serve existing files directly; all other requests → front controller
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>

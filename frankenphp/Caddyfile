@@ -29,6 +29,8 @@
 	# Disable Topics tracking if not enabled explicitly: https://github.com/jkarlin/topics
 	header ?Permissions-Policy "browsing-topics=()"
 
+	# NIP-05: Apache deployments need public/.well-known/ handled via public/.htaccess; nginx: deploy/well-known-nip05-nginx.conf
+
 	@phpRoute {
 		not path /.well-known/mercure*
 		not file {path}
