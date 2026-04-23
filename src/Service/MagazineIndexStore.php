@@ -40,7 +40,7 @@ final class MagazineIndexStore
         if ($slug === '') {
             return null;
         }
-        $item = $this->pool->getItem(self::CAT_PREFIX.$slug);
+        $item = $this->pool->getItem($this->categoryKey($slug));
         if (!$item->isHit()) {
             return null;
         }
@@ -67,7 +67,7 @@ final class MagazineIndexStore
         if ($slug === '') {
             return;
         }
-        $item = $this->pool->getItem(self::CAT_PREFIX.$slug);
+        $item = $this->pool->getItem($this->categoryKey($slug));
         $item->set(serialize($event));
         $item->expiresAfter(self::PERSIST_TTL);
         $this->pool->save($item);
@@ -83,7 +83,7 @@ final class MagazineIndexStore
         if ($slug === '') {
             return;
         }
-        $this->pool->deleteItem(self::CAT_PREFIX.$slug);
+        $this->pool->deleteItem($this->categoryKey($slug));
     }
 
     /**
@@ -99,6 +99,14 @@ final class MagazineIndexStore
     private function rootKey(string $npub, string $dTag): string
     {
         return self::ROOT_PREFIX.hash('sha256', $npub."\0".$dTag);
+    }
+
+    /**
+     * Category `d` / slug strings may contain colons (NIP-33 `a` segments); PSR-6 keys must not use `{}()/\@:`.
+     */
+    private function categoryKey(string $slug): string
+    {
+        return self::CAT_PREFIX.hash('sha256', $slug);
     }
 
     private function unwrap(mixed $value): ?Event

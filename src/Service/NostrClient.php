@@ -431,6 +431,7 @@ class NostrClient
     /**
      * NIP-09 kind 5 deletion requests in $since..$until (unix), batched by author pubkey (hex).
      *
+     * @param (callable(int, int, int): void)|null $afterChunk 1-based index, total chunks, pubkeys in chunk
      * @param list<string>        $authorPubkeyHex
      * @return list<stdClass>     Deduplicated by event `id` (highest {@see created_at} kept)
      */
@@ -439,6 +440,7 @@ class NostrClient
         int $since,
         int $until,
         int $authorsPerRequest = 40,
+        ?callable $afterChunk = null,
     ): array {
         $authorPubkeyHex = \array_values(\array_unique(\array_filter(
             $authorPubkeyHex,
@@ -449,7 +451,9 @@ class NostrClient
         }
         $authorsPerRequest = max(1, min(100, $authorsPerRequest));
         $byId = [];
-        foreach (array_chunk($authorPubkeyHex, $authorsPerRequest) as $chunk) {
+        $chunks = array_chunk($authorPubkeyHex, $authorsPerRequest);
+        $numChunks = \count($chunks);
+        foreach ($chunks as $i => $chunk) {
             $request = $this->createNostrRequest(
                 kinds: [KindsEnum::DELETION_REQUEST],
                 filters: [
@@ -468,6 +472,9 @@ class NostrClient
                 'raw_events' => \count($events),
                 'ms' => (int) round((microtime(true) - $t0) * 1000),
             ]);
+            if ($afterChunk !== null) {
+                $afterChunk(1 + (int) $i, $numChunks, \count($chunk));
+            }
             foreach ($events as $ev) {
                 if (!\is_object($ev) || (int) ($ev->kind ?? 0) !== KindsEnum::DELETION_REQUEST->value) {
                     continue;

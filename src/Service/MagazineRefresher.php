@@ -29,8 +29,11 @@ final class MagazineRefresher
     /**
      * Fetches the root index then each category index until $budgetSeconds elapses. $preferSlugs
      * are requested first (e.g. current /cat route) so they are less likely to miss the budget.
+     *
+     * @param (callable(string, array<string, int|string|bool|null>): void)|null $onProgress
+     *        Phases: `before_root`, `after_root` (total_steps, step, slug_count), `category_fetched` (step, total_steps, slug)
      */
-    public function refreshFromRelays(int $budgetSeconds = 8, array $preferSlugs = []): void
+    public function refreshFromRelays(int $budgetSeconds = 8, array $preferSlugs = [], ?callable $onProgress = null): void
     {
         $budgetSeconds = max(1, min(30, $budgetSeconds));
         $deadline = microtime(true) + $budgetSeconds;
@@ -45,8 +48,10 @@ final class MagazineRefresher
         $defaultRelay = (string) $this->params->get('default_relay');
         $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
 
+        $onProgress?->__invoke('before_root', []);
         $root = $this->nostrClient->getMagazineIndex($npub, $dTag);
         if ($root === null) {
+            $onProgress?->__invoke('aborted', ['reason' => 'no_root']);
             $this->logger->warning(sprintf(
                 'MagazineRefresher: root index not returned (tried from %s)',
                 $relayLabel
@@ -61,6 +66,13 @@ final class MagazineRefresher
         $this->store->putRoot($npub, $dTag, $root);
 
         $slugs = $this->orderedCategorySlugs($this->categorySlugsFromRoot($root), $preferSlugs);
+        $totalSteps = 1 + \count($slugs);
+        $onProgress?->__invoke('after_root', [
+            'total_steps' => $totalSteps,
+            'step' => 1,
+            'slug_count' => \count($slugs),
+        ]);
+        $step = 1;
         foreach ($slugs as $slug) {
             if (microtime(true) >= $deadline) {
                 $this->logger->notice('MagazineRefresher: stopped at time budget; some categories not fetched', [
@@ -82,6 +94,13 @@ final class MagazineRefresher
                     'slug' => $slug,
                     'message' => $e->getMessage(),
                     'relay' => $defaultRelay,
+                ]);
+            } finally {
+                ++$step;
+                $onProgress?->__invoke('category_fetched', [
+                    'step' => $step,
+                    'total_steps' => $totalSteps,
+                    'slug' => $slug,
                 ]);
             }
         }

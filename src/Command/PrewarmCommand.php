@@ -15,6 +15,7 @@ use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -70,11 +71,45 @@ final class PrewarmCommand extends Command
             $budget = max(1, (int) $input->getOption('magazine-budget'));
             $io->section('Magazine index (kinds 30040)');
             try {
-                $this->magazineRefresher->refreshFromRelays($budget, []);
+                $hb = (object) ['silent' => false];
+                $bar = null;
+                $this->runWithPcntlHeartbeat($io, 5, function () use ($io, $budget, &$bar, $hb): void {
+                    $this->magazineRefresher->refreshFromRelays($budget, [], function (string $phase, array $p) use ($io, &$bar, $hb): void {
+                        if ($phase === 'before_root') {
+                            $io->writeln('   <comment>Fetching magazine root index (30040) from relays…</comment>');
+                        } elseif ($phase === 'aborted') {
+                            $hb->silent = true;
+                            $this->cancelPcntlAlarm();
+                        } elseif ($phase === 'after_root') {
+                            $hb->silent = true;
+                            $this->cancelPcntlAlarm();
+                            $bar = $this->createPrewarmProgressBar(
+                                $io,
+                                max(1, (int) ($p['total_steps'] ?? 1)),
+                                'Magazine index',
+                            );
+                            $bar->start();
+                            $bar->setProgress(1);
+                        } elseif ($phase === 'category_fetched' && $bar !== null) {
+                            $bar->advance(1);
+                            $slug = (string) ($p['slug'] ?? '');
+                            if (strlen($slug) > 70) {
+                                $slug = substr($slug, 0, 67).'…';
+                            }
+                            $bar->setMessage($slug !== '' ? 'Category: '.$slug : 'Category');
+                        }
+                    });
+                }, $hb);
+                if ($bar !== null) {
+                    $bar->finish();
+                    $io->newLine(2);
+                }
                 $io->success('Magazine indices refreshed (within budget).');
             } catch (\Throwable $e) {
                 $this->logger->error('app:prewarm magazine failed', ['e' => $e]);
                 $io->warning('Magazine refresh failed: '.$e->getMessage());
+            } finally {
+                $this->cancelPcntlAlarm();
             }
         } else {
             $io->note('Skipping magazine (--no-magazine).');
@@ -110,13 +145,26 @@ final class PrewarmCommand extends Command
             if ($deletionPubkeys === []) {
                 $io->note('No author pubkeys; skipping kind 5 deletion fetch.');
             } else {
+                $chunks = array_chunk($deletionPubkeys, 40);
+                $nChunks = \count($chunks);
+                $nipBar = $this->createPrewarmProgressBar($io, max(1, $nChunks), 'NIP-09 kind 5 (by author batch)');
+                $nipBar->start();
                 try {
                     $kind5 = $this->nostrClient->fetchKind5DeletionEventsForAuthors(
                         $deletionPubkeys,
                         $since,
                         $until,
-                        40
+                        40,
+                        function (int $index, int $totalChunks, int $pubkeyCount) use ($nipBar): void {
+                            $nipBar->advance(1);
+                            $nipBar->setMessage(sprintf('Batch %d/%d · %d pubkeys', $index, $totalChunks, $pubkeyCount));
+                        }
                     );
+                } finally {
+                    $nipBar->finish();
+                    $io->newLine(2);
+                }
+                try {
                     $st = $this->nip09DeletionApplier->apply($kind5);
                     $io->writeln(sprintf(
                         'Kind 5 events: <info>%d</info> (deduped). Articles removed: <info>%d</info>; magazine root/category cache entries removed: <info>%d</info> / <info>%d</info>.',
@@ -171,13 +219,15 @@ final class PrewarmCommand extends Command
                     $total,
                     $batchSize
                 ));
-                $bar = $io->createProgressBar($total);
+                $bar = $this->createPrewarmProgressBar($io, $total, 'Kind-0 metadata');
                 $bar->start();
                 try {
                     foreach (array_chunk($toWarm, $batchSize) as $chunk) {
                         $fetched = $this->nostrClient->fetchKind0MetadataForAuthors($chunk, $batchSize);
                         $n += $this->cacheService->putPrewarmMetadataBatch($chunk, $fetched, $keys);
                         $bar->advance(\count($chunk));
+                        $p0 = (string) ($chunk[0] ?? '');
+                        $bar->setMessage('Batch up to · '.substr($p0, 0, 8).'…');
                     }
                 } catch (\Throwable $e) {
                     $this->logger->error('app:prewarm metadata batch failed', ['exception' => $e]);
@@ -215,31 +265,100 @@ final class PrewarmCommand extends Command
             $qb->setMaxResults($maxArticles);
         }
         $articles = $qb->getQuery()->getResult();
+        $articleCount = \count($articles);
         $w = 0;
-        /** @var Article $article */
-        foreach ($articles as $article) {
-            if (microtime(true) >= $deadline) {
-                $io->warning('Comment phase stopped: comments-budget reached.');
-                break;
-            }
-            $slug = trim((string) $article->getSlug());
-            $pubkey = (string) $article->getPubkey();
-            if ($slug === '' || strlen($pubkey) !== 64) {
-                continue;
-            }
-            $kind = $article->getKind()?->value ?? 30023;
-            $coordinate = $kind.':'.$pubkey.':'.$slug;
-            $eventHex = (string) ($article->getEventId() ?? '');
+        if ($articleCount === 0) {
+            $io->note('No articles in DB to scan for comment cache.');
+        } else {
+            $cBar = $this->createPrewarmProgressBar($io, $articleCount, 'Comment threads');
+            $cBar->start();
             try {
-                $this->commentThreadLoader->load($coordinate, $eventHex !== '' ? $eventHex : null);
-                ++$w;
-            } catch (\Throwable $e) {
-                $this->logger->warning('app:prewarm comment load', ['coord' => $coordinate, 'error' => $e->getMessage()]);
+                /** @var Article $article */
+                foreach ($articles as $article) {
+                    if (microtime(true) >= $deadline) {
+                        $io->warning('Comment phase stopped: comments-budget reached.');
+                        break;
+                    }
+                    $slug = trim((string) $article->getSlug());
+                    $pubkey = (string) $article->getPubkey();
+                    if ($slug === '' || strlen($pubkey) !== 64) {
+                        $cBar->advance(1);
+                        $cBar->setMessage('skip · invalid row');
+
+                        continue;
+                    }
+                    $kind = $article->getKind()?->value ?? 30023;
+                    $coordinate = $kind.':'.$pubkey.':'.$slug;
+                    $msg = $slug;
+                    if (strlen($msg) > 56) {
+                        $msg = substr($msg, 0, 53).'…';
+                    }
+                    $cBar->setMessage($msg);
+                    $eventHex = (string) ($article->getEventId() ?? '');
+                    try {
+                        $this->commentThreadLoader->load($coordinate, $eventHex !== '' ? $eventHex : null);
+                        ++$w;
+                    } catch (\Throwable $e) {
+                        $this->logger->warning('app:prewarm comment load', ['coord' => $coordinate, 'error' => $e->getMessage()]);
+                    }
+                    $cBar->advance(1);
+                }
+            } finally {
+                $cBar->finish();
+                $io->newLine(2);
             }
         }
-        $io->success(sprintf('Warmed comment cache for %d of %d article(s).', $w, \count($articles)));
+        $io->success(sprintf('Warmed comment cache for %d of %d article(s).', $w, $articleCount));
 
         return Command::SUCCESS;
+    }
+
+    private function createPrewarmProgressBar(SymfonyStyle $io, int $max, string $message = ''): ProgressBar
+    {
+        $bar = $io->createProgressBar($max);
+        if (method_exists($bar, 'setMinSecondsBetweenRedraws')) {
+            $bar->setMinSecondsBetweenRedraws(5.0);
+        }
+        $bar->setFormat(' %current%/%max% [%bar%] %percent:3s%%'."\n".'  <comment>%message%</comment> <info>%elapsed:6s%</info> ');
+        $bar->setMessage($message);
+
+        return $bar;
+    }
+
+    /**
+     * @param object{silent?: bool} $controller
+     */
+    private function runWithPcntlHeartbeat(SymfonyStyle $io, int $sec, callable $work, ?object $controller = null): void
+    {
+        if (!\function_exists('pcntl_async_signals') || !\function_exists('pcntl_signal') || !\function_exists('pcntl_alarm')) {
+            $work();
+
+            return;
+        }
+        $t0 = time();
+        $handler = function () use ($io, $t0, $sec, $controller): void {
+            if ($controller !== null && !empty($controller->silent)) {
+                return;
+            }
+            $io->writeln(sprintf('   <comment>… %ds elapsed</comment>', time() - $t0));
+            \pcntl_alarm((int) ceil($sec));
+        };
+        \pcntl_async_signals(true);
+        \pcntl_signal(\SIGALRM, $handler);
+        \pcntl_alarm((int) ceil($sec));
+        try {
+            $work();
+        } finally {
+            \pcntl_alarm(0);
+            \pcntl_signal(\SIGALRM, \SIG_DFL);
+        }
+    }
+
+    private function cancelPcntlAlarm(): void
+    {
+        if (\function_exists('pcntl_alarm')) {
+            @\pcntl_alarm(0);
+        }
     }
 
     private function disableCliExecutionTimeLimit(): void
