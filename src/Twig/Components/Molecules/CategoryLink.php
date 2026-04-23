@@ -2,6 +2,7 @@
 
 namespace App\Twig\Components\Molecules;
 
+use App\Service\MagazineContentService;
 use App\Service\MagazineIndexStore;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
 
@@ -14,6 +15,7 @@ final class CategoryLink
 
     public function __construct(
         private readonly MagazineIndexStore $store,
+        private readonly MagazineContentService $magazineContent,
     ) {
     }
 
@@ -29,6 +31,7 @@ final class CategoryLink
         }
 
         $this->title = $this->slug;
+        $this->magazineContent->warmCategoryIndexIfMissing($this->slug);
         $cat = $this->store->getCategory($this->slug);
         if (!\is_object($cat) || !\method_exists($cat, 'getTags')) {
             return;

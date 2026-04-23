@@ -35,6 +35,12 @@ parameters:
     nip05_domain: 'blog.imwald.eu'
     # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).
     jumble_profile_users_base: 'https://jumble.imwald.eu/users'
+    # Comma-separated category #d slugs to fetch first in app:prewarm after the root (see MagazineRefresher).
+    magazine_prewarm_prefer_slugs_empty: ''
+    magazine_prewarm_prefer_slugs: '%env(default:magazine_prewarm_prefer_slugs_empty:MAGAZINE_PREWARM_PREFER_SLUGS)%'
+    # Extra category #d slugs to 30040-fetch in prewarm right after prefer (before the rest of root’s a tags), so budget runs still hit new categories.
+    magazine_prewarm_also_slugs_empty: ''
+    magazine_prewarm_also_slugs: '%env(default:magazine_prewarm_also_slugs_empty:MAGAZINE_PREWARM_ALSO_SLUGS)%'
     external_links:
       - title: "Unfold"
         url: "https://github.com/decent-newsroom/unfold"

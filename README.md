@@ -81,7 +81,7 @@ make prewarm
 | `--metadata-batch` | `50` | Pubkeys per batched Nostr `REQ` |
 | `--comments-max` | `10` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
 | `--comments-budget` | `600` | Max wall seconds for the whole comments phase (Nostr is slow; raise e.g. `1200` if you need more articles in one run) |
-| `--magazine-budget` | `30` | Max wall seconds for magazine refresh |
+| `--magazine-budget` | `90` | Max wall seconds for magazine root + per-category 30040 fetches (hard-capped at 600s in code). If you have many categories, a **low** budget can stop before the last slug is refreshed—**stale home/category pages** until the next run. Set `MAGAZINE_PREWARM_PREFER_SLUGS` (comma-separated category `#d` slugs) to fetch those first after the root. |
 
 Prewarm clears the PHP **CLI** execution time limit for that run; relay work can be slow.
 
@@ -100,6 +100,7 @@ For a full **Nostr backfill** + one-shot prewarm, use **`make prewarm`** (or a h
 | What | File |
 |------|------|
 | Site title, `npub`, `d_tag`, **relays** (`default_relay`, `article_relays`, `profile_relays`), theme | `config/unfold.yaml` (imported as Symfony parameters) |
+| `MAGAZINE_PREWARM_PREFER_SLUGS` | `.env` / `.env.local` — optional comma-separated category slugs to prioritize in `app:prewarm` magazine phase (after the root). Use when the relay time budget would otherwise skip your updated category. |
 | `DATABASE_URL`, `APP_SECRET`, `HTTP_PORT`, `MYSQL_*`, optional **`PREWARM_FLAGS`** (for the Docker `cron` service) | `.env` / `.env.local` (see `.env.dist`) |
 | Service wiring (e.g. cache, `NostrClient` args) | `config/services.yaml` |
 

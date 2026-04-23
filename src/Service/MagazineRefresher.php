@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Event;
+use App\Util\NostrEventTags;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use Psr\Log\LoggerInterface;
@@ -24,6 +25,16 @@ final class MagazineRefresher
         private readonly LoggerInterface $logger,
         private readonly CacheItemPoolInterface $appCache,
         private readonly FeaturedAuthorSync $featuredAuthorSync,
+        /**
+         * Comma-separated category #d slugs (from the root index `a` tags) to fetch first after the root
+         * when the magazine relay phase is time-bounded; see MAGAZINE_PREWARM_PREFER_SLUGS in .env.
+         */
+        private readonly string $magazinePrewarmPreferSlugs = '',
+        /**
+         * Comma-separated category #d slugs to always run a 30040 fetch for in prewarm, after the
+         * slugs from the live root (e.g. politics while the cached root has not yet listed that `a` tag).
+         */
+        private readonly string $magazinePrewarmAlsoSlugs = '',
     ) {
     }
 
@@ -37,10 +48,12 @@ final class MagazineRefresher
      */
     public function refreshFromRelays(int $budgetSeconds = 8, array $preferSlugs = [], ?callable $onProgress = null): void
     {
-        $budgetSeconds = max(1, min(30, $budgetSeconds));
+        // Allow large budgets (PrewarmCommand --magazine-budget). Hard cap only to avoid runaway PHP time.
+        $budgetSeconds = max(1, min(600, $budgetSeconds));
         $deadline = microtime(true) + $budgetSeconds;
         $npub = (string) $this->params->get('npub');
         $dTag = (string) $this->params->get('d_tag');
+        $preferFromEnv = $this->parseCommaSeparatedSlugs($this->magazinePrewarmPreferSlugs);
 
         // Do not set max_execution_time to the *remaining* soft budget: PHP resets the timer, so
         // after a 6s root fetch, "2s left" would become a 2s hard cap for the *next* relay I/O
@@ -49,6 +62,12 @@ final class MagazineRefresher
 
         $defaultRelay = (string) $this->params->get('default_relay');
         $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
+
+        if ($preferFromEnv !== []) {
+            $this->logger->info('MagazineRefresher: prefer slugs (env) merged into fetch order', [
+                'prefer' => $preferFromEnv,
+            ]);
+        }
 
         $onProgress?->__invoke('before_root', []);
         $root = $this->nostrClient->getMagazineIndex($npub, $dTag);
@@ -67,7 +86,18 @@ final class MagazineRefresher
 
         $this->store->putRoot($npub, $dTag, $root);
 
-        $slugs = $this->orderedCategorySlugs($this->categorySlugsFromRoot($root), $preferSlugs);
+        $mergedPrefer = $this->mergePreferSlugsInOrder($preferSlugs, $preferFromEnv);
+        $alsoFromEnv = $this->parseCommaSeparatedSlugs($this->magazinePrewarmAlsoSlugs);
+        if ($alsoFromEnv !== []) {
+            $this->logger->info('MagazineRefresher: also slugs (env) merged into 30040 fetch list', [
+                'also' => $alsoFromEnv,
+            ]);
+        }
+        $slugs = $this->orderedCategorySlugs(
+            $this->categorySlugsFromRoot($root),
+            $mergedPrefer,
+            $alsoFromEnv
+        );
         $totalSteps = 1 + \count($slugs);
         $onProgress?->__invoke('after_root', [
             'total_steps' => $totalSteps,
@@ -152,14 +182,18 @@ final class MagazineRefresher
     {
         $slugs = [];
         foreach ($root->getTags() as $tag) {
-            if (($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
+            if (!NostrEventTags::tagNameMatches($tag, 'a')) {
                 continue;
             }
-            $parts = explode(':', (string) $tag[1], 3);
+            $seq = NostrEventTags::rowToStringList($tag);
+            if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $parts = explode(':', (string) $seq[1], 3);
             if (\count($parts) < 3) {
                 continue;
             }
-            $s = trim((string) end($parts));
+            $s = trim((string) $parts[2]);
             if ($s !== '' && !\in_array($s, $slugs, true)) {
                 $slugs[] = $s;
             }
@@ -169,16 +203,29 @@ final class MagazineRefresher
     }
 
     /**
+     * Order: prefer (incl. MAGAZINE_PREWARM_PREFER_SLUGS), then MAGAZINE_PREWARM_ALSO_SLUGS, then
+     * each remaining category from the live root 30040. "Also" runs before the root tail so a
+     * time-bounded prewarm still fetches e.g. a new politics category 30040 even if the slug list
+     * from the root is long and the soft budget would stop before the former end of the list.
+     *
      * @param list<string> $allFromRoot
      * @param list<string> $prefer
+     * @param list<string>  $also
+     *
      * @return list<string>
      */
-    private function orderedCategorySlugs(array $allFromRoot, array $prefer): array
+    private function orderedCategorySlugs(array $allFromRoot, array $prefer, array $also): array
     {
         $prefer = array_values(array_filter($prefer, static function (string $s): bool {
             return $s !== '';
         }));
         $out = $prefer;
+        foreach ($also as $s) {
+            $s = trim($s);
+            if ($s !== '' && !\in_array($s, $out, true)) {
+                $out[] = $s;
+            }
+        }
         foreach ($allFromRoot as $s) {
             if (!\in_array($s, $out, true)) {
                 $out[] = $s;
@@ -205,8 +252,46 @@ final class MagazineRefresher
      */
     private function applyExecutionTimeCap(int $budgetSeconds): void
     {
-        $sec = max(30, min(120, $budgetSeconds + 30));
+        $sec = max(30, min(700, $budgetSeconds + 30));
         @set_time_limit($sec);
         @ini_set('max_execution_time', (string) $sec);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseCommaSeparatedSlugs(string $raw): array
+    {
+        if (trim($raw) === '') {
+            return [];
+        }
+        $out = [];
+        foreach (explode(',', $raw) as $part) {
+            $s = trim($part);
+            if ($s !== '' && !\in_array($s, $out, true)) {
+                $out[] = $s;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $fromCaller e.g. current /cat route (first)
+     * @param list<string> $fromEnv MAGAZINE_PREWARM_PREFER_SLUGS (next)
+     *
+     * @return list<string>
+     */
+    private function mergePreferSlugsInOrder(array $fromCaller, array $fromEnv): array
+    {
+        $out = [];
+        foreach (array_merge($fromCaller, $fromEnv) as $s) {
+            $s = trim((string) $s);
+            if ($s !== '' && !\in_array($s, $out, true)) {
+                $out[] = $s;
+            }
+        }
+
+        return $out;
     }
 }

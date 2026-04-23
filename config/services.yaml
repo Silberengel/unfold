@@ -52,6 +52,8 @@ services:
     App\Service\MagazineRefresher:
         arguments:
             $appCache: '@cache.app'
+            $magazinePrewarmPreferSlugs: '%magazine_prewarm_prefer_slugs%'
+            $magazinePrewarmAlsoSlugs: '%magazine_prewarm_also_slugs%'
     App\Service\CacheService:
         arguments:
             $appCache: '@cache.app'

@@ -65,7 +65,7 @@ final class PrewarmCommand extends Command
             ->addOption('deletion-since', null, InputOption::VALUE_REQUIRED, 'strtotime() window start for kind 5 fetch', '-2 month')
             ->addOption('no-metadata', null, InputOption::VALUE_NONE, 'Skip Nostr profile metadata cache')
             ->addOption('no-comments', null, InputOption::VALUE_NONE, 'Skip comment thread cache')
-            ->addOption('magazine-budget', null, InputOption::VALUE_REQUIRED, 'Seconds wall time for magazine relay refresh', '30')
+            ->addOption('magazine-budget', null, InputOption::VALUE_REQUIRED, 'Seconds wall time for magazine relay refresh (capped at 600s; if many category indices, raise this or set MAGAZINE_PREWARM_PREFER_SLUGS for hot slugs first)', '90')
             ->addOption('metadata-limit', null, InputOption::VALUE_REQUIRED, 'Max distinct author pubkeys to warm (0 = all)', '0')
             ->addOption('metadata-batch', null, InputOption::VALUE_REQUIRED, 'Kind-0 metadata: pubkeys per Nostr REQ (batched)', '50')
             ->addOption('comments-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to warm comment cache for (0 = all, order: createdAt DESC; excludes generic /articles feed-only rows)', '10')
@@ -198,7 +198,7 @@ final class PrewarmCommand extends Command
             $io->warning('Long-form backfill failed: '.$e->getMessage());
         }
 
-        // MagazineRefresher sets max_execution_time (e.g. 60 for budget 30); restore before metadata.
+        // MagazineRefresher sets max_execution_time (budget + headroom); restore before metadata.
         $this->disableCliExecutionTimeLimit();
 
         if (!$input->getOption('no-deletions')) {

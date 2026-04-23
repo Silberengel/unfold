@@ -8,12 +8,13 @@ use App\Entity\Article;
 use App\Entity\Event;
 use App\Enum\EventStatusEnum;
 use App\Repository\ArticleRepository;
+use App\Util\NostrEventTags;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
- * Magazine index for templates. Reads {@see MagazineIndexStore} only on HTTP; relay refresh and DB
- * backfill for category long-form are done by `app:prewarm` (cron) / CLI.
+ * Magazine index for templates. The store is filled by `app:prewarm` (cron) / CLI; missing 30040
+ * snapshots can be loaded once per request from relays (see ensure* methods).
  */
 final class MagazineContentService
 {
@@ -65,6 +66,10 @@ final class MagazineContentService
         $npub = (string) $this->params->get('npub');
         $dTag = (string) $this->params->get('d_tag');
         $mag = $this->store->getRoot($npub, $dTag);
+        if ($mag === null) {
+            $this->ensureRoot30040FromRelays($npub, $dTag);
+            $mag = $this->store->getRoot($npub, $dTag);
+        }
 
         return $this->categoryATagsFromMag($mag);
     }
@@ -78,11 +83,19 @@ final class MagazineContentService
             return [];
         }
         $tags = $mag->getTags();
-        $cats = array_filter($tags, static function (mixed $tag): bool {
-            return \is_array($tag) && ($tag[0] ?? null) === 'a';
-        });
+        $cats = [];
+        foreach ($tags as $tag) {
+            if (!NostrEventTags::tagNameMatches($tag, 'a')) {
+                continue;
+            }
+            $seq = NostrEventTags::rowToStringList($tag);
+            if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $cats[] = ['a', (string) $seq[1]];
+        }
 
-        return array_values($cats);
+        return $cats;
     }
 
     /**
@@ -127,10 +140,14 @@ final class MagazineContentService
                 continue;
             }
             foreach ($catIndex->getTags() as $tag) {
-                if (!\is_array($tag) || ($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
+                if (!NostrEventTags::tagNameMatches($tag, 'a')) {
                     continue;
                 }
-                $parts = explode(':', (string) $tag[1], 3);
+                $seq = NostrEventTags::rowToStringList($tag);
+                if ($seq === null || !isset($seq[1])) {
+                    continue;
+                }
+                $parts = explode(':', (string) $seq[1], 3);
                 if (\count($parts) < 2) {
                     continue;
                 }
@@ -157,13 +174,18 @@ final class MagazineContentService
         if ($slug === '') {
             return '';
         }
+        $this->warmCategoryIndexIfMissing($slug);
         $catIndex = $this->store->getCategory($slug);
         if ($catIndex === null) {
             return $slug;
         }
         foreach ($catIndex->getTags() as $tag) {
-            if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
-                return (string) $tag[1];
+            if (!NostrEventTags::tagNameMatches($tag, 'title')) {
+                continue;
+            }
+            $seq = NostrEventTags::rowToStringList($tag);
+            if ($seq !== null && isset($seq[1])) {
+                return (string) $seq[1];
             }
         }
 
@@ -178,20 +200,26 @@ final class MagazineContentService
      */
     public function getCategoryPageData(string $slug): array
     {
+        $this->warmCategoryIndexIfMissing($slug);
         $catIndex = $this->store->getCategory($slug);
         $list = [];
         $coordinates = [];
         $category = [];
         if ($catIndex) {
             foreach ($catIndex->getTags() as $tag) {
-                if ($tag[0] === 'title') {
-                    $category['title'] = (string) $tag[1];
+                $seq = NostrEventTags::rowToStringList($tag);
+                if ($seq === null) {
+                    continue;
                 }
-                if ($tag[0] === 'summary') {
-                    $category['summary'] = (string) $tag[1];
+                $name = strtolower($seq[0] ?? '');
+                if ($name === 'title' && isset($seq[1])) {
+                    $category['title'] = (string) $seq[1];
                 }
-                if ($tag[0] === 'a') {
-                    $coordinates[] = $tag[1];
+                if ($name === 'summary' && isset($seq[1])) {
+                    $category['summary'] = (string) $seq[1];
+                }
+                if ($name === 'a' && isset($seq[1])) {
+                    $coordinates[] = (string) $seq[1];
                 }
             }
         }
@@ -264,8 +292,11 @@ final class MagazineContentService
         }
         $coordinates = [];
         foreach ($catIndex->getTags() as $tag) {
-            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
-                $coordinates[] = (string) $tag[1];
+            if (NostrEventTags::tagNameMatches($tag, 'a')) {
+                $seq = NostrEventTags::rowToStringList($tag);
+                if ($seq !== null && isset($seq[1]) && (string) $seq[1] !== '') {
+                    $coordinates[] = (string) $seq[1];
+                }
             }
         }
         if ($coordinates === []) {
@@ -357,5 +388,65 @@ final class MagazineContentService
         });
 
         return $list;
+    }
+
+    /**
+     * Ensures the category 30040 is in the store for this HTTP request (one relay pass per slug).
+     * Safe to call from e.g. {@see \App\Twig\Components\Molecules\CategoryLink} before reading titles.
+     */
+    public function warmCategoryIndexIfMissing(string $slug): void
+    {
+        if ($this->store->getCategory($slug) !== null) {
+            return;
+        }
+        $this->ensureCategory30040FromRelays($slug);
+    }
+
+    private function ensureRoot30040FromRelays(string $npub, string $dTag): void
+    {
+        $r = $this->requestStack->getCurrentRequest();
+        if ($r !== null && $r->attributes->get('_magazine_root_ensured')) {
+            return;
+        }
+        try {
+            $e = $this->nostrClient->getMagazineIndex($npub, $dTag);
+            if ($e !== null) {
+                $this->store->putRoot($npub, $dTag, $e);
+            }
+        } catch (\Throwable) {
+        }
+        if ($r !== null) {
+            $r->attributes->set('_magazine_root_ensured', true);
+        }
+    }
+
+    private function ensureCategory30040FromRelays(string $slug): void
+    {
+        if (trim($slug) === '') {
+            return;
+        }
+        if ($this->store->getCategory($slug) !== null) {
+            return;
+        }
+        $r = $this->requestStack->getCurrentRequest();
+        if ($r !== null) {
+            $tried = $r->attributes->get('_magazine_category_fetch_tried', []);
+            if (!\is_array($tried)) {
+                $tried = [];
+            }
+            if (\in_array($slug, $tried, true)) {
+                return;
+            }
+            $tried[] = $slug;
+            $r->attributes->set('_magazine_category_fetch_tried', $tried);
+        }
+        $npub = (string) $this->params->get('npub');
+        try {
+            $e = $this->nostrClient->getMagazineIndex($npub, $slug);
+            if ($e !== null) {
+                $this->store->putCategory($slug, $e);
+            }
+        } catch (\Throwable) {
+        }
     }
 }

@@ -285,11 +285,11 @@ final class SeoController extends AbstractController
             $plain = preg_replace('/\s+/', ' ', (string) $article->getContent()) ?? '';
             $sum = (string) mb_substr($plain, 0, 500);
         }
-        $eId = (string) ($article->getEventId() ?? '');
-        if ($eId === '') {
-            $eId = (string) ($article->getId() ?? 'item');
-        }
-        $entryId = 'urn:web:'.$this->urlHostId($request).":article:{$eId}";
+        // One stable Atom <id> per row. Nostr eventId can repeat (revisions, duplicates); readers
+        // merge on <id> and would only show a single entry if ids collided.
+        $dbId = $article->getId();
+        $entryId = 'urn:web:'.$this->urlHostId($request)
+            .':db-article:'.($dbId !== null && $dbId !== '' ? (string) $dbId : \spl_object_id($article));
 
         $pub = $article->getPublishedAt() ?? $article->getCreatedAt() ?? $tArticle;
         $out = "\n  <entry>";
@@ -367,12 +367,21 @@ final class SeoController extends AbstractController
 
     private function xmlText(string $s): string
     {
-        return htmlspecialchars($s, \ENT_XML1 | \ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars($this->stripInvalidXml1Chars($s), \ENT_XML1 | \ENT_QUOTES, 'UTF-8');
     }
 
     private function xmlAttr(string $s): string
     {
-        return htmlspecialchars($s, \ENT_XML1 | \ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars($this->stripInvalidXml1Chars($s), \ENT_XML1 | \ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * XML 1.0 disallows C0 control chars other than tab, CR, LF; they can make feeds appear truncated
+     * after the first entry that used only “clean” text.
+     */
+    private function stripInvalidXml1Chars(string $s): string
+    {
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s) ?? $s;
     }
 
     private function xmlResponse(string $body): Response
