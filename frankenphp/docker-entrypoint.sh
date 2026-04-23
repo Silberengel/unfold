@@ -2,6 +2,11 @@
 set -e
 
 if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
+	# Host bind-mount: /app is often owned by another uid; git 2.35+ and Composer (VCS) warn or fail.
+	if command -v git >/dev/null 2>&1; then
+		git config --global --add safe.directory /app 2>/dev/null || true
+	fi
+
 	# Install the project the first time PHP is started
 	# After the installation, the following block can be deleted
 	if [ ! -f composer.json ]; then
@@ -22,8 +27,16 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		fi
 	fi
 
-	if [ -z "$(ls -A 'vendor/' 2>/dev/null)" ]; then
+	if [ ! -f vendor/autoload.php ]; then
+		set +e
 		composer install --prefer-dist --no-progress --no-interaction
+		CI_ERR=$?
+		set -e
+		if [ "$CI_ERR" -ne 0 ]; then
+			echo "composer install failed (exit $CI_ERR). If composer.json changed without composer.lock, syncing lock (symfony/process)…"
+			composer update symfony/process -W --prefer-dist --no-progress --no-interaction --ignore-platform-reqs
+			composer install --prefer-dist --no-progress --no-interaction
+		fi
 	fi
 
 	# DATABASE_URL from Compose / k8s env, or from a local .env file (dev bind-mount).
