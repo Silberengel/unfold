@@ -194,7 +194,7 @@ final class MagazineContentService
 
     /**
      * Category listing from the persisted 30040 index and DB only. Does not call relays.
-     * Missing `Article` rows (not yet in MySQL) appear until `app:prewarm` backfills.
+     * Rows come from MySQL only; run `app:prewarm` to sync new `a` tags and replaceable revisions.
      *
      * @return array{list: list<Article>, category: array{title: string, summary: string}}
      */
@@ -263,19 +263,20 @@ final class MagazineContentService
     }
 
     /**
-     * For every category in the root index, fetch Nostr long-form for `a` tags missing in MySQL.
-     * Nostr I/O; intended for {@see PrewarmCommand} / cron only.
+     * For every category in the store, fetch the latest Nostr long-form for each `a` tag so new
+     * posts are ingested and NIP-33 replaceable updates refresh existing MySQL rows. Nostr I/O;
+     * intended for {@see PrewarmCommand} / cron only.
      */
-    public function ingestMissingLongformForAllMagazineCategories(): int
+    public function ingestLongformForAllMagazineCategories(): int
     {
         $n = 0;
         foreach ($this->getCategorySlugsFromStore() as $catSlug) {
-            $missing = $this->findMissingLongformCoordinatesForCategory($catSlug);
-            if ($missing === []) {
+            $all = $this->findAllLongformCoordinatesForCategory($catSlug);
+            if ($all === []) {
                 continue;
             }
-            $this->nostrClient->ingestMissingLongformForCategoryCoordinates($missing);
-            $n += \count($missing);
+            $this->nostrClient->ingestLongformForCategoryCoordinates($all);
+            $n += \count($all);
         }
 
         return $n;
@@ -284,56 +285,30 @@ final class MagazineContentService
     /**
      * @return list<string> Nostr coordinates kind:pubkey:identifier
      */
-    private function findMissingLongformCoordinatesForCategory(string $slug): array
+    private function findAllLongformCoordinatesForCategory(string $slug): array
     {
         $catIndex = $this->store->getCategory($slug);
         if ($catIndex === null) {
             return [];
         }
-        $coordinates = [];
+        $out = [];
         foreach ($catIndex->getTags() as $tag) {
-            if (NostrEventTags::tagNameMatches($tag, 'a')) {
-                $seq = NostrEventTags::rowToStringList($tag);
-                if ($seq !== null && isset($seq[1]) && (string) $seq[1] !== '') {
-                    $coordinates[] = (string) $seq[1];
-                }
-            }
-        }
-        if ($coordinates === []) {
-            return [];
-        }
-        $pairs = [];
-        foreach ($coordinates as $coordinate) {
-            $parts = explode(':', (string) $coordinate, 3);
-            if (\count($parts) < 3) {
+            if (!NostrEventTags::tagNameMatches($tag, 'a')) {
                 continue;
             }
-            $slugPart = trim((string) $parts[2]);
-            if ($slugPart === '') {
+            $seq = NostrEventTags::rowToStringList($tag);
+            if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
                 continue;
             }
-            $pairs[] = [
-                'pubkey' => (string) $parts[1],
-                'slug' => $slugPart,
-            ];
-        }
-        if ($pairs === []) {
-            return [];
-        }
-        $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
-        $missing = [];
-        foreach ($coordinates as $coordinate) {
-            $parts = explode(':', (string) $coordinate, 3);
-            if (\count($parts) < 3) {
+            $coordinate = (string) $seq[1];
+            $parts = explode(':', $coordinate, 3);
+            if (\count($parts) < 3 || trim((string) $parts[2]) === '') {
                 continue;
             }
-            $k = (string) $parts[1]."\0".trim((string) $parts[2]);
-            if (!isset($byAddress[$k])) {
-                $missing[] = (string) $coordinate;
-            }
+            $out[] = $coordinate;
         }
 
-        return $missing;
+        return $out;
     }
 
     /**

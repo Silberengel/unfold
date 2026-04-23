@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\Article;
 use App\Entity\User;
 use App\Entity\Event as PublicationEventEntity;
+use App\Enum\EventStatusEnum;
 use App\Enum\KindsEnum;
 use App\Factory\ArticleFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -2046,17 +2047,205 @@ class NostrClient
      */
     public function saveEachArticleToTheDatabase(Article $article): void
     {
-        $saved = $this->entityManager->getRepository(Article::class)->findOneBy(['eventId' => $article->getEventId()]);
-        if (!$saved) {
+        $newId = (string) ($article->getEventId() ?? '');
+        if ($newId === '') {
+            $this->logger->info('[longform_ingest] saveEachArticle: skip, empty eventId on Article', [
+                'title' => $article->getTitle(),
+            ]);
+
+            return;
+        }
+        $repo = $this->entityManager->getRepository(Article::class);
+        if ($repo->findOneBy(['eventId' => $newId]) !== null) {
+            $this->logger->info('[longform_ingest] saveEachArticle: skip, DB already has this exact event id (no work)', [
+                'eventId' => $newId,
+                'slug' => $article->getSlug(),
+            ]);
+
+            return;
+        }
+        $pubkey = strtolower((string) ($article->getPubkey() ?? ''));
+        $slug = trim((string) ($article->getSlug() ?? ''));
+        if ($pubkey === '' || $slug === '') {
+            $this->logger->info('[longform_ingest] saveEachArticle: persist new (missing pubkey or slug on entity)', [
+                'eventId' => $newId,
+                'pubkey_empty' => $pubkey === '',
+                'slug' => $slug,
+            ]);
+            $this->persistNewArticle($article, 'missing_pubkey_or_slug_on_entity');
+
+            return;
+        }
+        $incumbent = $this->findLatestLongFormArticleByAuthorAndSlug($pubkey, $slug);
+        if ($incumbent === null) {
+            $this->logger->info('[longform_ingest] saveEachArticle: persist new row (no DB row for author+slug)', [
+                'eventId' => $newId,
+                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+            ]);
+            $this->persistNewArticle($article, 'no_db_row_for_nip33_address');
+
+            return;
+        }
+        $candidate = $article->getRaw();
+        if (!\is_object($candidate)) {
+            $this->logger->warning('[longform_ingest] saveEachArticle: new Article has no raw wire; trying insert as new', [
+                'eventId' => $newId,
+            ]);
+            $this->persistNewArticle($article, 'no_raw_on_incoming_article');
+
+            return;
+        }
+        $iWire = self::longFormWireStubFromArticle($incumbent);
+        $cTs = self::magazineEventCreatedAt($candidate);
+        $iTs = self::magazineEventCreatedAt($iWire);
+        if (self::wireEventSupersedes($candidate, $iWire)) {
+            $this->logger->info('[longform_ingest] saveEachArticle: NIP-33 update — candidate wins, flushing DB row', [
+                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'from_event_id' => $incumbent->getEventId(),
+                'to_event_id' => $newId,
+                'db_row_id' => $incumbent->getId(),
+                'incumbent_created_at' => $iTs,
+                'candidate_created_at' => $cTs,
+            ]);
+            $this->applyLongFormArticleOnto($article, $incumbent);
+            if ($incumbent->getPubkey() !== $pubkey) {
+                $incumbent->setPubkey($pubkey);
+            }
             try {
-                $this->logger->info('Saving article', ['article' => $article]);
-                $this->entityManager->persist($article);
                 $this->entityManager->flush();
             } catch (\Exception $e) {
-                $this->logger->error($e->getMessage());
+                $this->logger->error('[longform_ingest] saveEachArticle: flush after update failed: '.$e->getMessage());
                 $this->managerRegistry->resetManager();
             }
+
+            return;
         }
+        if (self::wireEventSupersedes($iWire, $candidate)) {
+            $this->logger->info('[longform_ingest] saveEachArticle: keep DB — merged relay result is not newer (incumbent wins)', [
+                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'dbEventId' => $incumbent->getEventId(),
+                'seenEventId' => $newId,
+                'db_row_id' => $incumbent->getId(),
+                'dbCreatedAt' => $iTs,
+                'seenCreatedAt' => $cTs,
+            ]);
+        } elseif ((string) $incumbent->getEventId() !== $newId) {
+            $this->logger->notice('[longform_ingest] saveEachArticle: inconclusive supersedes (different ids) — check relays / d-tag match', [
+                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'dbEventId' => $incumbent->getEventId(),
+                'seenEventId' => $newId,
+                'db_row_id' => $incumbent->getId(),
+                'dbCreatedAt' => $iTs,
+                'seenCreatedAt' => $cTs,
+            ]);
+        }
+    }
+
+    private function persistNewArticle(Article $article, string $reason = 'unspecified'): void
+    {
+        try {
+            $this->logger->info('[longform_ingest] persistNewArticle', [
+                'reason' => $reason,
+                'eventId' => $article->getEventId(),
+                'slug' => self::longformIngestShortSlug((string) ($article->getSlug() ?? '')),
+            ]);
+            $this->entityManager->persist($article);
+            $this->entityManager->flush();
+        } catch (\Exception $e) {
+            $this->logger->error('[longform_ingest] persistNewArticle failed: '.$e->getMessage(), [
+                'reason' => $reason,
+                'eventId' => $article->getEventId(),
+            ]);
+            $this->managerRegistry->resetManager();
+        }
+    }
+
+    private static function longformIngestShortSlug(string $slug, int $max = 100): string
+    {
+        $t = trim($slug);
+        if (strlen($t) > $max) {
+            return substr($t, 0, $max - 1).'…';
+        }
+
+        return $t;
+    }
+
+    /**
+     * @return array{kind: int, id: string, created_at: int, d: string, nip33: ?string}
+     */
+    private static function longformIngestEventWireSummary(object $e): array
+    {
+        $d = self::eventDTagValue($e);
+        $nip = self::nip33ParameterizedReplaceableAddress($e);
+
+        return [
+            'kind' => (int) ($e->kind ?? 0),
+            'id' => (string) ($e->id ?? ''),
+            'created_at' => (int) ($e->created_at ?? 0),
+            'd' => $d !== null && $d !== '' ? self::longformIngestShortSlug($d, 80) : '',
+            'nip33' => $nip,
+        ];
+    }
+
+    private function findLatestLongFormArticleByAuthorAndSlug(string $pubkey, string $slug): ?Article
+    {
+        $pubkey = strtolower($pubkey);
+        /** @var ?Article $row */
+        $row = $this->entityManager->getRepository(Article::class)->createQueryBuilder('a')
+            ->where('LOWER(a.pubkey) = :pk')
+            ->andWhere('a.slug = :sl')
+            ->setParameter('pk', $pubkey)
+            ->setParameter('sl', $slug)
+            ->orderBy('a.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $row;
+    }
+
+    /**
+     * Minimal Nostr event shape for {@see self::wireEventSupersedes} when `raw` is not a full wire object.
+     */
+    private static function longFormWireStubFromArticle(Article $a): object
+    {
+        $raw = $a->getRaw();
+        if (\is_object($raw) && isset($raw->id) && (isset($raw->created_at) || isset($raw->createdAt))) {
+            return $raw;
+        }
+        $o = new \stdClass();
+        $o->id = (string) ($a->getEventId() ?? '');
+        $ca = $a->getCreatedAt();
+        $o->created_at = $ca !== null ? $ca->getTimestamp() : 0;
+        $o->pubkey = (string) ($a->getPubkey() ?? '');
+        $k = $a->getKind();
+
+        $o->kind = $k !== null ? $k->value : KindsEnum::LONGFORM->value;
+
+        return $o;
+    }
+
+    private function applyLongFormArticleOnto(Article $source, Article $target): void
+    {
+        $target->setEventId((string) $source->getEventId());
+        $target->setContent($source->getContent());
+        $target->setTitle($source->getTitle());
+        $target->setSummary($source->getSummary());
+        $target->setImage($source->getImage());
+        if ($source->getCreatedAt() !== null) {
+            $target->setCreatedAt($source->getCreatedAt());
+        }
+        $target->setSig($source->getSig());
+        if ($source->getPublishedAt() !== null) {
+            $target->setPublishedAt($source->getPublishedAt());
+        }
+        $target->setTopics($source->getTopics());
+        if ($source->getKind() !== null) {
+            $target->setKind($source->getKind());
+        }
+        $es = $source->getEventStatus();
+        $target->setEventStatus($es ?? EventStatusEnum::PUBLISHED);
+        $target->setRaw($source->getRaw());
     }
 
     /**
@@ -2424,24 +2613,38 @@ class NostrClient
     }
 
     /**
-     * Batch-fetch longform for category `a` coordinates that are not in the DB; one Nostr call per
-     * (author × kind) group, only the default relay (faster; magazine 30040 uses the full relay set).
+     * Batch-fetch latest longform for category `a` coordinates; one Nostr call per (author × kind)
+     * group. Uses the same full article {@see $defaultRelaySet} as kind 30040 index queries so merged
+     * NIP-33 results are not stuck on a single relay’s copy. {@see saveEachArticleToTheDatabase}
+     * upserts by NIP-33 address.
      *
      * @param list<string> $addresses kind:pubkey:identifier
      */
-    public function ingestMissingLongformForCategoryCoordinates(array $addresses): void
+    public function ingestLongformForCategoryCoordinates(array $addresses): void
     {
         if ($addresses === []) {
+            $this->logger->info('[longform_ingest] ingestLongform: no addresses, exit');
+
             return;
         }
+        $relaysForLog = implode(', ', array_map(self::relayLogLabel(...), $this->configuredArticleRelayUrlList()));
+        $this->logger->info('[longform_ingest] ingestLongform: start', [
+            'address_count' => \count($addresses),
+            'relays' => $relaysForLog,
+            'addresses_sample' => \array_values(\array_slice($addresses, 0, 15)),
+        ]);
         $groups = [];
         foreach ($addresses as $c) {
             $parts = explode(':', (string) $c, 3);
             if (\count($parts) < 3) {
+                $this->logger->notice('[longform_ingest] ingestLongform: skip malformed coordinate (not kind:pubkey:rest)', [
+                    'coordinate' => $c,
+                ]);
+
                 continue;
             }
             $kind = (int) $parts[0];
-            $pubkey = $parts[1];
+            $pubkey = strtolower($parts[1]);
             $d = trim((string) $parts[2]);
             if ($d === '' || $kind <= 0) {
                 continue;
@@ -2451,28 +2654,75 @@ class NostrClient
             $groups[$gkey]['kind'] = $kind;
             $groups[$gkey]['dTags'][] = $d;
         }
-        foreach ($groups as $g) {
+        $this->logger->info('[longform_ingest] ingestLongform: request groups (batched by author+kind)', [
+            'group_count' => \count($groups),
+        ]);
+        foreach ($groups as $gkey => $g) {
             $dTags = array_values(array_unique($g['dTags'] ?? []));
             if ($dTags === [] || !isset($g['pubkey'], $g['kind'])) {
                 continue;
             }
             $kindEnum = KindsEnum::tryFrom((int) $g['kind']);
             if ($kindEnum === null) {
-                $this->logger->notice('Skipping category coordinate with unknown kind', ['kind' => $g['kind']]);
+                $this->logger->notice('[longform_ingest] skip group: unknown kind', ['kind' => $g['kind']]);
 
                 continue;
             }
+            $this->logger->info('[longform_ingest] ingestLongform: REQ group', [
+                'group_key' => $gkey,
+                'filter_kind' => (int) $g['kind'],
+                'author_hex64_prefix' => substr((string) $g['pubkey'], 0, 12),
+                'd_tag_count' => \count($dTags),
+                'd_tags' => array_map(
+                    fn (string $dt): string => self::longformIngestShortSlug($dt, 72),
+                    $dTags
+                ),
+            ]);
             $request = $this->createNostrRequest(
                 [$kindEnum],
                 ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
-                $this->buildSingleRelaySet($this->defaultRelayUrl),
+                $this->defaultRelaySet,
             );
             try {
                 $events = $this->processResponse(
                     $request->send(),
                     static fn (object $event) => $event,
                 );
-                foreach (self::mergeNip33ParameterizedWireEvents($events) as $event) {
+                $rawCount = \count($events);
+                $rawSample = [];
+                $si = 0;
+                foreach ($events as $ev) {
+                    if (!\is_object($ev)) {
+                        continue;
+                    }
+                    if ($si < 25) {
+                        $rawSample[] = self::longformIngestEventWireSummary($ev);
+                    }
+                    ++$si;
+                }
+                $this->logger->info('[longform_ingest] ingestLongform: responses merged from relays (pre-NIP-33 per-address merge)', [
+                    'raw_wire_count' => $rawCount,
+                    'sample_up_to_25' => $rawSample,
+                ]);
+                if ($rawCount === 0) {
+                    $this->logger->warning('[longform_ingest] ingestLongform: no EVENT rows returned for this filter (check relay index / author filter / #d list)', [
+                        'group_key' => $gkey,
+                        'authors_filter' => $g['pubkey'],
+                    ]);
+                }
+                $merged = self::mergeNip33ParameterizedWireEvents($events);
+                $mergedDetail = [];
+                foreach ($merged as $ev) {
+                    if (!\is_object($ev)) {
+                        continue;
+                    }
+                    $mergedDetail[] = self::longformIngestEventWireSummary($ev);
+                }
+                $this->logger->info('[longform_ingest] ingestLongform: after mergeNip33ParameterizedWireEvents', [
+                    'merged_count' => \count($merged),
+                    'one_row_per_nip33_address' => $mergedDetail,
+                ]);
+                foreach ($merged as $event) {
                     if (!\is_object($event)) {
                         continue;
                     }
@@ -2480,17 +2730,18 @@ class NostrClient
                     $this->saveEachArticleToTheDatabase($article);
                 }
             } catch (\Throwable $e) {
-                $this->logger->error(sprintf(
-                    'ingestMissingLongformForCategoryCoordinates [%s]: %s',
-                    self::relayLogLabel($this->defaultRelayUrl),
-                    $e->getMessage()
-                ), [
-                    'message' => $e->getMessage(),
-                    'pubkey' => $g['pubkey'] ?? null,
-                    'relay' => $this->defaultRelayUrl,
-                ]);
+                $this->logger->error(
+                    sprintf('[longform_ingest] ingestLongform: exception in group %s: %s', (string) $gkey, $e->getMessage()),
+                    [
+                        'message' => $e->getMessage(),
+                        'pubkey' => $g['pubkey'] ?? null,
+                        'trace' => $e->getTraceAsString(),
+                        'relays' => $relaysForLog,
+                    ],
+                );
             }
         }
+        $this->logger->info('[longform_ingest] ingestLongform: done (all groups)');
     }
 
     private static function magazineEventCreatedAt(mixed $event): int

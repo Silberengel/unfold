@@ -185,13 +185,13 @@ final class PrewarmCommand extends Command
             }
         }
 
-        $io->section('Long-form in DB (category `a` tags missing from MySQL)');
+        $io->section('Long-form in DB (category `a` tags — refresh from Nostr)');
         try {
-            $n = $this->magazineContent->ingestMissingLongformForAllMagazineCategories();
+            $n = $this->magazineContent->ingestLongformForAllMagazineCategories();
             if ($n === 0) {
-                $io->note('No missing long-form rows for category `a` coordinates (or empty magazine store).');
+                $io->note('No category `a` coordinates in the magazine store (or empty category indices).');
             } else {
-                $io->writeln(sprintf('Fetched or attempted ingest for <info>%d</info> missing coordinate(s).', $n));
+                $io->writeln(sprintf('Fetched latest long-form for <info>%d</info> coordinate(s) (new rows + NIP-33 updates).', $n));
             }
         } catch (\Throwable $e) {
             $this->logger->error('app:prewarm longform ingest failed', ['e' => $e]);
