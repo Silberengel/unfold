@@ -24,6 +24,9 @@
         </nav>
     </div>
     <div class="site-footer__main">
+        <p class="site-footer__jumble">
+            <a class="site-footer__link" href="{{ magazine_on_jumble_url()|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">View this magazine on Jumble</a>
+        </p>
         <div class="footer-links">
             {% for link in footer_links %}
                 <div class="footer-link">

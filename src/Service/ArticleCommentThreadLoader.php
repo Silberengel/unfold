@@ -309,7 +309,7 @@ final readonly class ArticleCommentThreadLoader
                     $pRaw = isset($parent->content) ? (string) $parent->content : '';
                     $preview = $this->parentEventTextPreviewForBlurb($pRaw);
                     if ($preview !== '') {
-                        $blurb = '> *'.'Replying to thread'.'* — '."\n> ".$preview;
+                        $blurb = '> *'.'Reply to'.'* — '."\n> ".$preview;
                     }
                 }
             }

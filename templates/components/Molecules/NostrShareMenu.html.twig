@@ -1,7 +1,9 @@
 {% set share = nostr_share_menu() %}
 {% if share is not null %}
     <details class="nostr-share-menu">
-        <summary class="nostr-share-menu__trigger btn btn-secondary btn-sm" title="Nostr options" aria-label="Nostr options">⋯</summary>
+        <summary class="nostr-share-menu__trigger btn btn-secondary btn-sm" title="Nostr options" aria-label="Nostr options">
+            <span class="nostr-share-menu__label">Nostr</span><span class="nostr-share-menu__glyph" aria-hidden="true">⋯</span>
+        </summary>
         <ul class="nostr-share-menu__list" role="menu">
             {% if share.npub is not null and share.npub is not same as('') %}
                 <li class="nostr-share-menu__item" role="none"

@@ -128,21 +128,49 @@ blockquote p {
     gap: 0.35rem;
 }
 
-/* Thread depth: light indent, max visual level 3 (deeper uses --depth-3) */
-.comments .card.comment--depth-0 {
+/* Tracebacks: same flex+gap as .comments so spacing isn’t lost to margin collapse or .card { margin } from app.css */
+.comments-quotes__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 0;
+}
+
+.comments-quotes__list > .card.comment--quote {
+    margin: 0; /* override app.css .card { margin-bottom: 50px } */
+    flex-shrink: 0;
+}
+
+.comments-quotes__list .card.comment--quote .card-footer.nostr-previews {
+    margin-top: 0.75rem;
+}
+
+/* Thread: no depth indent; one accent color for all replies; compact vertical rhythm */
+.comments {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.comments .card.comment {
     margin-left: 0;
+    margin-bottom: 0;
+    padding: 0.5rem 0.65rem 0.5rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-primary);
 }
 
-.comments .card.comment--depth-1 {
-    margin-left: 0.28rem;
-}
-
-.comments .card.comment--depth-2 {
-    margin-left: 0.6rem;
-}
-
+.comments .card.comment--depth-0,
+.comments .card.comment--depth-1,
+.comments .card.comment--depth-2,
 .comments .card.comment--depth-3 {
-    margin-left: 0.95rem;
+    margin-left: 0;
+    border-left-color: var(--color-primary);
+}
+
+.comments .card.comment .metadata {
+    margin-bottom: 0.4rem;
 }
 
 .comment__reply-blurb {
@@ -185,13 +213,13 @@ blockquote p {
 }
 
 .comment-reply {
-    margin-top: 1rem;
-    padding-top: 1rem;
+    margin-top: 0.45rem;
+    padding-top: 0.45rem;
     border-top: 1px solid var(--color-border);
 }
 
 .comment-reply--article {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.75rem;
     border: 1px solid var(--color-border);
     border-radius: 6px;
     border-top: 1px solid var(--color-border);
@@ -219,8 +247,8 @@ blockquote p {
 }
 
 .comment-reply__toolbar--inline {
-    margin-bottom: 0.25rem;
-    margin-top: 0.5rem;
+    margin-bottom: 0.15rem;
+    margin-top: 0.3rem;
     justify-content: flex-end;
 }
 
@@ -243,7 +271,7 @@ blockquote p {
 }
 
 .comment-reply--nested {
-    margin-top: 0.5rem;
+    margin-top: 0.3rem;
 }
 
 .comment-reply__head {

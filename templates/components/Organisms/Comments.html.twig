@@ -165,6 +165,7 @@
     <div class="comments-quotes">
         <h3 class="comments-quotes__title">Quotes and references</h3>
         <p class="text-subtle comments-quotes__lede">Other notes that cite this article in a <code>q</code> tag (NIP-18) or reference its address in <code>a</code> / <code>A</code> (e.g. generic reposts, highlights).</p>
+        <div class="comments-quotes__list">
         {% for item in quotes %}
             {% set cid = item.id|default('') %}
             {% set cpk = item.pubkey|default('') %}
@@ -204,5 +205,6 @@
                 {% endif %}
             </div>
         {% endfor %}
+        </div>
     </div>
 {% endif %}

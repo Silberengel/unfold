@@ -45,8 +45,8 @@ parameters:
     magazine_prewarm_also_slugs: '%env(default:magazine_prewarm_also_slugs_empty:MAGAZINE_PREWARM_ALSO_SLUGS)%'
     external_links:
       - title: "Unfold"
-        url: "https://github.com/decent-newsroom/unfold"
-        description: "Project source code on GitHub."
+        url: "https://git.imwald.eu/silberengel/unfold/src/branch/imwald"
+        description: "This site’s Unfold source (imwald branch)."
       - title: "Decent Newsroom"
         url: "https://decentnewsroom.com/"
         description: "Decentralized magazine platform."

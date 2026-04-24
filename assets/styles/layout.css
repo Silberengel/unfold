@@ -92,11 +92,26 @@ nav a:hover {
 }
 
 .nostr-share-menu__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
     min-width: 2.25rem;
-    font-size: 1.15rem;
+    font-size: 0.9rem;
     line-height: 1.2;
     padding: 0.2rem 0.45rem;
     list-style: none;
+}
+
+.nostr-share-menu__label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.nostr-share-menu__glyph {
+    font-size: 1.1rem;
+    line-height: 1;
+    opacity: 0.9;
 }
 
 .nostr-share-menu__trigger::-webkit-details-marker {
@@ -576,6 +591,11 @@ footer {
 
 .site-footer__main {
     text-align: center;
+}
+
+.site-footer__jumble {
+    margin: 0 0 0.65rem;
+    font-size: 0.95rem;
 }
 
 .site-footer__legal {

@@ -106,18 +106,13 @@ final class NostrShareMenuBuilder
         return new Key();
     }
 
-    public function buildForRequest(Request $request): ?NostrShareMenuContext
+    /**
+     * Context for the header Nostr menu. Always returns a context on real HTTP requests (never null).
+     * Templates that do not include the header never call this; no need to suppress on XHR / fragments.
+     */
+    public function buildForRequest(Request $request): NostrShareMenuContext
     {
-        if ($request->isXmlHttpRequest() || 'xmlhttprequest' === strtolower((string) $request->headers->get('X-Requested-With'))) {
-            return null;
-        }
-        if ($request->attributes->getBoolean('_embed')) {
-            return null;
-        }
         $route = (string) $request->attributes->get('_route', '');
-        if (str_ends_with($route, 'fragment') || str_starts_with($request->getPathInfo(), '/fragment/')) {
-            return null;
-        }
         if ('' === $route) {
             return $this->siteWithRootMenu();
         }
