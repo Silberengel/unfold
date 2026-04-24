@@ -8,7 +8,10 @@
                 <span class="brand__title">{{ website_name }}</span>
             </h1>
         </a>
-        <button class="hamburger btn btn-secondary" data-action="click->menu#toggle" aria-label="Menu">&#9776;</button>
+        <div class="header__end">
+            {% include 'components/Molecules/NostrShareMenu.html.twig' %}
+            <button class="hamburger btn btn-secondary" data-action="click->menu#toggle" aria-label="Menu">&#9776;</button>
+        </div>
     </div>
     <div class="header__categories"  data-menu-target="menu">
         <ul>

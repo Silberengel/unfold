@@ -10,7 +10,7 @@
                 <small>{{ article.createdAt|date('F j Y') }}</small>
             {% endif %}
         </div>
-        <a href="{{ path('article-slug', {slug: article.slug}) }}">
+        <a href="{{ (article.pubkey and npub_from_hex(article.pubkey) != '') ? path('article', { npub: npub_from_hex(article.pubkey), slug: article.slug }) : path('article-legacy-redirect', { slug: article.slug }) }}">
             <div class="card-header">
                 {% if category %}<small class="text-uppercase">{{ category }}</small>{% endif %}
                 {% if article.image %}

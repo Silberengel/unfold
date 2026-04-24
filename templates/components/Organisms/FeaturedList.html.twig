@@ -7,7 +7,7 @@
             <div>
                 {% set feature = list[0] %}
                 <div class="card">
-                    <a href="{{ path('article-slug', {slug: feature.slug}) }}">
+                    <a href="{{ (feature.pubkey and npub_from_hex(feature.pubkey) != '') ? path('article', { npub: npub_from_hex(feature.pubkey), slug: feature.slug }) : path('article-legacy-redirect', { slug: feature.slug }) }}">
                         <div class="card-header">
                             {% if feature.image %}
                                 <img src="{{ feature.image }}" alt="Cover image for {{ feature.title }}">
@@ -26,7 +26,7 @@
                 {% for item in list %}
                     {% if item != feature %}
                         <div class="card">
-                            <a href="{{ path('article-slug', {slug: item.slug}) }}">
+                            <a href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}">
                                 <div class="card-body">
                                     <h2 class="card-title">{{ item.title }}</h2>
                                     <p class="lede truncate">

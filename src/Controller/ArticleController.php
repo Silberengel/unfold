@@ -272,7 +272,9 @@ class ArticleController  extends AbstractController
 
         $nostrClient->getLongFormFromNaddr($slug, $relays, $author, $kind);
         if ($slug) {
-            return $this->redirectToRoute('article-slug', ['slug' => $slug]);
+            $npub = (new Key())->convertPublicKeyToBech32((string) $author);
+
+            return $this->redirectToRoute('article', ['npub' => $npub, 'slug' => $slug], Response::HTTP_MOVED_PERMANENTLY);
         }
 
         throw new \Exception('No article.');
@@ -283,13 +285,14 @@ class ArticleController  extends AbstractController
      */
     // Slug is the NIP-33 d-identifier and may contain "/"; default [^/]++ would break sitemap/URL generation.
     #[Route(
-        path: '/article/d/{slug}',
-        name: 'article-slug',
-        requirements: ['slug' => '.+'],
+        path: '/p/{npub}/d/{slug}',
+        name: 'article',
+        requirements: ['npub' => '^npub1.*', 'slug' => '.+'],
         options: ['utf8' => true],
     )]
     public function article(
-        $slug,
+        string $npub,
+        string $slug,
         EntityManagerInterface $entityManager,
         CacheService $cacheService,
         CacheItemPoolInterface $articlesCache,
@@ -297,32 +300,77 @@ class ArticleController  extends AbstractController
         ArticleCommentThreadLoader $commentThreadLoader
     ): Response
     {
-
-        set_time_limit(300); // 5 minutes
-        ini_set('max_execution_time', '300');
-
-        $article = null;
-        // check if an item with same eventId already exists in the db
-        $repository = $entityManager->getRepository(Article::class);
-        $articles = $repository->findBy(['slug' => $slug]);
-        $revisions = count($articles);
-
-        if ($revisions === 0) {
+        $article = $this->loadLatestArticleBySlug($entityManager, $slug);
+        if ($article === null) {
+            throw $this->createNotFoundException('The article could not be found');
+        }
+        $key = new Key();
+        if ($key->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
             throw $this->createNotFoundException('The article could not be found');
         }
 
+        return $this->renderArticle(
+            $article,
+            $cacheService,
+            $articlesCache,
+            $converter,
+            $commentThreadLoader
+        );
+    }
+
+    /**
+     * Legacy: /article/d/{slug} → 301 to /p/{npub}/d/{slug} (NIP-33 with author npub in path).
+     */
+    #[Route(
+        path: '/article/d/{slug}',
+        name: 'article-legacy-redirect',
+        requirements: ['slug' => '.+'],
+        options: ['utf8' => true],
+    )]
+    public function articleLegacyRedirect(
+        string $slug,
+        EntityManagerInterface $entityManager,
+    ): Response {
+        $article = $this->loadLatestArticleBySlug($entityManager, $slug);
+        if ($article === null) {
+            throw $this->createNotFoundException('The article could not be found');
+        }
+        $key = new Key();
+        $npub = $key->convertPublicKeyToBech32((string) $article->getPubkey());
+
+        return $this->redirectToRoute('article', ['npub' => $npub, 'slug' => $slug], Response::HTTP_MOVED_PERMANENTLY);
+    }
+
+    private function loadLatestArticleBySlug(EntityManagerInterface $entityManager, string $slug): ?Article
+    {
+        $repository = $entityManager->getRepository(Article::class);
+        $articles = $repository->findBy(['slug' => $slug]);
+        $revisions = \count($articles);
+        if ($revisions === 0) {
+            return null;
+        }
         if ($revisions > 1) {
-            // sort articles by created at date
             usort($articles, function ($a, $b) {
                 return $b->getCreatedAt() <=> $a->getCreatedAt();
             });
-            // get the last article
-            $article = end($articles);
-        } else {
-            $article = $articles[0];
+
+            return end($articles);
         }
 
-        $cacheKey = 'article_' . $article->getId();
+        return $articles[0];
+    }
+
+    private function renderArticle(
+        Article $article,
+        CacheService $cacheService,
+        CacheItemPoolInterface $articlesCache,
+        Converter $converter,
+        ArticleCommentThreadLoader $commentThreadLoader
+    ): Response {
+        set_time_limit(300); // 5 minutes
+        ini_set('max_execution_time', '300');
+
+        $cacheKey = 'article_'.$article->getId();
         $cacheItem = $articlesCache->getItem($cacheKey);
         if (!$cacheItem->isHit()) {
             $cacheItem->set($converter->convertToHtml($article->getContent()));
@@ -335,7 +383,7 @@ class ArticleController  extends AbstractController
 
         $kind = $article->getKind()?->value ?? 30023;
         $pubkey = (string) $article->getPubkey();
-        $articleSlug = (string) ($article->getSlug() ?? $slug);
+        $articleSlug = (string) $article->getSlug();
         $coordinate = $kind.':'.$pubkey.':'.$articleSlug;
         $eid = $article->getEventId();
         $eid = ($eid !== null && $eid !== '' && self::isValidHexEventId($eid)) ? $eid : null;
@@ -518,11 +566,13 @@ class ArticleController  extends AbstractController
         $article = $cacheItem->get();
 
         $content = $converter->convertToHtml($article->getContent());
+        $previewNpub = (new Key())->convertPublicKeyToBech32($currentPubkey);
 
         return $this->render('pages/article.html.twig', [
             'article' => $article,
             'content' => $content,
             'author' => $user->getMetadata(),
+            'npub' => $previewNpub,
             'comments_preloaded' => false,
         ]);
     }

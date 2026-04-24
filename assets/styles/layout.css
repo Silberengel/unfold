@@ -77,6 +77,75 @@ nav a:hover {
     font-size: 26px;
 }
 
+/* Trailing tools: Nostr ⋯ menu + hamburger (mobile) */
+.header__end {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* NIP-19 share menu (header) */
+.nostr-share-menu {
+    position: relative;
+    list-style: none;
+}
+
+.nostr-share-menu__trigger {
+    min-width: 2.25rem;
+    font-size: 1.15rem;
+    line-height: 1.2;
+    padding: 0.2rem 0.45rem;
+    list-style: none;
+}
+
+.nostr-share-menu__trigger::-webkit-details-marker {
+    display: none;
+}
+
+.nostr-share-menu__list {
+    position: absolute;
+    z-index: 1002;
+    right: 0;
+    top: calc(100% + 4px);
+    margin: 0;
+    padding: 0.35rem 0;
+    min-width: 12rem;
+    list-style: none;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.nostr-share-menu__item {
+    margin: 0;
+    padding: 0;
+}
+
+.nostr-share-menu__action {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.45rem 0.75rem;
+    font: inherit;
+    color: var(--color-text, inherit);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 0;
+}
+
+.nostr-share-menu__action:hover,
+.nostr-share-menu__action:focus-visible {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+a.nostr-share-menu__action {
+    color: var(--color-primary, inherit);
+}
+
 .header__logo {
     display: flex;
     width: 100%;
@@ -186,6 +255,23 @@ nav a:hover {
 @media (min-width: 1025px) {
     .header__mobile-account {
         display: none;
+    }
+
+    /* Center the title; keep Nostr menu + hamburger on the right without shifting the brand. */
+    .header__logo {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+    }
+
+    .header__brand {
+        grid-column: 2;
+        justify-self: center;
+    }
+
+    .header__end {
+        grid-column: 3;
+        justify-self: end;
     }
 }
 

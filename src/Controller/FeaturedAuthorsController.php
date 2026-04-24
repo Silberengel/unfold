@@ -30,7 +30,6 @@ final class FeaturedAuthorsController extends AbstractController
         ParameterBagInterface $params,
     ): Response {
         $domain = trim((string) $params->get('nip05_domain'));
-        $jumbleBase = rtrim((string) $params->get('jumble_profile_users_base'), '/');
         $keys = new Key();
         $authors = [];
         foreach ($featuredAuthorRepository->findAllListedOrderByLocalPart() as $fa) {
@@ -38,7 +37,6 @@ final class FeaturedAuthorsController extends AbstractController
             $bundle = $cacheService->getMetadataBundle($npub);
             $author = $bundle['content'];
             $kind0Tags = $bundle['kind0_tags'];
-            $jumbleProfileHref = $jumbleBase !== '' ? $jumbleBase.'/'.$npub : null;
             $kind10133 = [];
             try {
                 $kind10133 = $nostrClient->getKind10133PaymentTargetEventsForNpub($npub, 20);
@@ -50,7 +48,6 @@ final class FeaturedAuthorsController extends AbstractController
                 'npub' => $npub,
                 'profile_websites' => $profileIdentityLinks->buildWebsites($author, $kind0Tags),
                 'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, $extraPayto),
-                'jumble_profile_href' => $jumbleProfileHref,
             ];
         }
 

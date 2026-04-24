@@ -75,10 +75,6 @@ class AuthorController extends AbstractController
         }
         $extraPayto = $profilePaymentLinks->collectPaytoUrisFromNipA3Kind10133Events($kind10133);
 
-        $jumbleBase = (string) $this->getParameter('jumble_profile_users_base');
-        $jumbleBase = rtrim($jumbleBase, '/');
-        $jumbleProfileHref = $jumbleBase !== '' ? $jumbleBase.'/'.$npub : null;
-
         $profileNip05 = $profileIdentityLinks->buildNip05($author, $kind0Tags);
         $fa = $featuredAuthorRepository->findOneByPubkeyHex($pubkey);
         if ($fa !== null && $fa->isListed()) {
@@ -96,7 +92,6 @@ class AuthorController extends AbstractController
             'profile_websites' => $profileIdentityLinks->buildWebsites($author, $kind0Tags),
             'profile_nip05' => $profileNip05,
             'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, $extraPayto),
-            'jumble_profile_href' => $jumbleProfileHref,
         ]);
     }
 

@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Service\NostrClient;
 use App\Service\NostrLinkParser;
+use App\Service\NostrShareMenuBuilder;
 use App\Service\CacheService;
 use Exception;
 use nostriphant\NIP19\Bech32;
@@ -13,6 +14,7 @@ use nostriphant\NIP19\Data;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
@@ -23,8 +25,14 @@ class EventController extends AbstractController
      * @throws Exception
      */
     #[Route('/e/{nevent}', name: 'nevent', requirements: ['nevent' => '^nevent1.*'])]
-    public function index($nevent, NostrClient $nostrClient, CacheService $cacheService, NostrLinkParser $nostrLinkParser, LoggerInterface $logger): Response
-    {
+    public function index(
+        $nevent,
+        Request $request,
+        NostrClient $nostrClient,
+        CacheService $cacheService,
+        NostrLinkParser $nostrLinkParser,
+        LoggerInterface $logger,
+    ): Response {
         $logger->info('Accessing event page', ['nevent' => $nevent]);
 
         try {
@@ -37,11 +45,15 @@ class EventController extends AbstractController
             $data = $decoded->data;
             $logger->info('Event data', ['data' => json_encode($data)]);
 
+            $relays = [];
             // Sort which event type this is using $data->type
             switch ($decoded->type) {
                 case 'note':
                     // Handle note (regular event)
                     $relays = $data->relays ?? [];
+                    if (!\is_array($relays)) {
+                        $relays = [];
+                    }
                     $event = $nostrClient->getEventById($data->identifier, $relays);
                     break;
 
@@ -53,16 +65,23 @@ class EventController extends AbstractController
                 case 'nevent':
                     // Handle nevent identifier (event with additional metadata)
                     $relays = $data->relays ?? [];
+                    if (!\is_array($relays)) {
+                        $relays = [];
+                    }
                     $event = $nostrClient->getEventById($data->id, $relays);
                     break;
 
                 case 'naddr':
                     // Handle naddr (parameterized replaceable event)
+                    $relays = $data->relays ?? [];
+                    if (!\is_array($relays)) {
+                        $relays = [];
+                    }
                     $decodedData = [
                         'kind' => $data->kind,
                         'pubkey' => $data->pubkey,
                         'identifier' => $data->identifier,
-                        'relays' => $data->relays ?? []
+                        'relays' => $relays,
                     ];
                     $event = $nostrClient->getEventByNaddr($decodedData);
                     break;
@@ -76,6 +95,8 @@ class EventController extends AbstractController
                 $logger->warning('Event not found', ['data' => $data]);
                 throw new NotFoundHttpException('Event not found');
             }
+
+            NostrShareMenuBuilder::applyWireEventToRequest($request, $event, $relays);
 
             // Parse event content for Nostr links
             $nostrLinks = [];

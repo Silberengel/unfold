@@ -351,6 +351,10 @@ div:nth-child(odd) .featured-list {
         flex-shrink: 0;
         margin-left: 0;
     }
+
+    .header__end {
+        flex-shrink: 0;
+    }
 }
 
 /* Fixed square + overflow clips to a true circle. Logo img is out-of-flow so

@@ -35,6 +35,8 @@ parameters:
     nip05_domain: 'blog.imwald.eu'
     # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).
     jumble_profile_users_base: 'https://jumble.imwald.eu/users'
+    # Base for event threads: {base}/{nevent1...} (NIP-19 nevent, not raw hex id).
+    jumble_feed_notes_base: 'https://jumble.imwald.eu/feed/notes'
     # Comma-separated category #d slugs to fetch first in app:prewarm after the root (see MagazineRefresher).
     magazine_prewarm_prefer_slugs_empty: ''
     magazine_prewarm_prefer_slugs: '%env(default:magazine_prewarm_prefer_slugs_empty:MAGAZINE_PREWARM_PREFER_SLUGS)%'

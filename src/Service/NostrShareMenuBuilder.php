@@ -1,0 +1,348 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service;
+
+use App\Dto\NostrShareMenuContext;
+use App\Entity\Article;
+use App\Entity\Event;
+use App\Nostr\Nip19Addressable;
+use App\Repository\ArticleRepository;
+use nostriphant\NIP19\Bech32;
+use swentel\nostr\Key\Key;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\Request;
+
+/**
+ * Resolves the header Nostr share menu (npub; naddr for addressables, else nevent; Jumble /feed/notes/…).
+ */
+final class NostrShareMenuBuilder
+{
+    public const string ATTR_NPUB = 'nostr_share_npub';
+
+    public const string ATTR_NEVENT_BECH32 = 'nostr_share_nevent_bech32';
+
+    public const string ATTR_NADDR_BECH32 = 'nostr_share_naddr_bech32';
+
+    public static function applyWireEventToRequest(Request $request, object $event, array $relayHints = []): void
+    {
+        $pubkeyHex = strtolower((string) ($event->pubkey ?? ''));
+        if (64 !== \strlen($pubkeyHex) || !ctype_xdigit($pubkeyHex)) {
+            return;
+        }
+        $key = new Key();
+        $request->attributes->set(self::ATTR_NPUB, $key->convertPublicKeyToBech32($pubkeyHex));
+        $kind = (int) ($event->kind ?? 0);
+        $d = self::dTagFromWireEvent($event);
+        if (Nip19Addressable::isParameterizedReplaceableKind($kind) && $d !== null) {
+            $naddr = Nip19Addressable::naddrBech32($kind, $pubkeyHex, $d, $relayHints);
+            $request->attributes->set(self::ATTR_NADDR_BECH32, $naddr);
+
+            return;
+        }
+        $eventIdHex = strtolower((string) ($event->id ?? ''));
+        if (64 === \strlen($eventIdHex) && ctype_xdigit($eventIdHex)) {
+            $rebuilt = (string) Bech32::nevent(
+                id: $eventIdHex,
+                relays: $relayHints,
+                author: $pubkeyHex,
+                kind: $kind,
+            );
+            $request->attributes->set(self::ATTR_NEVENT_BECH32, $rebuilt);
+        }
+    }
+
+    /**
+     * @param list<mixed>|\ArrayObject<int, mixed> $event->tags
+     */
+    private static function dTagFromWireEvent(object $event): ?string
+    {
+        if (!isset($event->tags)) {
+            return null;
+        }
+        $rows = $event->tags;
+        if ($rows instanceof \ArrayObject) {
+            $rows = $rows->getArrayCopy();
+        }
+        if (!\is_array($rows)) {
+            return null;
+        }
+        $norm = array_values(
+            array_map(
+                static function ($r) {
+                    if (!\is_array($r) && !\is_object($r)) {
+                        return $r;
+                    }
+                    if (\is_object($r)) {
+                        $r = (array) $r;
+                    }
+
+                    return $r;
+                },
+                $rows
+            )
+        );
+
+        return Nip19Addressable::dTagFromTagRows($norm);
+    }
+
+    public function __construct(
+        private readonly MagazineIndexStore $magazineIndexStore,
+        private readonly ArticleRepository $articleRepository,
+        #[Autowire('%npub%')]
+        private readonly string $siteNpub,
+        #[Autowire('%d_tag%')]
+        private readonly string $rootDTag,
+        #[Autowire('%jumble_profile_users_base%')]
+        private readonly string $jumbleProfileUsersBase,
+        #[Autowire('%jumble_feed_notes_base%')]
+        private readonly string $jumbleFeedNotesBase,
+    ) {
+    }
+
+    private function nostrKey(): Key
+    {
+        return new Key();
+    }
+
+    public function buildForRequest(Request $request): ?NostrShareMenuContext
+    {
+        if ($request->isXmlHttpRequest() || 'xmlhttprequest' === strtolower((string) $request->headers->get('X-Requested-With'))) {
+            return null;
+        }
+        if ($request->attributes->getBoolean('_embed')) {
+            return null;
+        }
+        $route = (string) $request->attributes->get('_route', '');
+        if (str_ends_with($route, 'fragment') || str_starts_with($request->getPathInfo(), '/fragment/')) {
+            return null;
+        }
+        if ('' === $route) {
+            return $this->siteWithRootMenu();
+        }
+
+        return match ($route) {
+            'home' => $this->siteWithRootMenu(),
+            'article' => $this->forArticleNpubD(
+                (string) $request->attributes->get('npub', ''),
+                (string) $request->attributes->get('slug', ''),
+            ),
+            'author-profile' => $this->forAuthorProfile($request->attributes->get('npub', '')),
+            'nevent' => $this->forNevent($request, (string) $request->attributes->get('nevent', '')),
+            'magazine-category' => $this->forCategory($request->attributes->get('slug', '')),
+            'articles', 'featured_authors', 'search', 'article-preview', 'article-preview-event', 'editor-create', 'editor-edit' => $this->siteWithRootMenu(),
+            default => $this->siteWithRootMenu(),
+        };
+    }
+
+    private function forArticleNpubD(string $npub, string $slug): NostrShareMenuContext
+    {
+        if ($npub === '' || $slug === '' || !str_starts_with($npub, 'npub1')) {
+            return $this->siteWithRootMenu();
+        }
+        $list = $this->articleRepository->findBy(['slug' => $slug], ['createdAt' => 'DESC'], 1);
+        $article = $list[0] ?? null;
+        if ($article === null) {
+            return $this->siteWithRootMenu();
+        }
+        if ($this->nostrKey()->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
+            return $this->siteWithRootMenu();
+        }
+
+        return $this->fromArticle($article);
+    }
+
+    private function fromArticle(Article $article): NostrShareMenuContext
+    {
+        $npub = $this->nostrKey()->convertPublicKeyToBech32((string) $article->getPubkey());
+        $kind = (int) ($article->getKind()?->value ?? 30023);
+        $d = (string) ($article->getSlug() ?? '');
+        if ($d === '') {
+            return new NostrShareMenuContext(
+                $npub,
+                null,
+                null,
+                $this->profileJumbleUrl($npub),
+            );
+        }
+        $pk = strtolower((string) $article->getPubkey());
+        $naddr = Nip19Addressable::naddrBech32($kind, $pk, $d, []);
+
+        return new NostrShareMenuContext(
+            $npub,
+            null,
+            $naddr,
+            $this->feedJumble($naddr),
+        );
+    }
+
+    private function forAuthorProfile(mixed $npubParam): NostrShareMenuContext
+    {
+        $npub = (string) $npubParam;
+        if ($npub === '' || !str_starts_with($npub, 'npub1')) {
+            return $this->siteWithRootMenu();
+        }
+
+        return new NostrShareMenuContext(
+            $npub,
+            null,
+            null,
+            $this->profileJumbleUrl($npub),
+        );
+    }
+
+    private function forNevent(Request $request, string $neventFromRoute): NostrShareMenuContext
+    {
+        if ($request->attributes->has(self::ATTR_NPUB) && $request->attributes->has(self::ATTR_NADDR_BECH32)) {
+            $naddr = (string) $request->attributes->get(self::ATTR_NADDR_BECH32);
+            $np = (string) $request->attributes->get(self::ATTR_NPUB);
+
+            return new NostrShareMenuContext(
+                $np,
+                null,
+                $naddr,
+                $this->feedJumble($naddr),
+            );
+        }
+        if ($request->attributes->has(self::ATTR_NPUB) && $request->attributes->has(self::ATTR_NEVENT_BECH32)) {
+            $nb = (string) $request->attributes->get(self::ATTR_NEVENT_BECH32);
+            $np = (string) $request->attributes->get(self::ATTR_NPUB);
+
+            return new NostrShareMenuContext(
+                $np,
+                $nb,
+                null,
+                $this->feedJumble($nb),
+            );
+        }
+
+        $nevent = $neventFromRoute;
+        if ($nevent === '' || !str_starts_with($nevent, 'nevent1')) {
+            return $this->siteWithRootMenu();
+        }
+        try {
+            $decoded = new Bech32($nevent);
+        } catch (\Throwable) {
+            return $this->siteWithRootMenu();
+        }
+        if ($decoded->type !== 'nevent' || !isset($decoded->data->id)) {
+            return $this->siteWithRootMenu();
+        }
+        $eventId = strtolower((string) $decoded->data->id);
+        if (64 !== \strlen($eventId) || !ctype_xdigit($eventId)) {
+            return $this->siteWithRootMenu();
+        }
+        $authorHex = $decoded->data->author ?? null;
+        if (\is_string($authorHex) && 64 === \strlen($authorHex) && ctype_xdigit($authorHex)) {
+            $authorHex = strtolower($authorHex);
+        } else {
+            $authorHex = null;
+        }
+        $kind = isset($decoded->data->kind) ? (int) $decoded->data->kind : 1;
+        $relays = $decoded->data->relays ?? [];
+        $relays = \is_array($relays) ? $relays : [];
+        if ($authorHex !== null) {
+            $rebuilt = (string) Bech32::nevent(
+                id: $eventId,
+                relays: $relays,
+                author: $authorHex,
+                kind: $kind,
+            );
+
+            return new NostrShareMenuContext(
+                $this->nostrKey()->convertPublicKeyToBech32($authorHex),
+                $rebuilt,
+                null,
+                $this->feedJumble($rebuilt),
+            );
+        }
+
+        return new NostrShareMenuContext(
+            null,
+            $nevent,
+            null,
+            $this->feedJumble($nevent),
+        );
+    }
+
+    private function forCategory(string $slug): NostrShareMenuContext
+    {
+        if ($slug === '') {
+            return $this->siteWithRootMenu();
+        }
+        $cat = $this->magazineIndexStore->getCategory($slug);
+        if ($cat === null) {
+            return $this->siteWithRootMenu();
+        }
+
+        return $this->fromNostrEvent($cat) ?? $this->siteWithRootMenu();
+    }
+
+    private function fromNostrEvent(Event $e): ?NostrShareMenuContext
+    {
+        $id = strtolower($e->getId());
+        if (64 !== \strlen($id) || !ctype_xdigit($id)) {
+            return null;
+        }
+        $pk = strtolower($e->getPubkey());
+        if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
+            return null;
+        }
+        $kind = (int) $e->getKind();
+        $d = Nip19Addressable::dTagFromEventEntity($e);
+        $npub = $this->nostrKey()->convertPublicKeyToBech32($pk);
+        if (Nip19Addressable::isParameterizedReplaceableKind($kind) && $d !== null) {
+            $naddr = Nip19Addressable::naddrBech32($kind, $pk, $d, []);
+
+            return new NostrShareMenuContext(
+                $npub,
+                null,
+                $naddr,
+                $this->feedJumble($naddr),
+            );
+        }
+        $nevent = (string) Bech32::nevent(
+            id: $id,
+            relays: [],
+            author: $pk,
+            kind: $kind,
+        );
+
+        return new NostrShareMenuContext(
+            $npub,
+            $nevent,
+            null,
+            $this->feedJumble($nevent),
+        );
+    }
+
+    private function siteWithRootMenu(): NostrShareMenuContext
+    {
+        $root = $this->magazineIndexStore->getRoot($this->siteNpub, $this->rootDTag);
+        if (null === $fromRoot = $root ? $this->fromNostrEvent($root) : null) {
+            return new NostrShareMenuContext(
+                $this->siteNpub,
+                null,
+                null,
+                $this->profileJumbleUrl($this->siteNpub),
+            );
+        }
+
+        return $fromRoot;
+    }
+
+    private function profileJumbleUrl(string $npub): string
+    {
+        $b = rtrim($this->jumbleProfileUsersBase, '/');
+
+        return $b === '' ? '#' : $b.'/'.$npub;
+    }
+
+    private function feedJumble(string $naddrOrNeventOrNoteBech32): string
+    {
+        $b = rtrim($this->jumbleFeedNotesBase, '/');
+
+        return $b === '' ? $naddrOrNeventOrNoteBech32 : $b.'/'.$naddrOrNeventOrNoteBech32;
+    }
+}

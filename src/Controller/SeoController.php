@@ -10,6 +10,7 @@ use App\Repository\ArticleRepository;
 use App\Repository\FeaturedAuthorRepository;
 use App\Service\MagazineContentService;
 use App\Service\MagazineIndexStore;
+use App\Service\NostrPathHelper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -31,6 +32,7 @@ final class SeoController extends AbstractController
         private readonly MagazineIndexStore $magazineIndexStore,
         private readonly ParameterBagInterface $params,
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
+        private readonly NostrPathHelper $nostrPathHelper,
     ) {
     }
 
@@ -57,8 +59,12 @@ final class SeoController extends AbstractController
         $articles = $this->articleRepository->findPublishedForSyndication(8000);
         $bySlug = $this->dedupeArticlesByLatestRevision($articles);
         foreach ($bySlug as $article) {
+            $loc = $this->nostrPathHelper->articleAbsoluteUrl($article);
+            if ($loc === '') {
+                continue;
+            }
             $urls[] = [
-                'loc' => $this->absoluteUrlForRoute('article-slug', ['slug' => (string) $article->getSlug()]),
+                'loc' => $loc,
                 'lastmod' => $this->articleLastMod($article),
             ];
         }
@@ -277,7 +283,10 @@ final class SeoController extends AbstractController
         if ($slug === '') {
             return '';
         }
-        $permalink = $this->absoluteUrlForRoute('article-slug', ['slug' => $slug]);
+        $permalink = $this->nostrPathHelper->articleAbsoluteUrl($article);
+        if ($permalink === '') {
+            return '';
+        }
         $title = (string) ($article->getTitle() ?? 'Untitled');
         $tArticle = $this->articleLastMod($article);
         $sum = (string) ($article->getSummary() ?? '');

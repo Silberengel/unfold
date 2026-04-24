@@ -21,7 +21,7 @@
         {% set _og_default_dims = false %}
     {% endif %}
     {% set _desc = article.summary|default('')|striptags|u.truncate(159, '…') %}
-    {% set _canonical = url('article-slug', {slug: article.slug}) %}
+    {% set _canonical = url('article', { npub: npub|default(npub_from_hex(article.pubkey)), slug: article.slug }) %}
     {% set _author_name = '' %}
     {% if author is defined and author %}
         {% set _author_name = attribute(author, 'name')|default(attribute(author, 'display_name')|default('')) %}

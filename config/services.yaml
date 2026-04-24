@@ -45,6 +45,8 @@ services:
         arguments:
             $footerLinksPath: '%footer_links%'
         tags: [ 'twig.extension' ]
+    App\Twig\NostrShareMenuExtension:
+        tags: [ 'twig.extension' ]
     # Nostr index snapshots: distinct key prefix from other cache.app users.
     App\Service\MagazineIndexStore:
         arguments:

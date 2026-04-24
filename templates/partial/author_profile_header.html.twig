@@ -1,4 +1,4 @@
-{# Shared author “header” + about (no article list). Expects: author, npub, profile_*, jumble_profile_href; show_nip05: true on full /p/ profile only #}
+{# Shared author “header” + about (no article list). Expects: author, npub, profile_*; show_nip05: true on full /p/ profile only #}
     {% set author_pic = null %}
     {% if author.picture is defined and author.picture %}
         {% set author_pic = author.picture %}
@@ -77,9 +77,3 @@
                 {{ author.about|markdown_to_html|mentionify|linkify  }}
             {% endif %}
         </div>
-
-        {% if not omit_jumble_button|default(false) and jumble_profile_href is not null and jumble_profile_href != '' %}
-            <p class="author-profile__jumble">
-                <a class="btn btn-secondary" href="{{ jumble_profile_href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">View on Jumble</a>
-            </p>
-        {% endif %}

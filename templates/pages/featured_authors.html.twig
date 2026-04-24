@@ -26,14 +26,9 @@
                         profile_nip05: [],
                         profile_websites: row.profile_websites,
                         profile_payment_links: row.profile_payment_links,
-                        jumble_profile_href: row.jumble_profile_href,
-                        omit_jumble_button: true,
                     } only %}
                 </div>
                 <div class="featured-authors__actions">
-                    {% if row.jumble_profile_href is not null and row.jumble_profile_href != '' %}
-                        <a class="btn btn-secondary" href="{{ row.jumble_profile_href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">View on Jumble</a>
-                    {% endif %}
                     <a class="btn btn-secondary" href="{{ path('author-profile', { npub: row.npub }) }}">Full profile</a>
                 </div>
             </article>
