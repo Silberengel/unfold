@@ -40,6 +40,9 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 	fi
 
 	# DATABASE_URL from Compose / k8s env, or from a local .env file (dev bind-mount).
+	# Project `var/` is often gitignored; create dirs before setfacl so log/cache handlers can always run.
+	mkdir -p var/log var/cache
+
 	if [ -n "${DATABASE_URL:-}" ] || { [ -f .env ] && grep -q ^DATABASE_URL= .env; }; then
 		echo 'Waiting for database to be ready...'
 		ATTEMPTS_LEFT_TO_REACH_DATABASE=60
