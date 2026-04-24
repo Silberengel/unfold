@@ -10,3 +10,9 @@ framework:
         pools:
             #my.dedicated.cache: null
             subscriptions.cache: null
+            # Comment / reply / trackback UI only (not profile, index, or article body).
+            cache.replies:
+                adapter: cache.adapter.filesystem
+            # Unpublished editor preview payloads only.
+            cache.drafts:
+                adapter: cache.adapter.filesystem

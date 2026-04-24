@@ -5,34 +5,33 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Event;
-use Psr\Cache\CacheItemPoolInterface;
-use Psr\Cache\InvalidArgumentException;
+use App\Nostr\MagazineEventKeys;
+use App\Repository\EventRepository;
+use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Read/write persisted magazine Nostr index events (kinds 30040) without callback-based relay I/O
- * on the request path. Updated by {@see MagazineRefresher} (via `app:prewarm` / cron, or explicit CLI use).
+ * Magazine Nostr index events (kind 30040) in MySQL {@see Event}. Updated by {@see MagazineRefresher}
+ * (`app:prewarm` / cron).
  */
 final class MagazineIndexStore
 {
-    private const ROOT_PREFIX = 'mroot_v1_';
-    private const CAT_PREFIX = 'mcat_v1_';
-
-    /** 30 days — we refresh on page load, TTL is a safety cap if sync stops working. */
-    private const PERSIST_TTL = 2_592_000;
-
     public function __construct(
-        private readonly CacheItemPoolInterface $pool,
+        private readonly EntityManagerInterface $entityManager,
+        private readonly EventRepository $eventRepository,
     ) {
     }
 
     public function getRoot(string $npub, string $dTag): ?Event
     {
-        $item = $this->pool->getItem($this->rootKey($npub, $dTag));
-        if (!$item->isHit()) {
+        if ($dTag === '') {
+            return null;
+        }
+        $key = MagazineEventKeys::magazineRoot($npub, $dTag);
+        if ($key === '') {
             return null;
         }
 
-        return $this->unwrap($item->get());
+        return $this->eventRepository->findOneByCoreRowKey($key);
     }
 
     public function getCategory(string $slug): ?Event
@@ -40,85 +39,86 @@ final class MagazineIndexStore
         if ($slug === '') {
             return null;
         }
-        $item = $this->pool->getItem($this->categoryKey($slug));
-        if (!$item->isHit()) {
-            return null;
-        }
+        $key = MagazineEventKeys::magazineCategory($slug);
 
-        return $this->unwrap($item->get());
+        return $this->eventRepository->findOneByCoreRowKey($key);
     }
 
-    /**
-     * @throws InvalidArgumentException
-     */
     public function putRoot(string $npub, string $dTag, Event $event): void
     {
-        $item = $this->pool->getItem($this->rootKey($npub, $dTag));
-        $item->set(serialize($event));
-        $item->expiresAfter(self::PERSIST_TTL);
-        $this->pool->save($item);
+        if ($dTag === '') {
+            return;
+        }
+        $key = MagazineEventKeys::magazineRoot($npub, $dTag);
+        if ($key === '') {
+            return;
+        }
+        $this->replaceByCoreKey($key, Event::STORAGE_MAGAZINE_ROOT, $event);
     }
 
-    /**
-     * @throws InvalidArgumentException
-     */
     public function putCategory(string $slug, Event $event): void
     {
         if ($slug === '') {
             return;
         }
-        $item = $this->pool->getItem($this->categoryKey($slug));
-        $item->set(serialize($event));
-        $item->expiresAfter(self::PERSIST_TTL);
-        $this->pool->save($item);
+        $key = MagazineEventKeys::magazineCategory($slug);
+        $this->replaceByCoreKey($key, Event::STORAGE_MAGAZINE_CATEGORY, $event);
     }
 
-    /**
-     * Remove a cached category index (NIP-09 / local invalidation).
-     *
-     * @throws InvalidArgumentException
-     */
     public function deleteCategory(string $slug): void
     {
         if ($slug === '') {
             return;
         }
-        $this->pool->deleteItem($this->categoryKey($slug));
+        $key = MagazineEventKeys::magazineCategory($slug);
+        $this->removeByCoreKey($key);
     }
 
-    /**
-     * Remove the cached root magazine index for this npub + d_tag.
-     *
-     * @throws InvalidArgumentException
-     */
     public function deleteRoot(string $npub, string $dTag): void
     {
-        $this->pool->deleteItem($this->rootKey($npub, $dTag));
-    }
-
-    private function rootKey(string $npub, string $dTag): string
-    {
-        return self::ROOT_PREFIX.hash('sha256', $npub."\0".$dTag);
-    }
-
-    /**
-     * Category `d` / slug strings may contain colons (NIP-33 `a` segments); PSR-6 keys must not use `{}()/\@:`.
-     */
-    private function categoryKey(string $slug): string
-    {
-        return self::CAT_PREFIX.hash('sha256', $slug);
-    }
-
-    private function unwrap(mixed $value): ?Event
-    {
-        if (!\is_string($value) || $value === '') {
-            return null;
+        if ($dTag === '') {
+            return;
         }
-        $e = unserialize($value, ['allowed_classes' => [Event::class]]);
-        if (!$e instanceof Event) {
-            return null;
-        }
+        $key = MagazineEventKeys::magazineRoot($npub, $dTag);
+        $this->removeByCoreKey($key);
+    }
 
-        return $e;
+    private function replaceByCoreKey(string $coreKey, string $role, Event $incoming): void
+    {
+        $prev = $this->eventRepository->findOneByCoreRowKey($coreKey);
+        if ($prev !== null && $prev->getId() === $incoming->getId()) {
+            $prev->setKind($incoming->getKind());
+            $prev->setPubkey($incoming->getPubkey());
+            $prev->setContent($incoming->getContent());
+            $prev->setCreatedAt($incoming->getCreatedAt());
+            $prev->setTags($incoming->getTags());
+            $prev->setSig($incoming->getSig());
+            $prev->setCoreRowKey($coreKey);
+            $prev->setStorageRole($role);
+            if ($incoming->getEventId() !== null) {
+                $prev->setEventId($incoming->getEventId());
+            }
+            $this->entityManager->flush();
+
+            return;
+        }
+        if ($prev !== null) {
+            $this->entityManager->remove($prev);
+            $this->entityManager->flush();
+        }
+        $incoming->setCoreRowKey($coreKey);
+        $incoming->setStorageRole($role);
+        $this->entityManager->persist($incoming);
+        $this->entityManager->flush();
+    }
+
+    private function removeByCoreKey(string $coreKey): void
+    {
+        $e = $this->eventRepository->findOneByCoreRowKey($coreKey);
+        if ($e === null) {
+            return;
+        }
+        $this->entityManager->remove($e);
+        $this->entityManager->flush();
     }
 }

@@ -647,6 +647,50 @@ class NostrClient
     }
 
     /**
+     * Batched kind-0 fetch: one REQ per chunk; returns latest wire event per author (for DB persistence).
+     *
+     * @param list<string> $authorPubkeyHex
+     * @return array<string, object> Keyed by lowercase 64-hex pubkey
+     */
+    public function fetchKind0WireEventsForAuthors(array $authorPubkeyHex, int $authorsPerRequest = 50): array
+    {
+        $authorPubkeyHex = \array_values(\array_unique(\array_filter(
+            $authorPubkeyHex,
+            static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
+        )));
+        if ($authorPubkeyHex === []) {
+            return [];
+        }
+        $authorsPerRequest = max(1, min(200, $authorsPerRequest));
+        $byPub = [];
+        $relaysTried = $this->profileMetadataQueryRelayUrlList();
+        $relaySet = $this->relaySetForProfileMetadataFetch();
+        $chunks = array_chunk($authorPubkeyHex, $authorsPerRequest);
+        foreach ($chunks as $chunk) {
+            $request = $this->createNostrRequest(
+                kinds: [KindsEnum::METADATA],
+                filters: ['authors' => $chunk],
+                relaySet: $relaySet
+            );
+            $events = $this->processResponse(
+                $request->send(),
+                static fn ($ev) => $ev,
+            );
+            foreach (self::mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
+                if (!\is_object($ev)) {
+                    continue;
+                }
+                $pk = \substr((string) $addr, 2);
+                if (64 === \strlen($pk) && ctype_xdigit($pk)) {
+                    $byPub[strtolower($pk)] = $ev;
+                }
+            }
+        }
+
+        return $byPub;
+    }
+
+    /**
      * NIP-09 kind 5 deletion requests in $since..$until (unix), batched by author pubkey (hex).
      *
      * @param (callable(int, int, int): void)|null $afterChunk 1-based index, total chunks, pubkeys in chunk
@@ -697,6 +741,9 @@ class NostrClient
                 if (!\is_object($ev) || (int) ($ev->kind ?? 0) !== KindsEnum::DELETION_REQUEST->value) {
                     continue;
                 }
+                if (!self::kind5DeletionRelevantToStoredDbData($ev)) {
+                    continue;
+                }
                 $id = (string) ($ev->id ?? '');
                 if (64 !== \strlen($id)) {
                     continue;
@@ -710,6 +757,45 @@ class NostrClient
         }
 
         return array_values($byId);
+    }
+
+    /**
+     * Keep only kind-5 events that (claim to) delete kinds we keep in MySQL: profile, relay list, payto,
+     * long-form, magazine index. Omits thread/reply/comment deletions to shrink relay responses.
+     */
+    private static function kind5DeletionRelevantToStoredDbData(object $ev): bool
+    {
+        static $kinds;
+        if ($kinds === null) {
+            $kinds = [
+                KindsEnum::METADATA->value,
+                KindsEnum::RELAY_LIST->value,
+                KindsEnum::PAYMENT_TARGETS->value,
+                KindsEnum::LONGFORM->value,
+                KindsEnum::LONGFORM_DRAFT->value,
+                KindsEnum::PUBLICATION_INDEX->value,
+            ];
+        }
+        foreach ($ev->tags ?? [] as $tag) {
+            if (!\is_array($tag) && !\is_object($tag)) {
+                continue;
+            }
+            $r = \is_object($tag) ? array_values((array) $tag) : $tag;
+            if (!isset($r[0], $r[1])) {
+                continue;
+            }
+            if ((string) $r[0] === 'k' && \in_array((int) $r[1], $kinds, true)) {
+                return true;
+            }
+            if ((string) $r[0] === 'a') {
+                $parts = explode(':', (string) $r[1], 3);
+                if ($parts !== [] && \in_array((int) $parts[0], $kinds, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1067,44 +1153,69 @@ class NostrClient
     }
 
     /**
-     * @throws \Exception
+     * Merged NIP-65 (kind 10002) event for the author, or null.
      */
-    public function getNpubRelays($npub): array
+    public function getNpubRelayList10002Wire($npub): ?object
     {
-        // Get relays
         $request = $this->createNostrRequest(
             kinds: [KindsEnum::RELAY_LIST],
             filters: ['authors' => [$npub]],
             relaySet: $this->defaultRelaySet
         );
-        $response = $this->processResponse($request->send(), function($received) {
+        $response = $this->processResponse($request->send(), function ($received) {
             return $received;
         });
         if (empty($response)) {
-            return [];
+            return null;
         }
         $merged = self::mergeNip33ParameterizedWireEvents($response);
-        $use = null;
         $k10002 = (int) KindsEnum::RELAY_LIST->value;
         foreach ($merged as $e) {
             if (\is_object($e) && (int) ($e->kind ?? 0) === $k10002) {
-                $use = $e;
-                break;
+                return $e;
             }
         }
+
+        return null;
+    }
+
+    /**
+     * NIP-65: `r` values as wss URLs, excluding localhost.
+     *
+     * @return list<string>
+     */
+    public static function relayWssListFromNip65Object(object $wire): array
+    {
+        $relays = [];
+        foreach ($wire->tags ?? [] as $tag) {
+            if (!\is_array($tag) && !\is_object($tag)) {
+                continue;
+            }
+            $r = \is_object($tag) ? array_values((array) $tag) : $tag;
+            if (!isset($r[0], $r[1])) {
+                continue;
+            }
+            if ((string) $r[0] === 'r') {
+                $relays[] = (string) $r[1];
+            }
+        }
+
+        return array_values(array_filter(array_unique($relays), static function (string $relay) {
+            return str_starts_with($relay, 'wss:') && !str_contains($relay, 'localhost');
+        }));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getNpubRelays($npub): array
+    {
+        $use = $this->getNpubRelayList10002Wire($npub);
         if ($use === null) {
             return [];
         }
-        $relays = [];
-        foreach ($use->tags ?? [] as $tag) {
-            if ($tag[0] === 'r') {
-                $relays[] = $tag[1];
-            }
-        }
-        // Remove duplicates, localhost and any non-wss relays
-        return array_filter(array_unique($relays), function ($relay) {
-            return str_starts_with($relay, 'wss:') && !str_contains($relay, 'localhost');
-        });
+
+        return self::relayWssListFromNip65Object($use);
     }
 
     /**

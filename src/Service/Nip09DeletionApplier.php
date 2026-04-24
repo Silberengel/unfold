@@ -6,7 +6,9 @@ namespace App\Service;
 
 use App\Entity\Event as MagazineNostrEvent;
 use App\Enum\KindsEnum;
+use App\Nostr\MagazineEventKeys;
 use App\Repository\ArticleRepository;
+use App\Repository\EventRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
@@ -15,14 +17,13 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 /**
  * Applies NIP-09 (kind 5) deletion requests to:
  * - MySQL: long-form articles ({@see KindsEnum::LONGFORM} 30023, {@see KindsEnum::LONGFORM_DRAFT} 30024)
- * - Magazine cache: publication indices ({@see KindsEnum::PUBLICATION_INDEX} 30040) in {@see MagazineIndexStore}
+ * - MySQL {@see Event} rows: kind 30040 magazine indices (root + category), kind 0 profile, 10002 relay list, 10133 payto
  *
- * Both are handled for `e` tags (with `k` when present) and for NIP-33 `a` tags.
+ * Handled for `e` tags (with `k` when present) and for NIP-33 `a` tags.
  *
  * Relays are not authoritative; we only remove data we can validate (same pubkey as deletion request).
- * For cached 30040 category indices (keyed by `d` only), we require the stored event’s author
- * to match the deletion — not just an `a` tag whose own pubkey matches, so colliding `d` values
- * across authors cannot wipe another author’s cache entry.
+ * For category 30040 rows (keyed by `d` only), we require the stored event’s author to match the
+ * deletion author so colliding `d` values across authors cannot wipe another author’s index.
  */
 final class Nip09DeletionApplier
 {
@@ -30,6 +31,7 @@ final class Nip09DeletionApplier
         private readonly EntityManagerInterface $entityManager,
         private readonly ArticleRepository $articleRepository,
         private readonly MagazineIndexStore $magazineIndexStore,
+        private readonly EventRepository $eventRepository,
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
     ) {
@@ -73,9 +75,11 @@ final class Nip09DeletionApplier
                         KindsEnum::LONGFORM->value,
                         KindsEnum::LONGFORM_DRAFT->value,
                         KindsEnum::PUBLICATION_INDEX->value,
+                        KindsEnum::METADATA->value,
+                        KindsEnum::RELAY_LIST->value,
+                        KindsEnum::PAYMENT_TARGETS->value,
                         1, // NIP-09 may include kind 1; we do not store notes, but must not treat k as “unknown”
                     ], true)) {
-                    // Other kinds: we do not mirror in this app; skip.
                     continue;
                 }
                 if ($declared === 1) {
@@ -86,7 +90,9 @@ final class Nip09DeletionApplier
                     ++$articlesPendingFlush;
                     continue;
                 }
-                // No DB row: try kind 30040 magazine index by event id; also 30023/24 if not mirrored in DB.
+                if ($this->tryRemoveCoreEventRowByEventId($eId, $deletionPubkey, $declared)) {
+                    continue;
+                }
                 if ($declared === null || \in_array($declared, [
                     KindsEnum::LONGFORM->value,
                     KindsEnum::LONGFORM_DRAFT->value,
@@ -110,12 +116,10 @@ final class Nip09DeletionApplier
             }
         }
 
-        if ($articlesPendingFlush > 0) {
-            try {
-                $this->entityManager->flush();
-            } catch (\Throwable $e) {
-                $this->logger->error('Nip09DeletionApplier: flush failed', ['exception' => $e]);
-            }
+        try {
+            $this->entityManager->flush();
+        } catch (\Throwable $e) {
+            $this->logger->error('Nip09DeletionApplier: flush failed', ['exception' => $e]);
         }
 
         return [
@@ -125,51 +129,84 @@ final class Nip09DeletionApplier
         ];
     }
 
-    /** 0 = none, 1 = root cache, 2 = category cache */
+    /**
+     * Kind 0 / 10002 / 10133 rows in {@see Event} (profile, relay list, payto), by Nostr event id.
+     */
+    private function tryRemoveCoreEventRowByEventId(string $eventId, string $deletionPubkey, ?int $declared): bool
+    {
+        $eid = strtolower($eventId);
+        $e = $this->eventRepository->find($eid);
+        if ($e === null) {
+            return false;
+        }
+        if (!$this->pubkeyEquals($e->getPubkey(), $deletionPubkey)) {
+            return false;
+        }
+        $k = (int) $e->getKind();
+        if ($declared !== null && $declared !== $k) {
+            return false;
+        }
+        if (!\in_array($k, [
+            KindsEnum::METADATA->value,
+            KindsEnum::RELAY_LIST->value,
+            KindsEnum::PAYMENT_TARGETS->value,
+        ], true)) {
+            return false;
+        }
+        if ($k === KindsEnum::METADATA->value) {
+            if ($e->getStorageRole() !== null && $e->getStorageRole() !== MagazineNostrEvent::STORAGE_PROFILE_KIND0) {
+                return false;
+            }
+        } elseif ($k === KindsEnum::RELAY_LIST->value) {
+            if ($e->getStorageRole() !== null && $e->getStorageRole() !== MagazineNostrEvent::STORAGE_RELAY_LIST_10002) {
+                return false;
+            }
+        } elseif ($k === KindsEnum::PAYMENT_TARGETS->value) {
+            if ($e->getStorageRole() !== null && $e->getStorageRole() !== MagazineNostrEvent::STORAGE_PAYTO_10133) {
+                return false;
+            }
+        }
+        $this->entityManager->remove($e);
+        $this->logger->notice('NIP-09: removed core event row', [
+            'event_id' => $eid,
+            'kind' => $k,
+        ]);
+
+        return true;
+    }
+
+    /** 0 = none, 1 = root row, 2 = category row */
     private function tryRemoveMagazine30040ByEventId(string $eventId, string $deletionPubkey): int
     {
-        $npub = (string) $this->params->get('npub');
-        $dTag = (string) $this->params->get('d_tag');
-        if ($npub === '' || $dTag === '') {
+        $eid = strtolower($eventId);
+        $e = $this->eventRepository->find($eid);
+        if ($e === null) {
             return 0;
         }
-        $root = $this->magazineIndexStore->getRoot($npub, $dTag);
-        if ($root === null) {
+        if ((int) $e->getKind() !== KindsEnum::PUBLICATION_INDEX->value) {
             return 0;
         }
-        if ($this->eventIdMatches($root, $eventId) && $this->pubkeyEquals($root->getPubkey(), $deletionPubkey)) {
-            $this->magazineIndexStore->deleteRoot($npub, $dTag);
-            $this->logger->notice('NIP-09: removed cached magazine root index', [
-                'event_id' => $eventId,
+        if (!$this->pubkeyEquals($e->getPubkey(), $deletionPubkey)) {
+            return 0;
+        }
+        if ($e->getStorageRole() === MagazineNostrEvent::STORAGE_MAGAZINE_ROOT) {
+            $this->entityManager->remove($e);
+            $this->logger->notice('NIP-09: removed magazine root index (event table)', [
+                'event_id' => $eid,
             ]);
 
             return 1;
         }
-        foreach ($this->categorySlugsFromRoot($root) as $slug) {
-            $cat = $this->magazineIndexStore->getCategory($slug);
-            if ($cat === null) {
-                continue;
-            }
-            if ($this->eventIdMatches($cat, $eventId) && $this->pubkeyEquals($cat->getPubkey(), $deletionPubkey)) {
-                $this->magazineIndexStore->deleteCategory($slug);
-                $this->logger->notice('NIP-09: removed cached magazine category index', [
-                    'event_id' => $eventId,
-                    'slug' => $slug,
-                ]);
+        if ($e->getStorageRole() === MagazineNostrEvent::STORAGE_MAGAZINE_CATEGORY) {
+            $this->entityManager->remove($e);
+            $this->logger->notice('NIP-09: removed magazine category index (event table)', [
+                'event_id' => $eid,
+            ]);
 
-                return 2;
-            }
+            return 2;
         }
 
         return 0;
-    }
-
-    private function eventIdMatches(MagazineNostrEvent $e, string $eventId): bool
-    {
-        $a = strtolower($e->getId());
-        $b = strtolower($eventId);
-
-        return $a === $b;
     }
 
     private function pubkeyEquals(string $a, string $b): bool
@@ -179,29 +216,6 @@ final class Nip09DeletionApplier
         }
 
         return strtolower($a) === strtolower($b);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function categorySlugsFromRoot(MagazineNostrEvent $root): array
-    {
-        $slugs = [];
-        foreach ($root->getTags() as $tag) {
-            if (($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
-                continue;
-            }
-            $parts = explode(':', (string) $tag[1], 3);
-            if (\count($parts) < 3) {
-                continue;
-            }
-            $s = trim((string) end($parts));
-            if ($s !== '' && !\in_array($s, $slugs, true)) {
-                $slugs[] = $s;
-            }
-        }
-
-        return $slugs;
     }
 
     /**
@@ -261,11 +275,50 @@ final class Nip09DeletionApplier
         $kind = (int) $parts[0];
         $pk = (string) $parts[1];
         $d = trim((string) $parts[2]);
-        if ($d === '' || !$this->pubkeyEquals($pk, $deletionPubkey)) {
+        if (!$this->pubkeyEquals($pk, $deletionPubkey)) {
+            return $out;
+        }
+
+        if ($kind === KindsEnum::METADATA->value) {
+            if ($d !== '' && $d !== '0') {
+                return $out;
+            }
+            $row = $this->eventRepository->findOneByCoreRowKey(MagazineEventKeys::profileKind0(strtolower($pk)));
+            if ($row !== null && (int) $row->getKind() === KindsEnum::METADATA->value) {
+                $this->entityManager->remove($row);
+                $this->logger->notice('NIP-09: removed profile row (a tag)', ['address' => $addr]);
+            }
+
+            return $out;
+        }
+
+        if ($kind === KindsEnum::RELAY_LIST->value) {
+            $row = $this->eventRepository->findOneByCoreRowKey(MagazineEventKeys::relayList10002(strtolower($pk)));
+            if ($row !== null && (int) $row->getKind() === KindsEnum::RELAY_LIST->value) {
+                $this->entityManager->remove($row);
+                $this->logger->notice('NIP-09: removed relay list row (a tag)', ['address' => $addr]);
+            }
+
+            return $out;
+        }
+
+        if ($kind === KindsEnum::PAYMENT_TARGETS->value) {
+            if ($d === '') {
+                return $out;
+            }
+            $row = $this->eventRepository->findOneByCoreRowKey(MagazineEventKeys::payto10133(strtolower($pk), $d));
+            if ($row !== null && (int) $row->getKind() === KindsEnum::PAYMENT_TARGETS->value) {
+                $this->entityManager->remove($row);
+                $this->logger->notice('NIP-09: removed payto 10133 row (a tag)', ['address' => $addr]);
+            }
+
             return $out;
         }
 
         if ($kind === KindsEnum::LONGFORM->value || $kind === KindsEnum::LONGFORM_DRAFT->value) {
+            if ($d === '') {
+                return $out;
+            }
             $article = $this->articleRepository->findOneBy(['pubkey' => $pk, 'slug' => $d]);
             if ($article !== null) {
                 $eid = (string) ($article->getEventId() ?? '');

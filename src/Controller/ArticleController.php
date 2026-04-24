@@ -295,7 +295,6 @@ class ArticleController  extends AbstractController
         string $slug,
         EntityManagerInterface $entityManager,
         CacheService $cacheService,
-        CacheItemPoolInterface $articlesCache,
         Converter $converter,
         ArticleCommentThreadLoader $commentThreadLoader
     ): Response
@@ -312,7 +311,6 @@ class ArticleController  extends AbstractController
         return $this->renderArticle(
             $article,
             $cacheService,
-            $articlesCache,
             $converter,
             $commentThreadLoader
         );
@@ -363,19 +361,13 @@ class ArticleController  extends AbstractController
     private function renderArticle(
         Article $article,
         CacheService $cacheService,
-        CacheItemPoolInterface $articlesCache,
         Converter $converter,
         ArticleCommentThreadLoader $commentThreadLoader
     ): Response {
         set_time_limit(300); // 5 minutes
         ini_set('max_execution_time', '300');
 
-        $cacheKey = 'article_'.$article->getId();
-        $cacheItem = $articlesCache->getItem($cacheKey);
-        if (!$cacheItem->isHit()) {
-            $cacheItem->set($converter->convertToHtml($article->getContent()));
-            $articlesCache->save($cacheItem);
-        }
+        $html = $converter->convertToHtml($article->getContent());
 
         $key = new Key();
         $npub = $key->convertPublicKeyToBech32($article->getPubkey());
@@ -406,7 +398,7 @@ class ArticleController  extends AbstractController
             'article' => $article,
             'author' => $author,
             'npub' => $npub,
-            'content' => $cacheItem->get(),
+            'content' => $html,
             'comments_data' => $commentsData,
             'comments_preloaded' => $commentsPreloaded,
         ]);
@@ -421,7 +413,6 @@ class ArticleController  extends AbstractController
         Request $request,
         NostrClient $nostrClient,
         CacheService $cacheService,
-        CacheItemPoolInterface $articlesCache
     ): Response {
         $data = $request->getContent();
         $descriptor = json_decode($data);

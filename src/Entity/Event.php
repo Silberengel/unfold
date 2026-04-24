@@ -2,15 +2,27 @@
 
 namespace App\Entity;
 
+use App\Repository\EventRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Nostr events
+ * Nostr events stored in MySQL (kind-0 profiles, 30040 indices, kind-3 relay lists, etc.).
+ * Ephemeral reply/comment UI data must not use this table.
  */
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: EventRepository::class)]
 class Event
 {
+    public const STORAGE_MAGAZINE_ROOT = 'magazine_root';
+
+    public const STORAGE_MAGAZINE_CATEGORY = 'magazine_category';
+
+    public const STORAGE_PROFILE_KIND0 = 'profile';
+
+    public const STORAGE_RELAY_LIST_10002 = 'relay_list';
+
+    public const STORAGE_PAYTO_10133 = 'payto_10133';
+
     #[ORM\Id]
     #[ORM\Column(length: 225)]
     private string $id;
@@ -28,6 +40,12 @@ class Event
     private array $tags = [];
     #[ORM\Column(length: 255)]
     private string $sig = '';
+
+    #[ORM\Column(length: 255, unique: true, nullable: true)]
+    private ?string $coreRowKey = null;
+
+    #[ORM\Column(length: 32, nullable: true)]
+    private ?string $storageRole = null;
 
     public function getId(): string
     {
@@ -111,6 +129,25 @@ class Event
         $this->sig = $sig;
     }
 
+    public function getCoreRowKey(): ?string
+    {
+        return $this->coreRowKey;
+    }
+
+    public function setCoreRowKey(?string $coreRowKey): void
+    {
+        $this->coreRowKey = $coreRowKey;
+    }
+
+    public function getStorageRole(): ?string
+    {
+        return $this->storageRole;
+    }
+
+    public function setStorageRole(?string $storageRole): void
+    {
+        $this->storageRole = $storageRole;
+    }
 
     public function getTitle(): ?string
     {

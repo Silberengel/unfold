@@ -1,98 +1,117 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
-use Psr\Cache\CacheItemPoolInterface;
-use Psr\Cache\InvalidArgumentException;
+use App\Entity\Event;
+use App\Nostr\MagazineEventKeys;
+use App\Repository\EventRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
 
 readonly class CacheService
 {
     public function __construct(
-        private NostrClient            $nostrClient,
-        private CacheInterface         $cache,
-        private LoggerInterface        $logger,
-        private CacheItemPoolInterface $appCache,
+        private NostrClient $nostrClient,
+        private EntityManagerInterface $entityManager,
+        private EventRepository $eventRepository,
+        private LoggerInterface $logger,
     ) {
     }
 
-    /**
-     * @param string $npub
-     * @return \stdClass
-     */
     public function getMetadata(string $npub): \stdClass
     {
         return $this->getMetadataBundle($npub)['content'];
     }
 
     /**
-     * Kind-0 content JSON, tags (for payto/website/nip05), and any relay round trip once per cache item.
-     *
      * @return array{content: \stdClass, kind0_tags: list<list<string>>}
      */
     public function getMetadataBundle(string $npub): array
     {
-        // One key per author: do not split on Nostr.Land / aggr (see comment thread cache). Otherwise
-        // prewarm and anonymous hits do not match logged-in readers → cold Nostr on every article view.
-        $cacheKey = '0_'.$npub;
+        $authorHex = $this->npubToAuthorHex64($npub);
+        if ($authorHex === null) {
+            return $this->placeholderMetadataBundle($npub);
+        }
+        $row = $this->eventRepository->findOneByCoreRowKey(MagazineEventKeys::profileKind0($authorHex));
+        if ($row !== null) {
+            return $this->bundleFromKind0EventRow($row, $npub);
+        }
         try {
-            $cached = $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub) {
-                $item->expiresAfter(3600); // 1 hour, adjust as needed
-                try {
-                    $ev = $this->nostrClient->getNpubMetadata($npub);
-                    $tags = self::normalizeEventTagsList($ev->tags ?? null);
-                    try {
-                        $data = \json_decode((string) $ev->content, false, 512, \JSON_THROW_ON_ERROR);
-                    } catch (\JsonException) {
-                        $data = new \stdClass();
-                    }
-                    if (!\is_object($data)) {
-                        $data = new \stdClass();
-                    }
+            $ev = $this->nostrClient->getNpubMetadata($npub);
+            if (!\is_object($ev)) {
+                return $this->placeholderMetadataBundle($npub);
+            }
+            $this->replaceByCoreKey(
+                MagazineEventKeys::profileKind0($authorHex),
+                Event::STORAGE_PROFILE_KIND0,
+                $ev
+            );
+            $tags = self::normalizeEventTagsList($ev->tags ?? null);
+            $content = $this->decodeKind0ContentObject($ev);
+            if ($this->isPlaceholderContent($content, $npub)) {
+                $content = $this->namePlaceholderNpubObject($npub);
+            }
 
-                    return [
-                        'content' => $data,
-                        'kind0_tags' => $tags,
-                    ];
-                } catch (\Exception $e) {
-                    throw new MetadataRetrievalException('Failed to retrieve metadata', 0, $e);
-                }
-            });
-            if (\is_array($cached) && isset($cached['content']) && $cached['content'] instanceof \stdClass) {
-                return [
-                    'content' => $cached['content'],
-                    'kind0_tags' => \is_array($cached['kind0_tags'] ?? null) ? $cached['kind0_tags'] : [],
-                ];
-            }
-            // Legacy: cache stored only the decoded content object
-            if ($cached instanceof \stdClass) {
-                return ['content' => $cached, 'kind0_tags' => []];
-            }
-        } catch (\Exception|InvalidArgumentException $e) {
-            $root = $e->getPrevious() ?? $e;
+            return ['content' => $content, 'kind0_tags' => $tags];
+        } catch (\Exception $e) {
             $this->logger->warning('Profile metadata fetch failed; using npub placeholder.', [
                 'npub' => $npub,
-                'exception' => $root,
+                'exception' => $e->getPrevious() ?? $e,
             ]);
-            $content = new \stdClass();
-            $content->name = substr($npub, 0, 8) . '…' . substr($npub, -4);
-
-            return [
-                'content' => $content,
-                'kind0_tags' => [],
-            ];
         }
 
-        $content = new \stdClass();
-        $content->name = substr($npub, 0, 8) . '…' . substr($npub, -4);
+        return $this->placeholderMetadataBundle($npub);
+    }
 
-        return [
-            'content' => $content,
-            'kind0_tags' => [],
-        ];
+    /**
+     * Prewarm: batch upsert of kind-0 profile rows in {@see Event}.
+     *
+     * @param list<string>            $authorPubkeyHex
+     * @param array<string, object>  $wireByLowerHex from {@see NostrClient::fetchKind0WireEventsForAuthors} (keys are lowercase 64-hex)
+     */
+    public function putPrewarmMetadataBatch(array $authorPubkeyHex, array $wireByLowerHex): int
+    {
+        $n = 0;
+        foreach ($authorPubkeyHex as $hex) {
+            if (64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+                continue;
+            }
+            $h = strtolower($hex);
+            if (!isset($wireByLowerHex[$h]) || !\is_object($wireByLowerHex[$h])) {
+                continue;
+            }
+            $this->replaceByCoreKey(
+                MagazineEventKeys::profileKind0($h),
+                Event::STORAGE_PROFILE_KIND0,
+                $wireByLowerHex[$h]
+            );
+            ++$n;
+        }
+
+        return $n;
+    }
+
+    public function getRelays($npub)
+    {
+        $authorHex = $this->npubToAuthorHex64($npub);
+        if ($authorHex === null) {
+            return [];
+        }
+        $key = MagazineEventKeys::relayList10002($authorHex);
+        $row = $this->eventRepository->findOneByCoreRowKey($key);
+        if ($row !== null) {
+            return self::relayWssListFromNip65Tags($row->getTags());
+        }
+        $wire = $this->nostrClient->getNpubRelayList10002Wire($npub);
+        if ($wire === null) {
+            return [];
+        }
+        $this->replaceByCoreKey($key, Event::STORAGE_RELAY_LIST_10002, $wire);
+
+        return NostrClient::relayWssListFromNip65Object($wire);
     }
 
     /**
@@ -126,75 +145,162 @@ readonly class CacheService
         return $out;
     }
 
-    /**
-     * @param list<string> $authorPubkeyHex
-     * @param array<string, \stdClass> $metadataByHex from {@see NostrClient::fetchKind0MetadataForAuthors}
-     */
-    public function putPrewarmMetadataBatch(array $authorPubkeyHex, array $metadataByHex, Key $key): int
+    private function npubToAuthorHex64(string $npub): ?string
     {
-        $n = 0;
-        foreach ($authorPubkeyHex as $hex) {
-            if (strlen($hex) !== 64) {
-                continue;
+        if (64 === \strlen($npub) && ctype_xdigit($npub)) {
+            return strtolower($npub);
+        }
+        if (str_starts_with($npub, 'npub1')) {
+            try {
+                $h = (new Key())->convertToHex($npub);
+            } catch (\Throwable) {
+                $h = '';
             }
-            $npub = $key->convertPublicKeyToBech32($hex);
-            if (isset($metadataByHex[$hex]) && $metadataByHex[$hex] instanceof \stdClass) {
-                $this->putProfileInCache($npub, $metadataByHex[$hex]);
-            } else {
-                $this->putProfilePlaceholderInCache($npub);
+            if (64 === \strlen((string) $h) && ctype_xdigit((string) $h)) {
+                return strtolower($h);
             }
-            ++$n;
         }
 
-        return $n;
+        return null;
     }
 
-    public function getRelays($npub)
+    private function replaceByCoreKey(string $coreKey, string $storageRole, object $rawWire): void
     {
-        $cacheKey = '3_' . $npub;
-        try {
-            return $this->cache->get($cacheKey, function (ItemInterface $item) use ($npub) {
-                $item->expiresAfter(3600); // 1 hour
-                try {
-                    return $this->nostrClient->getNpubRelays($npub);
-                } catch (\Exception $e) {
-                    $this->logger->error('Error getting relays.', ['exception' => $e]);
-                    return [];
-                }
-            });
-        } catch (InvalidArgumentException $e) {
-            $this->logger->error('Error getting relay data.', ['exception' => $e]);
-            return [];
+        $entity = $this->wireToEventEntity($rawWire);
+        if ($entity === null) {
+            return;
         }
-    }
-
-    private function putProfileInCache(string $npub, \stdClass $content): void
-    {
-        try {
-            $item = $this->appCache->getItem('0_'.$npub);
-            $item->set($content);
-            $item->expiresAfter(3600);
-            $this->appCache->save($item);
-        } catch (InvalidArgumentException $e) {
-            $this->logger->error('putProfileInCache', ['npub' => $npub, 'exception' => $e]);
+        $entity->setCoreRowKey($coreKey);
+        $entity->setStorageRole($storageRole);
+        if ($entity->getEventId() === null) {
+            $entity->setEventId($entity->getId());
         }
-    }
-
-    private function putProfilePlaceholderInCache(string $npub): void
-    {
-        try {
-            $item = $this->appCache->getItem('0_'.$npub);
-            if ($item->isHit()) {
-                // Prewarm miss: keep an earlier good (or any) value — do not downgrade to placeholder.
-                return;
+        $prev = $this->eventRepository->findOneByCoreRowKey($coreKey);
+        if ($prev !== null && $prev->getId() === $entity->getId()) {
+            $prev->setKind($entity->getKind());
+            $prev->setPubkey($entity->getPubkey());
+            $prev->setContent($entity->getContent());
+            $prev->setCreatedAt($entity->getCreatedAt());
+            $prev->setTags($entity->getTags());
+            $prev->setSig($entity->getSig());
+            $prev->setCoreRowKey($coreKey);
+            $prev->setStorageRole($storageRole);
+            if ($entity->getEventId() !== null) {
+                $prev->setEventId($entity->getEventId());
             }
-        } catch (InvalidArgumentException $e) {
-            $this->logger->error('putProfilePlaceholderInCache', ['npub' => $npub, 'exception' => $e]);
+            $this->entityManager->flush();
 
             return;
         }
+        if ($prev !== null) {
+            $this->entityManager->remove($prev);
+            $this->entityManager->flush();
+        }
+        $this->entityManager->persist($entity);
+        $this->entityManager->flush();
+    }
+
+    private function wireToEventEntity(object $raw): ?Event
+    {
+        try {
+            $data = json_decode(json_encode($raw, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!\is_array($data)) {
+            return null;
+        }
+        $id = (string) ($data['id'] ?? '');
+        if (64 !== \strlen($id) || !ctype_xdigit($id)) {
+            return null;
+        }
+        $e = new Event();
+        $e->setId(strtolower($id));
+        $e->setEventId(strtolower($id));
+        $e->setKind((int) ($data['kind'] ?? 0));
+        $e->setPubkey(strtolower((string) ($data['pubkey'] ?? '')));
+        $e->setContent((string) ($data['content'] ?? ''));
+        $e->setCreatedAt((int) ($data['created_at'] ?? 0));
+        $tags = $data['tags'] ?? [];
+        $e->setTags(\is_array($tags) ? $tags : []);
+        $e->setSig((string) ($data['sig'] ?? ''));
+
+        return $e;
+    }
+
+    private function bundleFromKind0EventRow(Event $row, string $npub): array
+    {
+        $content = $this->decodeKind0ContentString($row->getContent());
+        if (!\is_object($content) || $this->isPlaceholderContent($content, $npub)) {
+            $content = $this->namePlaceholderNpubObject($npub);
+        }
+
+        return [
+            'content' => $content,
+            'kind0_tags' => self::normalizeEventTagsList($row->getTags()),
+        ];
+    }
+
+    private function decodeKind0ContentObject(object $ev): \stdClass
+    {
+        return $this->decodeKind0ContentString((string) ($ev->content ?? ''));
+    }
+
+    private function decodeKind0ContentString(string $raw): \stdClass
+    {
+        try {
+            $data = \json_decode($raw, false, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return new \stdClass();
+        }
+        if (!\is_object($data)) {
+            return new \stdClass();
+        }
+
+        return $data;
+    }
+
+    private function isPlaceholderContent(\stdClass $content, string $npub): bool
+    {
+        $n = (string) ($content->name ?? '');
+
+        return $n === substr($npub, 0, 8).'…'.substr($npub, -4);
+    }
+
+    private function namePlaceholderNpubObject(string $npub): \stdClass
+    {
         $c = new \stdClass();
         $c->name = substr($npub, 0, 8).'…'.substr($npub, -4);
-        $this->putProfileInCache($npub, $c);
+
+        return $c;
+    }
+
+    private function placeholderMetadataBundle(string $npub): array
+    {
+        return [
+            'content' => $this->namePlaceholderNpubObject($npub),
+            'kind0_tags' => [],
+        ];
+    }
+
+    /**
+     * @param list<list<string>>|array $tags
+     * @return list<string>
+     */
+    private static function relayWssListFromNip65Tags(array $tags): array
+    {
+        $relays = [];
+        foreach ($tags as $tag) {
+            if (!\is_array($tag) || !isset($tag[0], $tag[1])) {
+                continue;
+            }
+            if ((string) $tag[0] === 'r') {
+                $relays[] = (string) $tag[1];
+            }
+        }
+
+        return array_filter(array_unique($relays), static function (string $relay) {
+            return str_starts_with($relay, 'wss:') && !str_contains($relay, 'localhost');
+        });
     }
 }

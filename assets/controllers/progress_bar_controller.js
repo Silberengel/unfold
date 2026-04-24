@@ -7,8 +7,10 @@ export default class extends Controller {
   static targets = ['bar'];
 
   connect() {
-    this.boundHandleInteraction = this.handleInteraction.bind(this);
-    this.boundPageShow = this.onPageShow.bind(this);
+    // Bind once per controller instance so reconnects match disconnect()'s
+    // removeEventListener; new .bind() references each connect() would leave stale listeners.
+    this.boundHandleInteraction ??= this.handleInteraction.bind(this);
+    this.boundPageShow ??= this.onPageShow.bind(this);
     document.addEventListener('click', this.boundHandleInteraction);
     document.addEventListener('touchstart', this.handleTouchStart);
     document.addEventListener('touchend', this.handleTouchEnd);

@@ -319,8 +319,8 @@ final class PrewarmCommand extends Command
                 $bar->start();
                 try {
                     foreach (array_chunk($toWarm, $batchSize) as $chunk) {
-                        $fetched = $this->nostrClient->fetchKind0MetadataForAuthors($chunk, $batchSize);
-                        $n += $this->cacheService->putPrewarmMetadataBatch($chunk, $fetched, $keys);
+                        $fetched = $this->nostrClient->fetchKind0WireEventsForAuthors($chunk, $batchSize);
+                        $n += $this->cacheService->putPrewarmMetadataBatch($chunk, $fetched);
                         $bar->advance(\count($chunk));
                         $p0 = (string) ($chunk[0] ?? '');
                         $bar->setMessage('Batch up to · '.substr($p0, 0, 8).'…');
