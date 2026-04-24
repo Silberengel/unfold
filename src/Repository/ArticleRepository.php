@@ -110,11 +110,12 @@ class ArticleRepository extends ServiceEntityRepository
         $qb = $this->createQueryBuilder('a');
         $orX = $qb->expr()->orX();
         foreach ($pairs as $i => $p) {
+            $pkQ = strtolower((string) $p['pubkey']);
             $orX->add($qb->expr()->andX(
                 $qb->expr()->eq('a.pubkey', ':pk'.$i),
                 $qb->expr()->eq('a.slug', ':sl'.$i)
             ));
-            $qb->setParameter('pk'.$i, $p['pubkey']);
+            $qb->setParameter('pk'.$i, $pkQ);
             $qb->setParameter('sl'.$i, $p['slug']);
         }
         $qb->where($orX);
@@ -123,7 +124,7 @@ class ArticleRepository extends ServiceEntityRepository
         $rows = $qb->getQuery()->getResult();
         $out = [];
         foreach ($rows as $a) {
-            $pk = (string) $a->getPubkey();
+            $pk = strtolower((string) $a->getPubkey());
             $sl = trim((string) $a->getSlug());
             if ($sl !== '') {
                 $out[$pk."\0".$sl] = $a;

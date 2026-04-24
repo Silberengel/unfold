@@ -38,17 +38,25 @@ final class NostrShareMenuBuilder
         $npub = $key->convertPublicKeyToBech32($pubkeyHex);
         $kind = (int) ($event->kind ?? 0);
         $d = self::dTagFromWireEvent($event);
+        $eventIdHex = strtolower((string) ($event->id ?? ''));
         if (Nip19Addressable::isParameterizedReplaceableKind($kind) && $d !== null) {
             $naddr = Nip19Addressable::naddrBech32($kind, $pubkeyHex, $d, $relayHints);
+            $neventForRev = (64 === \strlen($eventIdHex) && ctype_xdigit($eventIdHex))
+                ? (string) Bech32::nevent(
+                    id: $eventIdHex,
+                    relays: $relayHints,
+                    author: $pubkeyHex,
+                    kind: $kind,
+                )
+                : null;
 
             return new NostrShareMenuContext(
                 $npub,
-                null,
+                $neventForRev,
                 $naddr,
                 $this->feedJumble($naddr),
             );
         }
-        $eventIdHex = strtolower((string) ($event->id ?? ''));
         if (64 === \strlen($eventIdHex) && ctype_xdigit($eventIdHex)) {
             $rebuilt = (string) Bech32::nevent(
                 id: $eventIdHex,
@@ -87,8 +95,6 @@ final class NostrShareMenuBuilder
         $request->attributes->set(self::ATTR_NPUB, $ctx->npub);
         if ($ctx->naddrBech32 !== null && $ctx->naddrBech32 !== '') {
             $request->attributes->set(self::ATTR_NADDR_BECH32, $ctx->naddrBech32);
-
-            return;
         }
         if ($ctx->neventBech32 !== null && $ctx->neventBech32 !== '') {
             $request->attributes->set(self::ATTR_NEVENT_BECH32, $ctx->neventBech32);
@@ -205,10 +211,19 @@ final class NostrShareMenuBuilder
         }
         $pk = strtolower((string) $article->getPubkey());
         $naddr = Nip19Addressable::naddrBech32($kind, $pk, $d, []);
+        $eid = strtolower((string) ($article->getEventId() ?? ''));
+        $nevent = (64 === \strlen($eid) && ctype_xdigit($eid))
+            ? (string) Bech32::nevent(
+                id: $eid,
+                relays: [],
+                author: $pk,
+                kind: $kind,
+            )
+            : null;
 
         return new NostrShareMenuContext(
             $npub,
-            null,
+            $nevent,
             $naddr,
             $this->feedJumble($naddr),
         );
@@ -231,27 +246,23 @@ final class NostrShareMenuBuilder
 
     private function forNevent(Request $request, string $neventFromRoute): NostrShareMenuContext
     {
-        if ($request->attributes->has(self::ATTR_NPUB) && $request->attributes->has(self::ATTR_NADDR_BECH32)) {
-            $naddr = (string) $request->attributes->get(self::ATTR_NADDR_BECH32);
+        if ($request->attributes->has(self::ATTR_NPUB)
+            && ($request->attributes->has(self::ATTR_NADDR_BECH32) || $request->attributes->has(self::ATTR_NEVENT_BECH32))) {
             $np = (string) $request->attributes->get(self::ATTR_NPUB);
+            $naddrRaw = $request->attributes->get(self::ATTR_NADDR_BECH32);
+            $naddr = \is_string($naddrRaw) && $naddrRaw !== '' ? $naddrRaw : null;
+            $neventRaw = $request->attributes->get(self::ATTR_NEVENT_BECH32);
+            $nb = \is_string($neventRaw) && $neventRaw !== '' ? $neventRaw : null;
+            if (null !== $naddr || null !== $nb) {
+                $jumble = $this->feedJumble($naddr ?? $nb);
 
-            return new NostrShareMenuContext(
-                $np,
-                null,
-                $naddr,
-                $this->feedJumble($naddr),
-            );
-        }
-        if ($request->attributes->has(self::ATTR_NPUB) && $request->attributes->has(self::ATTR_NEVENT_BECH32)) {
-            $nb = (string) $request->attributes->get(self::ATTR_NEVENT_BECH32);
-            $np = (string) $request->attributes->get(self::ATTR_NPUB);
-
-            return new NostrShareMenuContext(
-                $np,
-                $nb,
-                null,
-                $this->feedJumble($nb),
-            );
+                return new NostrShareMenuContext(
+                    $np,
+                    $nb,
+                    $naddr,
+                    $jumble,
+                );
+            }
         }
 
         $nevent = $neventFromRoute;
@@ -331,10 +342,16 @@ final class NostrShareMenuBuilder
         $npub = $this->nostrKey()->convertPublicKeyToBech32($pk);
         if (Nip19Addressable::isParameterizedReplaceableKind($kind) && $d !== null) {
             $naddr = Nip19Addressable::naddrBech32($kind, $pk, $d, []);
+            $neventForRev = (string) Bech32::nevent(
+                id: $id,
+                relays: [],
+                author: $pk,
+                kind: $kind,
+            );
 
             return new NostrShareMenuContext(
                 $npub,
-                null,
+                $neventForRev,
                 $naddr,
                 $this->feedJumble($naddr),
             );

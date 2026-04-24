@@ -1,4 +1,5 @@
 {% if article is defined %}
+    {% set card_title = article.title|default('')|trim %}
     <div class="card">
         <div class="metadata">
             {% if category %}
@@ -14,11 +15,11 @@
             <div class="card-header">
                 {% if category %}<small class="text-uppercase">{{ category }}</small>{% endif %}
                 {% if article.image %}
-                    <img src="{{ article.image }}" alt="Cover image for {{ article.title }}" onerror="this.style.display='none';" >
+                    <img src="{{ article.image }}" alt="Cover image for {{ card_title != '' ? card_title : (article.slug|default('')) }}" onerror="this.style.display='none';" >
                 {% endif %}
             </div>
             <div class="card-body">
-                    <h2 class="card-title">{{ article.title }}</h2>
+                    <h2 class="card-title">{% if card_title != '' %}{{ card_title }}{% else %}{{ article.slug|default('')|replace({'-': ' '})|title }}{% endif %}</h2>
                     {% if article.summary %}
                         <p class="lede">
                             {{ article.summary }}

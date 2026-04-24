@@ -39,8 +39,13 @@ final class MagazineRefresher
     }
 
     /**
-     * Fetches the root index then each category index until $budgetSeconds elapses. $preferSlugs
-     * are requested first (e.g. current /cat route) so they are less likely to miss the budget.
+     * Fetches the root 30040, then each category 30040. The soft wall-time budget applies to the
+     * **category phase only** (after the root is stored). The root fetch is not counted against that
+     * window—otherwise a slow root can consume the entire default budget and no category would be
+     * refreshed (stale per-category cache while the root looks current).
+     *
+     * $preferSlugs are requested first (e.g. current /cat route) so they are less likely to miss
+     * the category budget if the slug list is long.
      *
      * @param (callable(string, array<string, int|string|bool|null>): void)|null $onProgress
      *        Phases: `before_root`, `after_root` (total_steps, step, slug_count, slugs: list<string>),
@@ -50,15 +55,12 @@ final class MagazineRefresher
     {
         // Allow large budgets (PrewarmCommand --magazine-budget). Hard cap only to avoid runaway PHP time.
         $budgetSeconds = max(1, min(600, $budgetSeconds));
-        $deadline = microtime(true) + $budgetSeconds;
         $npub = (string) $this->params->get('npub');
         $dTag = (string) $this->params->get('d_tag');
         $preferFromEnv = $this->parseCommaSeparatedSlugs($this->magazinePrewarmPreferSlugs);
 
-        // Do not set max_execution_time to the *remaining* soft budget: PHP resets the timer, so
-        // after a 6s root fetch, "2s left" would become a 2s hard cap for the *next* relay I/O
-        // (e.g. slow TLS) and can fatal. Cap once with headroom; the $deadline loop limits work.
-        $this->applyExecutionTimeCap($budgetSeconds);
+        // Allow enough PHP wall time for a slow root fetch plus the full category-phase budget.
+        $this->applyExecutionTimeCap(2 * $budgetSeconds);
 
         $defaultRelay = (string) $this->params->get('default_relay');
         $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
@@ -85,6 +87,8 @@ final class MagazineRefresher
         }
 
         $this->store->putRoot($npub, $dTag, $root);
+
+        $deadline = microtime(true) + $budgetSeconds;
 
         $mergedPrefer = $this->mergePreferSlugsInOrder($preferSlugs, $preferFromEnv);
         $alsoFromEnv = $this->parseCommaSeparatedSlugs($this->magazinePrewarmAlsoSlugs);

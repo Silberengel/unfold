@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Dto;
 
 /**
- * Nostr "⋯" share menu: copy npub; copy nevent or naddr (Jumble uses the same bech in /feed/notes/…).
- * Addressable (NIP-33) long-form / index events: prefer naddr; one-off stateless events: nevent.
+ * Nostr "⋯" share menu: copy npub; copy naddr and/or nevent (Jumble /feed/notes/… uses the naddr when present, else nevent).
+ * For NIP-33 replaceable events, both can be set: naddr is the coordinate, nevent is the specific revision.
  */
 final class NostrShareMenuContext
 {

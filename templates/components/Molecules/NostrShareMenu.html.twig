@@ -24,7 +24,8 @@
                     data-copy-text-text-value="{{ share.naddrBech32|e('html_attr') }}">
                     <button type="button" class="nostr-share-menu__action" data-action="click->copy-text#copy" data-copy-text-target="button" role="menuitem">Copy naddr</button>
                 </li>
-            {% elseif share.neventBech32 is not null and share.neventBech32 is not same as('') %}
+            {% endif %}
+            {% if share.neventBech32 is not null and share.neventBech32 is not same as('') %}
                 <li class="nostr-share-menu__item" role="none"
                     data-controller="copy-text"
                     data-copy-text-text-value="{{ share.neventBech32|e('html_attr') }}">

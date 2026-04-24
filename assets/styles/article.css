@@ -40,12 +40,22 @@
     align-items: flex-start;
     gap: 0.75rem;
     flex-wrap: wrap;
+    /* .card-header { overflow: hidden } would clip the ⋯ dropdown; following siblings can paint on top. */
+    overflow: visible;
+    position: relative;
+    z-index: 5;
 }
 
 .card-header--article .card-title {
     flex: 1 1 12rem;
     min-width: 0;
     margin: 0;
+}
+
+/* Sibling .category-body would paint over the ⋯ popover; lift the title card above the list. */
+.category-page__header-card {
+    position: relative;
+    z-index: 6;
 }
 
 .card.comment .metadata.comment-card__head {

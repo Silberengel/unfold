@@ -29,6 +29,13 @@
 {% endblock %}
 
 {% block body %}
+    <div class="card category-page__header-card">
+        <div class="card-header card-header--article">
+            <h1 class="card-title">{{ (category.title|default('')|trim) != '' ? category.title : 'Category' }}</h1>
+            {% set _cat_share = nostr_share_menu() %}
+            {% if _cat_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _cat_share, event_menu: true } only %}{% endif %}
+        </div>
+    </div>
     <div class="category-body">
         <twig:Organisms:CardList :list="list" class="article-list" />
     </div>

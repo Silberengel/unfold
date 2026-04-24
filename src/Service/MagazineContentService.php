@@ -236,7 +236,7 @@ final class MagazineContentService
                     continue;
                 }
                 $pairs[] = [
-                    'pubkey' => (string) $parts[1],
+                    'pubkey' => strtolower((string) $parts[1]),
                     'slug' => $slugPart,
                 ];
             }
@@ -246,7 +246,7 @@ final class MagazineContentService
                 if (\count($parts) < 3) {
                     continue;
                 }
-                $k = (string) $parts[1]."\0".trim((string) $parts[2]);
+                $k = strtolower((string) $parts[1])."\0".trim((string) $parts[2]);
                 if (isset($byAddress[$k])) {
                     $list[] = $byAddress[$k];
                 }

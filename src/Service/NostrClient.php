@@ -2441,8 +2441,13 @@ class NostrClient
     }
 
     /**
-     * NIP-33: among relay results for a single (kind, author, d) filter, keep the live revision per
-     * {@see wireEventSupersedes}.
+     * NIP-33: from merged relay results, the event at the replaceable address kind:pubkeyLower:d.
+     * Uses {@see mergeNip33ParameterizedWireEvents} so every relay’s copies collapse to the live
+     * revision the same way everywhere; then we match the requested address only.
+     *
+     * (Older logic reimplemented “merge” by hand and had a fallback that could return a **different**
+     * 30040 (wrong #d) when the expected address key did not line up, which surfaced as “stale”
+     * category indices even when a newer note existed on a relay such as TheForest.)
      *
      * @param list<mixed> $events
      */
@@ -2457,42 +2462,25 @@ class NostrClient
         }
         $wantD = trim($dTag);
         $expectedAddr = (string) $expectedKind.':'.$authorHexLower.':'.$wantD;
-        $byAddress = [];
-        foreach ($events as $e) {
-            $addr = self::nip33ParameterizedReplaceableAddress($e);
-            if ($addr === null) {
-                continue;
-            }
-            if (strtolower(self::magazineEventPubkeyHex($e)) !== $authorHexLower) {
-                continue;
-            }
-            if (self::eventDTagValue($e) !== $wantD) {
+
+        $merged = self::mergeNip33ParameterizedWireEvents($events);
+        foreach ($merged as $e) {
+            if (!\is_object($e)) {
                 continue;
             }
             if (self::magazineEventKind($e) !== $expectedKind) {
                 continue;
             }
-            if (!isset($byAddress[$addr]) || self::wireEventSupersedes($e, $byAddress[$addr])) {
-                $byAddress[$addr] = $e;
+            if (strtolower(self::magazineEventPubkeyHex($e)) !== $authorHexLower) {
+                continue;
             }
-        }
-        if ($byAddress === []) {
-            return null;
-        }
-        if (isset($byAddress[$expectedAddr])) {
-            return $byAddress[$expectedAddr];
-        }
-        if (\count($byAddress) === 1) {
-            return $byAddress[array_key_first($byAddress)];
-        }
-        $best = null;
-        foreach ($byAddress as $e) {
-            if ($best === null || self::wireEventSupersedes($e, $best)) {
-                $best = $e;
+            $addr = self::nip33ParameterizedReplaceableAddress($e);
+            if ($addr === $expectedAddr) {
+                return $e;
             }
         }
 
-        return $best;
+        return null;
     }
 
     /**
