@@ -56,9 +56,9 @@ COPY --link frankenphp/Caddyfile /etc/caddy/Caddyfile
 
 ENTRYPOINT ["docker-entrypoint"]
 
-# Hit the public HTTP server, not Caddy :2019 admin (not always available the same way in all setups).
+# App liveness: GET /health (no DB/Nostr; see HealthController)
 HEALTHCHECK --interval=10s --timeout=5s --retries=6 --start-period=120s \
-	CMD curl -fsS http://127.0.0.1/ -o /dev/null || exit 1
+	CMD curl -fsS http://127.0.0.1/health -o /dev/null || exit 1
 CMD [ "frankenphp", "run", "--config", "/etc/caddy/Caddyfile" ]
 
 # Dev FrankenPHP image

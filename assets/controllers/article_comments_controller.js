@@ -62,6 +62,10 @@ export default class extends Controller {
                     throw new Error(`HTTP ${res.status}`);
                 }
                 const html = await res.text();
+                if (!this.hasContainerTarget) {
+                    window.clearTimeout(timer);
+                    return;
+                }
                 this.containerTarget.innerHTML = html;
                 const ms = Math.round(performance.now() - t0);
                 if (attempt > 1) {
@@ -76,12 +80,17 @@ export default class extends Controller {
                 if (attempt < maxAttempts) {
                     const delay = 1_200 * 2 ** (attempt - 1);
                     await new Promise((r) => setTimeout(r, delay));
+                    if (!this.hasContainerTarget) {
+                        return;
+                    }
                     continue;
                 }
                 const ms = Math.round(performance.now() - t0);
                 console.warn(`[article-comments] fragment failed after ${ms}ms`, this.urlValue, err);
-                this.containerTarget.innerHTML =
-                    '<p class="text-subtle">Comments could not be loaded.</p>';
+                if (this.hasContainerTarget) {
+                    this.containerTarget.innerHTML =
+                        '<p class="text-subtle">Comments could not be loaded.</p>';
+                }
             }
         }
     }

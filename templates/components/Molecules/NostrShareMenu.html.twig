@@ -1,8 +1,14 @@
-{% set share = nostr_share_menu() %}
+{% if share is not defined %}
+    {% set share = nostr_share_menu() %}
+{% endif %}
 {% if share is not null %}
-    <details class="nostr-share-menu">
+    <details class="nostr-share-menu{{ event_menu|default(false) ? ' nostr-share-menu--event' : '' }}">
         <summary class="nostr-share-menu__trigger btn btn-secondary btn-sm" title="Nostr options" aria-label="Nostr options">
-            <span class="nostr-share-menu__label">Nostr</span><span class="nostr-share-menu__glyph" aria-hidden="true">⋯</span>
+            {% if event_menu|default(false) %}
+                <span class="nostr-share-menu__glyph" aria-hidden="true">⋯</span>
+            {% else %}
+                <span class="nostr-share-menu__label">Nostr</span><span class="nostr-share-menu__glyph" aria-hidden="true">⋯</span>
+            {% endif %}
         </summary>
         <ul class="nostr-share-menu__list" role="menu">
             {% if share.npub is not null and share.npub is not same as('') %}

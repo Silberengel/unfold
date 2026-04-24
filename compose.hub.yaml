@@ -41,8 +41,9 @@ services:
       - "${HTTP_PUBLISH:-9080}:80/tcp"
     # Caddy/FrankenPHP only listen after the entrypoint finishes DB wait + migrations — allow a slow
     # first MySQL + migrate on a small host (avoids "unhealthy" + failed `up` for dependents).
+    # Liveness: GET /health (see HealthController), not /.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/", "-o", "/dev/null"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 10

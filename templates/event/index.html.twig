@@ -29,6 +29,8 @@
             {% endif %}
             <div class="event-page__meta">
                 <span class="event-date">{{ event.created_at|date('F j, Y - H:i') }}</span>
+                {% set _ep_share = nostr_event_share(event) %}
+                {% if _ep_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _ep_share, event_menu: true } only %}{% endif %}
             </div>
         </div>
         <div class="event-page__content">

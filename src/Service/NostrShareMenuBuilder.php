@@ -25,21 +25,28 @@ final class NostrShareMenuBuilder
 
     public const string ATTR_NADDR_BECH32 = 'nostr_share_naddr_bech32';
 
-    public static function applyWireEventToRequest(Request $request, object $event, array $relayHints = []): void
+    /**
+     * NIP-19 + Jumble href for a wire event (replies, quotes, previews, /e/ page).
+     */
+    public function shareContextFromWireEvent(object $event, array $relayHints = []): ?NostrShareMenuContext
     {
         $pubkeyHex = strtolower((string) ($event->pubkey ?? ''));
         if (64 !== \strlen($pubkeyHex) || !ctype_xdigit($pubkeyHex)) {
-            return;
+            return null;
         }
         $key = new Key();
-        $request->attributes->set(self::ATTR_NPUB, $key->convertPublicKeyToBech32($pubkeyHex));
+        $npub = $key->convertPublicKeyToBech32($pubkeyHex);
         $kind = (int) ($event->kind ?? 0);
         $d = self::dTagFromWireEvent($event);
         if (Nip19Addressable::isParameterizedReplaceableKind($kind) && $d !== null) {
             $naddr = Nip19Addressable::naddrBech32($kind, $pubkeyHex, $d, $relayHints);
-            $request->attributes->set(self::ATTR_NADDR_BECH32, $naddr);
 
-            return;
+            return new NostrShareMenuContext(
+                $npub,
+                null,
+                $naddr,
+                $this->feedJumble($naddr),
+            );
         }
         $eventIdHex = strtolower((string) ($event->id ?? ''));
         if (64 === \strlen($eventIdHex) && ctype_xdigit($eventIdHex)) {
@@ -49,7 +56,42 @@ final class NostrShareMenuBuilder
                 author: $pubkeyHex,
                 kind: $kind,
             );
-            $request->attributes->set(self::ATTR_NEVENT_BECH32, $rebuilt);
+
+            return new NostrShareMenuContext(
+                $npub,
+                $rebuilt,
+                null,
+                $this->feedJumble($rebuilt),
+            );
+        }
+
+        return new NostrShareMenuContext(
+            $npub,
+            null,
+            null,
+            $this->profileJumbleUrl($npub),
+        );
+    }
+
+    public function shareContextForArticle(Article $article): NostrShareMenuContext
+    {
+        return $this->fromArticle($article);
+    }
+
+    public function applyWireEventToRequest(Request $request, object $event, array $relayHints = []): void
+    {
+        $ctx = $this->shareContextFromWireEvent($event, $relayHints);
+        if (null === $ctx || null === $ctx->npub) {
+            return;
+        }
+        $request->attributes->set(self::ATTR_NPUB, $ctx->npub);
+        if ($ctx->naddrBech32 !== null && $ctx->naddrBech32 !== '') {
+            $request->attributes->set(self::ATTR_NADDR_BECH32, $ctx->naddrBech32);
+
+            return;
+        }
+        if ($ctx->neventBech32 !== null && $ctx->neventBech32 !== '') {
+            $request->attributes->set(self::ATTR_NEVENT_BECH32, $ctx->neventBech32);
         }
     }
 

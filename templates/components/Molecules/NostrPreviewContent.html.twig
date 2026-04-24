@@ -1,5 +1,11 @@
 {% if preview.type == 'naddr' %}
     <div class="card nostr-address-preview">
+        {% set _na_share = nostr_event_share(preview) %}
+        {% if _na_share %}
+            <div class="nostr-preview-card__menu">
+                {% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _na_share, event_menu: true } only %}
+            </div>
+        {% endif %}
         {% for tag in preview.tags %}
             {% if tag[0] == 'title' %}
                 <div class="card-header">
@@ -18,7 +24,11 @@
                 <div>
                     <twig:Molecules:UserFromNpub ident="{{ preview.pubkey }}" />
                 </div>
-                <span class="ui-badge ui-badge--brand">Highlight</span>
+                <div class="nostr-card-header__actions">
+                    <span class="ui-badge ui-badge--brand">Highlight</span>
+                    {% set _hi_share = nostr_event_share(preview) %}
+                    {% if _hi_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _hi_share, event_menu: true } only %}{% endif %}
+                </div>
             </div>
             <div class="card-body">
                 <p>{{ preview.content }}</p>
@@ -56,11 +66,15 @@
                 <div>
                     <twig:Molecules:UserFromNpub ident="{{ preview.pubkey }}" />
                 </div>
-                {% if is_longform %}
-                    <span class="ui-badge ui-badge--secondary">Article</span>
-                {% else %}
-                    <span class="ui-badge ui-badge--primary">Note</span>
-                {% endif %}
+                <div class="nostr-card-header__actions">
+                    {% if is_longform %}
+                        <span class="ui-badge ui-badge--secondary">Article</span>
+                    {% else %}
+                        <span class="ui-badge ui-badge--primary">Note</span>
+                    {% endif %}
+                    {% set _evp_share = nostr_event_share(preview) %}
+                    {% if _evp_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _evp_share, event_menu: true } only %}{% endif %}
+                </div>
             </div>
             <div class="card-body">
                 {% if is_longform %}
@@ -83,6 +97,12 @@
     {% endif %}
 {% elseif preview.type == 'nprofile' %}
     <div class="card nostr-profile-preview">
+        {% set _pr_share = nostr_event_share(preview) %}
+        {% if _pr_share %}
+            <div class="nostr-preview-card__menu">
+                {% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _pr_share, event_menu: true } only %}
+            </div>
+        {% endif %}
         <div class="card-body nostr-profile-preview__body">
             <h5 class="card-title">{{ preview.display_name ?: preview.name }} </h5>
             <small class="text-subtle">@{{ preview.npub|shortenNpub }}</small>

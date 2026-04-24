@@ -88,6 +88,12 @@
 }
 
 .event-page__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
     color: var(--color-text-mid);
     font-size: 0.95rem;
 }

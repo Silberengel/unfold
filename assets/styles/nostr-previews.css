@@ -85,6 +85,12 @@
     gap: 0.35rem;
 }
 
+.nostr-preview-card__menu {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.35rem;
+}
+
 .nostr-previews h6 {
     font-size: 0.9rem;
     margin-bottom: 1rem;

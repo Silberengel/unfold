@@ -68,8 +68,10 @@
     {% endif %}
 
     <div class="card">
-        <div class="card-header">
+        <div class="card-header card-header--article">
             <h1 class="card-title">{{ article.title }}</h1>
+            {% set _art_share = nostr_event_share(article) %}
+            {% if _art_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _art_share, event_menu: true } only %}{% endif %}
         </div>
         {% if author %}
             <div class="byline">

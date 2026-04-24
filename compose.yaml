@@ -4,10 +4,10 @@ services:
     build:
         context: .
         dockerfile: Dockerfile
-    # Overrides Dockerfile HEALTHCHECK: verify Caddy/FrankenPHP serves the app (not Caddy :2019 admin,
-    # which is unreliable for “ready”). `docker compose up --wait` requires this to pass.
+    # Overrides Dockerfile HEALTHCHECK: lightweight app route (see HealthController), not / (magazine + relays).
+    # `docker compose up --wait` requires this to pass.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/", "-o", "/dev/null"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 6

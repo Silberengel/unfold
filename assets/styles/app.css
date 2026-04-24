@@ -894,6 +894,14 @@ label.search {
     gap: 0.5rem;
 }
 
+.nostr-card-header__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .ui-badge {
     display: inline-block;
     padding: 0.2rem 0.55rem;

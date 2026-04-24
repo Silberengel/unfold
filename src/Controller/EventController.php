@@ -31,6 +31,7 @@ class EventController extends AbstractController
         NostrClient $nostrClient,
         CacheService $cacheService,
         NostrLinkParser $nostrLinkParser,
+        NostrShareMenuBuilder $nostrShareMenuBuilder,
         LoggerInterface $logger,
     ): Response {
         $logger->info('Accessing event page', ['nevent' => $nevent]);
@@ -96,7 +97,7 @@ class EventController extends AbstractController
                 throw new NotFoundHttpException('Event not found');
             }
 
-            NostrShareMenuBuilder::applyWireEventToRequest($request, $event, $relays);
+            $nostrShareMenuBuilder->applyWireEventToRequest($request, $event, $relays);
 
             // Parse event content for Nostr links
             $nostrLinks = [];

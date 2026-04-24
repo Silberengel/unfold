@@ -161,6 +161,12 @@ a.nostr-share-menu__action {
     color: var(--color-primary, inherit);
 }
 
+.nostr-share-menu--event .nostr-share-menu__trigger {
+    min-width: auto;
+    padding: 0.15rem 0.4rem;
+    font-size: 1rem;
+}
+
 .header__logo {
     display: flex;
     width: 100%;
