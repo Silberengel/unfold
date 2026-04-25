@@ -1,0 +1,15 @@
+{% if labels is defined and labels is not empty %}
+    <section class="sidebar-top-topics" aria-label="{{ 'sidebar.topics'|trans }}">
+        <h2 class="sidebar-top-topics__title">{{ 'sidebar.topics'|trans }}</h2>
+        <ul class="sidebar-top-topics__list" role="list">
+            {% for label in labels %}
+                <li>
+                    <a
+                        class="topic-badge sidebar-top-topics__link"
+                        href="{{ path('topic', { topic: label }) }}"
+                    >{{ label }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </section>
+{% endif %}

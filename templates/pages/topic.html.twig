@@ -1,0 +1,36 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ topic_label }} — {{ website_name }}{% endblock %}
+
+{% block meta_description %}
+    <meta name="description" content="{{ ('Articles tagged ' ~ topic_label ~ ' on ' ~ website_name)|e('html_attr') }}">
+{% endblock %}
+
+{% block nav %}{% endblock %}
+
+{% block body %}
+    <div class="search-page topic-page">
+        <h1 class="topic-page__title">{{ topic_label }}</h1>
+        <p class="topic-page__lede text-subtle">{{ 'topic.browse'|trans }}</p>
+
+        {% if list is not empty %}
+            <twig:Organisms:CardList :list="list" class="article-list"/>
+        {% else %}
+            <p class="text-subtle">{{ 'topic.empty'|trans }}</p>
+        {% endif %}
+
+        {% if pagination is defined and pagination.last_page > 1 %}
+            {% set _page = pagination.page|default(1) %}
+            {% set _last = pagination.last_page|default(1) %}
+            {% set _prev_url = _page > 1 ? path('topic', _page > 2 ? { topic: topic_param, page: _page - 1 } : { topic: topic_param }) : null %}
+            {% set _next_url = _page < _last ? path('topic', { topic: topic_param, page: _page + 1 }) : null %}
+            {% include 'components/Molecules/Pagination.html.twig' with {
+                page: _page,
+                last_page: _last,
+                prev_url: _prev_url,
+                next_url: _next_url,
+                aria_label: 'Topic pagination',
+            } only %}
+        {% endif %}
+    </div>
+{% endblock %}

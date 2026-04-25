@@ -1,5 +1,9 @@
 sidebar:
     featured_authors: 'Featured authors'
+    topics: 'Topics'
+topic:
+    browse: 'Articles with this tag'
+    empty: 'No published articles with this tag yet.'
 text:
     byline: 'By'
     search: 'Search...'

@@ -632,6 +632,36 @@ final class MagazineContentService
     }
 
     /**
+     * Article slugs that appear in any home “featured” block (per-category first pages), for topic ranking.
+     *
+     * @param list<array<int, string>> $categoryATags
+     *
+     * @return list<string>
+     */
+    public function collectFeaturedArticleSlugsForHome(array $categoryATags): array
+    {
+        $out = [];
+        foreach ($categoryATags as $row) {
+            $coord = $row[1] ?? '';
+            if (!\is_string($coord) || $coord === '') {
+                continue;
+            }
+            $b = $this->buildCategoryFeaturedBlock($coord);
+            if ($b === null) {
+                continue;
+            }
+            foreach ($b['cards'] as $card) {
+                $s = \trim((string) $card->getSlug());
+                if ($s !== '') {
+                    $out[$s] = true;
+                }
+            }
+        }
+
+        return array_keys($out);
+    }
+
+    /**
      * Interleaves up to four articles per home category in round-robin order (one “wall” mixing all topics).
      * Duplicate slugs across categories are skipped so each article appears at most once.
      *

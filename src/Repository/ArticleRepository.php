@@ -247,4 +247,88 @@ class ArticleRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Published or archived long-form with at least one stored topic, matched case-insensitively.
+     * Ordered newest first. Uses an in-process filter; suitable for moderate table sizes.
+     *
+     * @return list<Article>
+     */
+    public function findPublishedByTopic(string $topic, int $limit, int $offset): array
+    {
+        $all = $this->articlesMatchingTopicNormalized(
+            $this->normalizeTopicLabel($topic)
+        );
+
+        return \array_slice($all, $offset, $limit);
+    }
+
+    public function countPublishedByTopic(string $topic): int
+    {
+        return \count(
+            $this->articlesMatchingTopicNormalized(
+                $this->normalizeTopicLabel($topic)
+            )
+        );
+    }
+
+    /**
+     * @return list<Article>
+     */
+    private function articlesMatchingTopicNormalized(string $topicKey): array
+    {
+        if ($topicKey === '') {
+            return [];
+        }
+        $qb = $this->createQueryBuilder('a')
+            ->where('a.topics IS NOT NULL')
+            ->andWhere('a.content IS NOT NULL')
+            ->andWhere('LENGTH(a.content) > 250')
+            ->andWhere('a.eventStatus IN (:st)')
+            ->setParameter('st', [EventStatusEnum::PUBLISHED, EventStatusEnum::ARCHIVED])
+            ->orderBy('a.createdAt', 'DESC');
+
+        /** @var list<Article> $candidates */
+        $candidates = $qb->getQuery()->getResult();
+        $out = [];
+        foreach ($candidates as $a) {
+            $topics = $a->getTopics();
+            if (!\is_array($topics) || $topics === []) {
+                continue;
+            }
+            foreach ($topics as $t) {
+                if (!\is_string($t)) {
+                    continue;
+                }
+                $k = $this->normalizeTopicLabel($t);
+                if ($k === $topicKey) {
+                    $out[] = $a;
+                    break;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Public key for {@see findPublishedByTopic} and generating `/topic/…` URLs.
+     */
+    public function normalizeTopicParam(string $topic): string
+    {
+        return $this->normalizeTopicLabel($topic);
+    }
+
+    private function normalizeTopicLabel(string $topic): string
+    {
+        $t = \strtolower(\trim($topic));
+        if ($t === '') {
+            return '';
+        }
+        if (\str_starts_with($t, '#')) {
+            $t = ltrim($t, '#');
+        }
+
+        return \trim($t);
+    }
 }

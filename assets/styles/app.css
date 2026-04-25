@@ -683,7 +683,8 @@ footer a {
     gap: 10px;        /* Adds spacing between individual tags */
 }
 
-/* Individual tag */
+/* Individual tag (spans on non-article pages, links on article body) */
+a.tag,
 .tag {
     background-color: var(--color-bg-light);
     color: var(--color-text-mid);
@@ -693,19 +694,34 @@ footer a {
     cursor: pointer;             /* Cursor turns to pointer for clickable tags */
     text-decoration: none;       /* Removes any text decoration (e.g., underline) */
     display: inline-block;       /* Makes sure each tag behaves like a block with padding */
-    transition: background-color 0.3s ease; /* Smooth hover effect */
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/*!* Hover effect for tags *!*/
-/*.tag:hover {*/
-/*    color: var(--color-text-contrast);*/
-/*}*/
+a.tag:hover,
+a.tag:focus-visible {
+    background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-light));
+    color: var(--color-primary);
+    text-decoration: none;
+}
 
 /* Optional: Responsive adjustments for smaller screens */
 @media (max-width: 768px) {
     .tag {
         font-size: 0.8em;        /* Slightly smaller text for mobile */
     }
+}
+
+.topic-page__title {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0 0 0.35rem;
+    font-family: var(--heading-font), serif;
+}
+
+.topic-page__lede {
+    margin: 0 0 1.5rem;
+    font-size: 0.95rem;
 }
 
 

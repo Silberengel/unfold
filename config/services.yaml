@@ -49,6 +49,8 @@ services:
         tags: [ 'twig.extension' ]
     App\Twig\MagazineJumbleExtension:
         tags: [ 'twig.extension' ]
+    App\Twig\TopTopicsExtension:
+        tags: [ 'twig.extension' ]
     App\Service\MagazineRefresher:
         arguments:
             $appCache: '@cache.app'
