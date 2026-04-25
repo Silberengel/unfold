@@ -302,6 +302,174 @@ final class MagazineContentService
     }
 
     /**
+     * Human-readable prewarm/audit data: what each cached category index (30040) lists and which
+     * coordinates are unresolved in local MySQL `article`.
+     *
+     * @return array{
+     *   categories: list<array{
+     *     slug: string,
+     *     title: string,
+     *     event_id: string,
+     *     listed_total: int,
+     *     resolved_total: int,
+     *     missing_total: int,
+     *     entries: list<array{
+     *       coordinate: string,
+     *       status: 'resolved'|'missing',
+     *       reason: string,
+     *       article_title?: string,
+     *       article_slug?: string
+     *     }>
+     *   }>,
+     *   totals: array{categories: int, listed: int, resolved: int, missing: int}
+     * }
+     */
+    public function buildCategoryArticleDbCoverageReport(): array
+    {
+        $categories = [];
+        $totListed = 0;
+        $totResolved = 0;
+        $totMissing = 0;
+        foreach ($this->getCategorySlugsFromStore() as $slug) {
+            $catIndex = $this->store->getCategory($slug);
+            if ($catIndex === null) {
+                continue;
+            }
+            $title = $slug;
+            $coords = [];
+            foreach ($catIndex->getTags() as $tag) {
+                $seq = NostrEventTags::rowToStringList($tag);
+                if ($seq === null) {
+                    continue;
+                }
+                $name = strtolower((string) ($seq[0] ?? ''));
+                if ($name === 'title' && isset($seq[1]) && trim((string) $seq[1]) !== '') {
+                    $title = trim((string) $seq[1]);
+                }
+                if ($name === 'a' && isset($seq[1]) && trim((string) $seq[1]) !== '') {
+                    $coords[] = trim((string) $seq[1]);
+                }
+            }
+            $coords = array_values(array_unique($coords));
+            $pairs = [];
+            foreach ($coords as $coordinate) {
+                $parts = explode(':', $coordinate, 3);
+                if (\count($parts) < 3) {
+                    continue;
+                }
+                $pub = strtolower(trim((string) $parts[1]));
+                $d = trim((string) $parts[2]);
+                if ($d === '' || 64 !== \strlen($pub) || !ctype_xdigit($pub)) {
+                    continue;
+                }
+                $pairs[] = ['pubkey' => $pub, 'slug' => $d];
+            }
+            $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
+            $entries = [];
+            $resolved = 0;
+            $missing = 0;
+            foreach ($coords as $coordinate) {
+                $parts = explode(':', $coordinate, 3);
+                if (\count($parts) < 3) {
+                    $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'malformed_coordinate'];
+                    $missing++;
+
+                    continue;
+                }
+                $kind = (int) ($parts[0] ?? 0);
+                if (!\in_array($kind, [30023, 30024], true)) {
+                    $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'unsupported_kind'];
+                    $missing++;
+
+                    continue;
+                }
+                $pub = strtolower(trim((string) $parts[1]));
+                $d = trim((string) $parts[2]);
+                if (64 !== \strlen($pub) || !ctype_xdigit($pub)) {
+                    $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'invalid_pubkey'];
+                    $missing++;
+
+                    continue;
+                }
+                if ($d === '') {
+                    $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'empty_identifier'];
+                    $missing++;
+
+                    continue;
+                }
+                $k = $pub."\0".$d;
+                if (!isset($byAddress[$k])) {
+                    $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'article_not_in_db'];
+                    $missing++;
+
+                    continue;
+                }
+                $article = $byAddress[$k];
+                $entries[] = [
+                    'coordinate' => $coordinate,
+                    'status' => 'resolved',
+                    'reason' => 'ok',
+                    'article_title' => (string) ($article->getTitle() ?? ''),
+                    'article_slug' => (string) ($article->getSlug() ?? ''),
+                ];
+                $resolved++;
+            }
+            $listed = \count($coords);
+            $totListed += $listed;
+            $totResolved += $resolved;
+            $totMissing += $missing;
+            $categories[] = [
+                'slug' => $slug,
+                'title' => $title,
+                'event_id' => $catIndex->getId(),
+                'listed_total' => $listed,
+                'resolved_total' => $resolved,
+                'missing_total' => $missing,
+                'entries' => $entries,
+            ];
+        }
+
+        return [
+            'categories' => $categories,
+            'totals' => [
+                'categories' => \count($categories),
+                'listed' => $totListed,
+                'resolved' => $totResolved,
+                'missing' => $totMissing,
+            ],
+        ];
+    }
+
+    /**
+     * @param array{
+     *   categories: list<array{
+     *     entries: list<array{coordinate: string, status: string, reason: string}>
+     *   }>
+     * } $report
+     * @return list<string>
+     */
+    public function missingInDbCoordinatesFromCoverageReport(array $report): array
+    {
+        $out = [];
+        foreach ($report['categories'] ?? [] as $cat) {
+            foreach ($cat['entries'] ?? [] as $entry) {
+                if (($entry['status'] ?? '') !== 'missing') {
+                    continue;
+                }
+                if (($entry['reason'] ?? '') !== 'article_not_in_db') {
+                    continue;
+                }
+                $coord = isset($entry['coordinate']) ? (string) $entry['coordinate'] : '';
+                if ($coord !== '') {
+                    $out[] = $coord;
+                }
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
      * @return list<string> Nostr coordinates kind:pubkey:identifier
      */
     private function findAllLongformCoordinatesForCategory(string $slug): array

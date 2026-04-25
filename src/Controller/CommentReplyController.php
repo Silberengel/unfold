@@ -54,7 +54,12 @@ final class CommentReplyController extends AbstractController
                 $commentThreadLoader->invalidateThread($coord, 64 === \strlen((string) $eid) && ctype_xdigit((string) $eid) ? $eid : null);
             }
 
-            return $this->json(['ok' => true, 'id' => $out['id']]);
+            return $this->json([
+                'ok' => true,
+                'id' => $out['id'],
+                'ok_relays' => $out['ok_relays'] ?? null,
+                'total_relays' => $out['total_relays'] ?? null,
+            ]);
         }
 
         /** @var array{ok: false, error: string, code: int} $out */

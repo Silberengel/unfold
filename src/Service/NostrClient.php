@@ -918,15 +918,33 @@ class NostrClient
     public function publishEvent(Event $event, array $relays): array
     {
         $eventMessage = new EventMessage($event);
-        $relaySet = new RelaySet();
+        $results = [];
         foreach ($relays as $relayWss) {
-            $relay = new Relay($relayWss);
-            $relaySet->addRelay($relay);
+            if (!\is_string($relayWss) || $relayWss === '') {
+                continue;
+            }
+            try {
+                $relaySet = new RelaySet();
+                $relaySet->addRelay(new Relay($relayWss));
+                $relaySet->setMessage($eventMessage);
+                $this->applyRelaySocketTimeoutToSet($relaySet);
+                $sent = $relaySet->send();
+                if (\is_array($sent) && \array_key_exists($relayWss, $sent)) {
+                    $results[$relayWss] = $sent[$relayWss];
+                } else {
+                    $results[$relayWss] = $sent;
+                }
+            } catch (\Throwable $e) {
+                $this->logger->warning('nostr.publish.relay_failed', [
+                    'relay' => $relayWss,
+                    'error' => $e->getMessage(),
+                    'exception_class' => \get_class($e),
+                ]);
+                $results[$relayWss] = $e;
+            }
         }
-        $relaySet->setMessage($eventMessage);
-        $this->applyRelaySocketTimeoutToSet($relaySet);
-        // TODO handle responses appropriately
-        return $relaySet->send();
+
+        return $results;
     }
 
     /**

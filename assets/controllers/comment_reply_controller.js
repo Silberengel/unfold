@@ -109,10 +109,23 @@ export default class extends Controller {
         }
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            this.setHint(data.error || `HTTP ${res.status}`);
+            const msg = data.error || `HTTP ${res.status}`;
+            this.setHint(msg);
+            this.showToast(msg, 'error');
             return;
         }
-        this.setHint('Published.');
+        const okRelaysRaw = Number(data.ok_relays);
+        const totalRelaysRaw = Number(data.total_relays);
+        const okRelays = Number.isFinite(okRelaysRaw) ? okRelaysRaw : null;
+        const totalRelays = Number.isFinite(totalRelaysRaw) ? totalRelaysRaw : null;
+        const successMsg =
+            okRelays !== null && totalRelays !== null
+                ? `Published to ${okRelays}/${totalRelays} relays.`
+                : 'Published.';
+        this.setHint(successMsg);
+        this.showToast(successMsg, 'success');
+        // Keep form content until the success toast is visible.
+        await new Promise((r) => window.setTimeout(r, 180));
         if (ta) {
             ta.value = '';
         }
@@ -202,5 +215,21 @@ export default class extends Controller {
         if (this.hasHintTarget) {
             this.hintTarget.textContent = msg;
         }
+    }
+
+    showToast(message, tone = 'success') {
+        const el = document.createElement('div');
+        el.className = `reply-toast reply-toast--${tone === 'error' ? 'error' : 'success'}`;
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.textContent = message;
+        document.body.appendChild(el);
+        window.setTimeout(() => {
+            el.classList.add('reply-toast--visible');
+        }, 10);
+        window.setTimeout(() => {
+            el.classList.remove('reply-toast--visible');
+            window.setTimeout(() => el.remove(), 220);
+        }, 2600);
     }
 }

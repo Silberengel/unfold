@@ -379,7 +379,9 @@ final readonly class ArticleCommentThreadLoader
                 continue;
             }
             $name = (string) $row[0];
-            if ($name !== 'a' && $name !== 'A') {
+            // Use only direct lowercase `a` tags here; uppercase `A` is often thread-root context.
+            // Nested replies should derive blurbs from the direct `e` parent (handled via parentOf fallback).
+            if ($name !== 'a') {
                 continue;
             }
             $coord = (string) $row[1];

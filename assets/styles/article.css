@@ -338,3 +338,35 @@ blockquote p {
     font-size: 0.9rem;
     margin: 0.5rem 0 0;
 }
+
+.reply-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.2rem;
+    transform: translateX(-50%) translateY(8px);
+    z-index: 1200;
+    min-width: 16rem;
+    max-width: min(92vw, 32rem);
+    padding: 0.55rem 0.85rem;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    background: var(--color-bg);
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.reply-toast--visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.reply-toast--success {
+    border-color: #2f7a4b;
+    background: #e7f5eb;
+}
+
+.reply-toast--error {
+    border-color: #a12b2b;
+    background: #fdecec;
+}

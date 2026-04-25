@@ -174,15 +174,6 @@ final class PrewarmCommand extends Command
             }
         } else {
             $io->note('Skipping magazine (--no-magazine).');
-            try {
-                $fa = $this->featuredAuthorSync->syncNewAuthorsFromMagazineCategories();
-                if ($fa > 0) {
-                    $io->writeln(sprintf('   Featured authors: added <info>%d</info> new NIP-05 row(s) from the cached category index.', $fa));
-                }
-            } catch (\Throwable $e) {
-                $this->logger->warning('app:prewarm featured author sync (no-magazine)', ['e' => $e->getMessage()]);
-                $io->warning('Featured author sync failed: '.$e->getMessage());
-            }
         }
 
         $io->section('Long-form in DB (category `a` tags — refresh from Nostr)');
@@ -193,9 +184,39 @@ final class PrewarmCommand extends Command
             } else {
                 $io->writeln(sprintf('Fetched latest long-form for <info>%d</info> coordinate(s) (new rows + NIP-33 updates).', $n));
             }
+            $report = $this->magazineContent->buildCategoryArticleDbCoverageReport();
+            $missingCoords = $this->magazineContent->missingInDbCoordinatesFromCoverageReport($report);
+            $attempt = 0;
+            while ($missingCoords !== [] && $attempt < 2) {
+                $attempt++;
+                $io->writeln(sprintf(
+                    'Retrying unresolved category coordinates from relays (attempt <info>%d</info>, coordinates: <comment>%d</comment>)…',
+                    $attempt,
+                    \count($missingCoords)
+                ));
+                $this->nostrClient->ingestLongformForCategoryCoordinates($missingCoords);
+                $report = $this->magazineContent->buildCategoryArticleDbCoverageReport();
+                $missingCoords = $this->magazineContent->missingInDbCoordinatesFromCoverageReport($report);
+            }
+            $this->printCategoryCoverageSummary($io, $report);
         } catch (\Throwable $e) {
             $this->logger->error('app:prewarm longform ingest failed', ['e' => $e]);
             $io->warning('Long-form backfill failed: '.$e->getMessage());
+        }
+
+        $io->section('Featured authors / NIP-05 source list');
+        try {
+            $fa = $this->featuredAuthorSync->reconcileListedAuthorsFromMagazineCategories();
+            $io->writeln(sprintf(
+                'Derived from category `a` tags: listed now <info>%d</info> · added <info>%d</info> · relisted <info>%d</info> · unlisted <comment>%d</comment>',
+                $fa['listed_total'],
+                $fa['added'],
+                $fa['relisted'],
+                $fa['unlisted'],
+            ));
+        } catch (\Throwable $e) {
+            $this->logger->warning('app:prewarm featured author reconcile', ['e' => $e->getMessage()]);
+            $io->warning('Featured author reconcile failed: '.$e->getMessage());
         }
 
         // MagazineRefresher sets max_execution_time (budget + headroom); restore before metadata.
@@ -555,5 +576,69 @@ final class PrewarmCommand extends Command
     {
         @set_time_limit(0);
         @ini_set('max_execution_time', '0');
+    }
+
+    /**
+     * @param array{
+     *   categories: list<array{
+     *     slug: string,
+     *     title: string,
+     *     event_id: string,
+     *     listed_total: int,
+     *     resolved_total: int,
+     *     missing_total: int,
+     *     entries: list<array{
+     *       coordinate: string,
+     *       status: string,
+     *       reason: string,
+     *       article_title?: string
+     *     }>
+     *   }>,
+     *   totals: array{categories: int, listed: int, resolved: int, missing: int}
+     * } $report
+     */
+    private function printCategoryCoverageSummary(SymfonyStyle $io, array $report): void
+    {
+        $io->section('Category index -> DB coverage');
+        $tot = $report['totals'] ?? ['categories' => 0, 'listed' => 0, 'resolved' => 0, 'missing' => 0];
+        $io->writeln(sprintf(
+            'Categories: <info>%d</info> · listed coordinates: <info>%d</info> · in DB: <info>%d</info> · missing: <comment>%d</comment>',
+            (int) ($tot['categories'] ?? 0),
+            (int) ($tot['listed'] ?? 0),
+            (int) ($tot['resolved'] ?? 0),
+            (int) ($tot['missing'] ?? 0),
+        ));
+        foreach ($report['categories'] ?? [] as $cat) {
+            $title = trim((string) ($cat['title'] ?? ''));
+            $slug = (string) ($cat['slug'] ?? '');
+            $eventId = (string) ($cat['event_id'] ?? '');
+            $io->writeln(sprintf(
+                ' - <info>%s</info> (%s) · event <comment>%s</comment> · listed <info>%d</info>, in DB <info>%d</info>, missing <comment>%d</comment>',
+                $title !== '' ? $title : $slug,
+                $slug,
+                $eventId !== '' ? $eventId : 'n/a',
+                (int) ($cat['listed_total'] ?? 0),
+                (int) ($cat['resolved_total'] ?? 0),
+                (int) ($cat['missing_total'] ?? 0),
+            ));
+            foreach ($cat['entries'] ?? [] as $entry) {
+                $coord = (string) ($entry['coordinate'] ?? '');
+                if ($coord === '') {
+                    continue;
+                }
+                $status = (string) ($entry['status'] ?? 'missing');
+                if ($status === 'resolved') {
+                    $titleOut = trim((string) ($entry['article_title'] ?? ''));
+                    $io->writeln(sprintf(
+                        '    + <info>OK</info> %s%s',
+                        $coord,
+                        $titleOut !== '' ? ' -> '.$titleOut : ''
+                    ));
+                } else {
+                    $reason = (string) ($entry['reason'] ?? 'unknown');
+                    $io->writeln(sprintf('    - <comment>MISSING</comment> %s (%s)', $coord, $reason));
+                }
+            }
+        }
     }
 }

@@ -11,8 +11,8 @@ use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 
 /**
- * Adds {@see FeaturedAuthor} rows for pubkeys found in magazine category indices; assigns
- * unique NIP-05 local-parts from kind-0 name when possible. Does not remove or re-list rows.
+ * Reconciles {@see FeaturedAuthor} rows with pubkeys found in magazine category `a` tags.
+ * The listed set is derived from current category indices during prewarm.
  */
 final class FeaturedAuthorSync
 {
@@ -26,34 +26,87 @@ final class FeaturedAuthorSync
     }
 
     /**
-     * @return int Number of newly persisted authors
+     * @return array{added: int, relisted: int, unlisted: int, listed_total: int}
+     */
+    public function reconcileListedAuthorsFromMagazineCategories(): array
+    {
+        $pubkeys = $this->magazineContent->getAllDistinctCategoryAuthorPubkeyHexes();
+        $target = [];
+        foreach ($pubkeys as $hex) {
+            $h = strtolower(trim($hex));
+            if (64 === \strlen($h) && ctype_xdigit($h)) {
+                $target[$h] = true;
+            }
+        }
+
+        $existingByPubkey = [];
+        foreach ($this->featuredAuthorRepository->findAll() as $row) {
+            $existingByPubkey[strtolower($row->getPubkeyHex())] = $row;
+        }
+        $keys = new Key();
+        $added = 0;
+        $relisted = 0;
+        $unlisted = 0;
+        $changed = false;
+
+        foreach (array_keys($target) as $hex) {
+            $row = $existingByPubkey[$hex] ?? null;
+            if ($row === null) {
+                $entity = new FeaturedAuthor();
+                $entity->setPubkeyHex($hex);
+                $base = $this->deriveBaseLocalPart($keys, $hex);
+                $entity->setLocalPart($this->allocateUniqueLocalPart($base));
+                $entity->setIsListed(true);
+                $this->entityManager->persist($entity);
+                $existingByPubkey[$hex] = $entity;
+                $added++;
+                $changed = true;
+                continue;
+            }
+            if (!$row->isListed()) {
+                $row->setIsListed(true);
+                $relisted++;
+                $changed = true;
+            }
+        }
+
+        foreach ($existingByPubkey as $hex => $row) {
+            if (isset($target[$hex])) {
+                continue;
+            }
+            if ($row->isListed()) {
+                $row->setIsListed(false);
+                $unlisted++;
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->entityManager->flush();
+            $this->logger->info('featured_author.sync', [
+                'added' => $added,
+                'relisted' => $relisted,
+                'unlisted' => $unlisted,
+                'listed_total' => \count($target),
+            ]);
+        }
+
+        return [
+            'added' => $added,
+            'relisted' => $relisted,
+            'unlisted' => $unlisted,
+            'listed_total' => \count($target),
+        ];
+    }
+
+    /**
+     * @deprecated use {@see reconcileListedAuthorsFromMagazineCategories}
      */
     public function syncNewAuthorsFromMagazineCategories(): int
     {
-        $pubkeys = $this->magazineContent->getAllDistinctCategoryAuthorPubkeyHexes();
-        if ($pubkeys === []) {
-            return 0;
-        }
+        $st = $this->reconcileListedAuthorsFromMagazineCategories();
 
-        $keys = new Key();
-        $n = 0;
-        foreach ($pubkeys as $hex) {
-            if ($this->featuredAuthorRepository->findOneByPubkeyHex($hex) !== null) {
-                continue;
-            }
-            $entity = new FeaturedAuthor();
-            $entity->setPubkeyHex($hex);
-            $base = $this->deriveBaseLocalPart($keys, $hex);
-            $entity->setLocalPart($this->allocateUniqueLocalPart($base));
-            $this->entityManager->persist($entity);
-            ++$n;
-        }
-        if ($n > 0) {
-            $this->entityManager->flush();
-            $this->logger->info('featured_author.sync', ['new_count' => $n]);
-        }
-
-        return $n;
+        return $st['added'];
     }
 
     private function deriveBaseLocalPart(Key $keys, string $pubkeyHex): string

@@ -26,7 +26,7 @@ final readonly class CommentReplyService
     /**
      * @param array<string, mixed> $payload Decoded JSON body
      *
-     * @return array{ok: true, id: string, relays: array<string, mixed>}|array{ok: false, error: string, code: int}
+     * @return array{ok: true, id: string, relays: array<string, mixed>, ok_relays: int, total_relays: int}|array{ok: false, error: string, code: int}
      */
     public function publishFromRequestPayload(User $user, array $payload): array
     {
@@ -108,12 +108,34 @@ final readonly class CommentReplyService
 
         $relays = $this->nostrClient->getRelayUrlsForCommentPublish($expectedCoordinate, $parentAuthorHex);
         $result = $this->nostrClient->publishEvent($wire, $relays);
+        $okRelays = 0;
+        foreach ($result as $relayRes) {
+            if ($relayRes instanceof \Throwable) {
+                continue;
+            }
+            $okRelays++;
+        }
+        if ($okRelays < 1) {
+            $this->logger->warning('comment_reply.publish_failed_all_relays', [
+                'id' => $wire->getId(),
+                'relay_count' => \count($result),
+            ]);
+
+            return ['ok' => false, 'error' => 'Publish failed on all relays (network/relay error). Please retry.', 'code' => 502];
+        }
         $this->logger->info('comment_reply.published', [
             'id' => $wire->getId(),
             'relays' => \array_keys($result),
+            'ok_relays' => $okRelays,
         ]);
 
-        return ['ok' => true, 'id' => $wire->getId(), 'relays' => $result];
+        return [
+            'ok' => true,
+            'id' => $wire->getId(),
+            'relays' => $result,
+            'ok_relays' => $okRelays,
+            'total_relays' => \count($result),
+        ];
     }
 
     /**

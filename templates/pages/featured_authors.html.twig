@@ -5,7 +5,7 @@
         <header class="featured-authors__intro">
             <h1>Featured authors</h1>
             <p class="text-subtle">
-                Authors whose long-form has been placed in a magazine category receive a
+                Authors are derived from pubkeys referenced by category index <code>a</code> tags and receive a
                 <abbr title="NIP-05">NIP-05</abbr> identifier
                 {% if nip05_domain|default('')|trim != '' %}
                     under <strong>{{ nip05_domain|e }}</strong>
@@ -14,27 +14,32 @@
             </p>
         </header>
 
-        {% for row in authors %}
-            {% set _fa_label = row.author.name|default('')|trim != '' ? row.author.name : (row.npub|shortenNpub) %}
-            <article class="featured-authors__card" aria-label="{{ _fa_label|e('html_attr') }}">
-                <div class="author-profile author-profile--featured">
-                    {% include 'partial/author_profile_header.html.twig' with {
-                        author: row.author,
-                        npub: row.npub,
-                        header_tag: 'h2',
-                        show_nip05: false,
-                        profile_nip05: [],
-                        profile_websites: row.profile_websites,
-                        profile_payment_links: row.profile_payment_links,
-                    } only %}
-                </div>
-                <div class="featured-authors__actions">
-                    <a class="btn btn-secondary" href="{{ path('author-profile', { npub: row.npub }) }}">Full profile</a>
-                </div>
-            </article>
+        {% if authors is not empty %}
+            <div class="featured-authors-grid" role="list">
+                {% for row in authors %}
+                    {% set _name = row.display_name|default('')|trim %}
+                    {% set _label = _name != '' ? _name : (row.npub|shortenNpub) %}
+                    <a
+                        class="featured-authors-grid__card"
+                        href="{{ path('author-profile', { npub: row.npub }) }}"
+                        aria-label="Open profile for {{ _label|e('html_attr') }}"
+                        role="listitem"
+                    >
+                        <div class="featured-authors-grid__avatar">
+                            {% if row.picture|default('')|trim != '' %}
+                                <img src="{{ row.picture|e('html_attr') }}" alt="{{ _label|e('html_attr') }}">
+                            {% else %}
+                                <span class="featured-authors-grid__avatar-fallback">{{ _label|slice(0, 1)|upper }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="featured-authors-grid__name">{{ _label }}</div>
+                        <div class="featured-authors-grid__handle text-subtle">@{{ row.local_part|e }}</div>
+                    </a>
+                {% endfor %}
+            </div>
         {% else %}
             <p class="text-subtle">No featured authors are listed yet. They appear when authors are added to magazine category indices and synced.</p>
-        {% endfor %}
+        {% endif %}
 
         {% if pagination is defined and pagination.last_page > 1 %}
             {% set _page = pagination.page|default(1) %}
