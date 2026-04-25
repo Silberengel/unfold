@@ -163,6 +163,10 @@ export default class extends Controller {
      * Reload the section HTML from the article comments fragment. After publishing, relays can lag;
      * if `expectedEventIdHex` is set, re-fetch with backoff until the new note appears (or a cap is hit).
      *
+     * Only sets `innerHTML` once the response actually contains the new `data-event-id`. Assigning on
+     * every poll replaced the whole subtree each time and re-instantiated every Stimulus `comment-reply`
+     * (connect/disconnect storms) while relays were still behind.
+     *
      * @param {string} [expectedEventIdHex] lowercase 64-char hex
      */
     async refreshThread(expectedEventIdHex = '') {
@@ -197,11 +201,13 @@ export default class extends Controller {
                     throw new Error(String(res.status));
                 }
                 const html = await res.text();
-                container.innerHTML = html;
                 if (!wantId) {
+                    container.innerHTML = html;
                     return;
                 }
-                if (container.querySelector(`[data-event-id="${wantId}"]`)) {
+                const parsed = new DOMParser().parseFromString(html, 'text/html');
+                if (parsed.querySelector(`[data-event-id="${wantId}"]`)) {
+                    container.innerHTML = html;
                     return;
                 }
             } catch {

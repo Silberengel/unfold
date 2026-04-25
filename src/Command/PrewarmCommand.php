@@ -61,9 +61,9 @@ final class PrewarmCommand extends Command
     {
         $this
             ->addOption('no-magazine', null, InputOption::VALUE_NONE, 'Skip magazine 30040 index fetch')
-            ->addOption('no-deletions', null, InputOption::VALUE_NONE, 'Skip NIP-09 kind 5 deletion sync (30023/30024 DB + 30040 magazine cache)')
+            ->addOption('no-deletions', null, InputOption::VALUE_NONE, 'Skip NIP-09 kind 5 deletion sync (articles + event rows for stored kinds)')
             ->addOption('deletion-since', null, InputOption::VALUE_REQUIRED, 'strtotime() window start for kind 5 fetch', '-2 month')
-            ->addOption('no-metadata', null, InputOption::VALUE_NONE, 'Skip Nostr profile metadata cache')
+            ->addOption('no-metadata', null, InputOption::VALUE_NONE, 'Skip batched kind-0 profile prewarm (MySQL event table)')
             ->addOption('no-comments', null, InputOption::VALUE_NONE, 'Skip comment thread cache')
             ->addOption('magazine-budget', null, InputOption::VALUE_REQUIRED, 'Seconds wall time for the category 30040 phase only (root fetch is not counted; capped at 600s). If many slugs, raise this or set MAGAZINE_PREWARM_PREFER_SLUGS', '90')
             ->addOption('metadata-limit', null, InputOption::VALUE_REQUIRED, 'Max distinct author pubkeys to warm (0 = all)', '0')

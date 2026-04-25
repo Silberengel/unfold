@@ -4,7 +4,19 @@
   <img src="assets/laeserin_logo.png" alt="Imwald" width="150">
 </p>
 
-A Symfony + FrankenPHP site that **reads Nostr long-form articles (kind 30023)** and related data from relays, stores articles in **MySQL**, and serves pages with Twig. **Comments and profile metadata** are **cache-backed** (not the full source of truth in the DB).
+A Symfony + FrankenPHP site that **reads Nostr long-form articles (kind 30023)** and related data from relays, and serves pages with Twig.
+
+### Where data lives
+
+| Data | Storage |
+|------|---------|
+| Published articles (30023/24) | **MySQL** `article` table (from `articles:get` / relay sync) |
+| Magazine index (30040), kind-0 **profiles**, NIP-65 **relay lists** (10002) | **MySQL** `event` table with stable `core_row_key` (filled by `app:prewarm` and on-demand fetches) |
+| Comment / reply / thread **UI** (fetched thread HTML, etc.) | **Filesystem cache** pool `cache.replies` (not the DB) |
+| Unpublished **editor preview** payloads | **Filesystem cache** pool `cache.drafts` |
+| Generic Symfony `cache.app` | Other app caches; **not** used for long-term profile or magazine index storage |
+
+NIP-09 kind-5 deletions that target stored kinds are applied to **MySQL** (articles + `event` rows). Relays are expected to handle ephemeral thread data.
 
 ---
 
@@ -40,9 +52,9 @@ A Symfony + FrankenPHP site that **reads Nostr long-form articles (kind 30023)**
 
 ---
 
-## Backfill articles + warm caches (recommended)
+## Backfill articles + prewarm (recommended)
 
-To **migrate**, **import articles from Nostr** for a time window, then **prewarm** magazine indices, author metadata, and comment caches:
+To **migrate**, **import articles from Nostr** for a time window, then run **prewarm** (magazine + profiles + deletions + comment cache):
 
 ```bash
 make prewarm
@@ -51,11 +63,13 @@ make prewarm
 | Step (script order) | Command / effect |
 |---------------------|------------------|
 | 1 | `docker compose up -d --wait` — starts **php**, **database**, and **cron** (the `cron` image runs a full `app:prewarm` on a 10 min schedule) |
-| 2 | `doctrine:migrations:migrate` |
-| 3 | `articles:get -- '-2 month' 'now'` — sync long-form into MySQL for that window |
-| 4 | `app:prewarm` — magazine **30040**, **kind-0** profiles, **comment** cache (default **`--comments-max=10`**, newest by `createdAt`) |
+| 2 | `doctrine:migrations:migrate` — applies schema (including `event` columns for core Nostr rows) |
+| 3 | `articles:get -- '-2 month' 'now'` — sync long-form into the `article` table |
+| 4 | `app:prewarm` — NIP-09 kind-5 sync (for stored kinds), magazine **30040** → `event`, kind-0 **profiles** (and relay lists on demand) → `event`, **comment** thread cache → `cache.replies` (default **`--comments-max=10`**, newest by `createdAt`) |
 
 `make prewarm` brings the stack (including `cron`) up so scheduled prewarm is active. **Optional** extra arguments for the **cron**-scheduled `app:prewarm` go in **`.env`** as **`PREWARM_FLAGS`** (same as you might pass to `php bin/console app:prewarm …`); Compose passes them into the `cron` container. Example: `PREWARM_FLAGS="--metadata-limit=50 --no-magazine"`. **Restart** the `cron` service after changing `PREWARM_FLAGS` so the container reloads the env. On the **hub** stack, the `prewarm` service reads the same `PREWARM_FLAGS`; use `docker compose -f compose.hub.yaml up -d --force-recreate prewarm` after changing it.
+
+**Fresh database or major upgrade:** after schema changes, run **`articles:get`** + **`app:prewarm`** (or `make prewarm`) so `article` and `event` are repopulated from relays. There is no automatic migration of old PSR **profile** cache into MySQL.
 
 ---
 
@@ -63,8 +77,8 @@ make prewarm
 
 | Command | Purpose |
 |---------|---------|
-| `articles:get <from> <to>` | Pull long-form articles from Nostr for the time range, persist to DB |
-| `app:prewarm` | Magazine relay refresh + metadata cache + comment cache warm |
+| `articles:get <from> <to>` | Pull long-form articles from Nostr for the time range, persist to `article` |
+| `app:prewarm` | Magazine 30040 + kind-0 profile prewarm (→ `event`), NIP-09 deletions, comment thread warm (→ `cache.replies`) |
 | `doctrine:migrations:migrate` | Apply SQL migrations |
 | `user:elevate` | (If used) user elevation helper |
 
@@ -74,14 +88,16 @@ make prewarm
 
 | Option | Default | Meaning |
 |--------|---------|--------|
-| `--no-magazine` | off | Skip magazine 30040 index |
-| `--no-metadata` | off | Skip Nostr kind-0 / profile cache |
-| `--no-comments` | off | Skip comment thread cache |
-| `--metadata-limit` | `0` (all authors) | Cap distinct author pubkeys |
-| `--metadata-batch` | `50` | Pubkeys per batched Nostr `REQ` |
+| `--no-magazine` | off | Skip magazine 30040 index fetch / `event` update |
+| `--no-metadata` | off | Skip batched kind-0 profile prewarm (writes to `event`) |
+| `--no-deletions` | off | Skip NIP-09 kind-5 fetch and application (articles + `event` index/profile rows) |
+| `--deletion-since` | `-2 month` | `strtotime()` lower bound for kind-5 author-scoped fetch |
+| `--no-comments` | off | Skip comment thread prewarm (`cache.replies`) |
+| `--metadata-limit` | `0` (all authors) | Max distinct author pubkeys for the metadata phase |
+| `--metadata-batch` | `50` | Pubkeys per batched kind-0 Nostr `REQ` |
 | `--comments-max` | `10` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
 | `--comments-budget` | `600` | Max wall seconds for the whole comments phase (Nostr is slow; raise e.g. `1200` if you need more articles in one run) |
-| `--magazine-budget` | `90` | Max wall seconds for magazine root + per-category 30040 fetches (hard-capped at 600s in code). If you have many categories, a **low** budget can stop before the last slug is refreshed—**stale home/category pages** until the next run. Set `MAGAZINE_PREWARM_PREFER_SLUGS` (comma-separated category `#d` slugs) to fetch those first after the root. |
+| `--magazine-budget` | `90` | Max wall seconds for magazine **per-category** 30040 fetches (root is separate; cap 600s in code). If you have many categories, a **low** budget can stop before the last slug is refreshed. Set `MAGAZINE_PREWARM_PREFER_SLUGS` (comma-separated category `#d` slugs) to fetch those first after the root. |
 
 Prewarm clears the PHP **CLI** execution time limit for that run; relay work can be slow.
 
@@ -102,7 +118,8 @@ For a full **Nostr backfill** + one-shot prewarm, use **`make prewarm`** (or a h
 | Site title, `npub`, `d_tag`, **relays** (`default_relay`, `article_relays`, `profile_relays`), theme | `config/unfold.yaml` (imported as Symfony parameters) |
 | `MAGAZINE_PREWARM_PREFER_SLUGS` | `.env` / `.env.local` — optional comma-separated category slugs to prioritize in `app:prewarm` magazine phase (after the root). Use when the relay time budget would otherwise skip your updated category. |
 | `DATABASE_URL`, `APP_SECRET`, `HTTP_PORT`, `MYSQL_*`, optional **`PREWARM_FLAGS`** (for the Docker `cron` service) | `.env` / `.env.local` (see `.env.dist`) |
-| Service wiring (e.g. cache, `NostrClient` args) | `config/services.yaml` |
+| Cache pool definitions (`cache.replies`, `cache.drafts`, `cache.app`) | `config/packages/cache.yaml` |
+| Service wiring (e.g. which pool comment loaders use) | `config/services.yaml` |
 
 **Relays (short):** `default_relay` and `article_relays` drive article sync and many queries; `profile_relays` are used **first** for kind-0 / profile fetches, then the merged default + article set (see `NostrClient`).
 
