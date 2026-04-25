@@ -86,13 +86,14 @@
     gap: 0.35em;
 }
 
-blockquote {
+/* Article body only — avoid 50px vertical margins on comment / quote cards (Atoms:Content markdown). */
+.article-main blockquote {
     border-left: 6px solid var(--color-bg-light);
     padding-left: 3px;
     margin: 50px 0 50px 3px;
 }
 
-blockquote p {
+.article-main blockquote p {
     font-size: 1.6rem;
     font-style: italic;
     color: var(--color-text-mid);
@@ -180,20 +181,22 @@ blockquote p {
     margin-top: 0.75rem;
 }
 
-/* Thread: no depth indent; one accent color for all replies; compact vertical rhythm */
+/* Thread: no depth indent; one accent color for all replies */
 .comments {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.55rem;
 }
 
-.comments .card.comment {
+.comments .card.comment,
+.comments-quotes__list .card.comment {
     margin-left: 0;
     margin-bottom: 0;
-    padding: 0.5rem 0.65rem 0.5rem 0.7rem;
+    padding: 0.75rem 0.9rem 0.85rem;
     border-radius: 6px;
     border: 1px solid var(--color-border);
     border-left: 3px solid var(--color-primary);
+    gap: 0.5rem;
 }
 
 .comments .card.comment--depth-0,
@@ -204,19 +207,53 @@ blockquote p {
     border-left-color: var(--color-primary);
 }
 
-.comments .card.comment .metadata {
-    margin-bottom: 0.4rem;
+.comments .card.comment .metadata,
+.comments-quotes__list .card.comment .metadata {
+    margin-bottom: 0;
 }
 
 .comment__reply-blurb {
-    padding: 0.2rem 0.45rem 0.2rem 0.5rem;
+    padding: 0.4rem 0.55rem 0.45rem 0.55rem;
     margin: 0 0 0 0.2rem;
     border-left: 2px solid color-mix(in srgb, var(--color-border) 50%, transparent);
     background: color-mix(in srgb, var(--color-bg-light) 55%, transparent);
     border-radius: 0 3px 3px 0;
-    font-size: 0.78em;
-    line-height: 1.35;
+    font-size: 0.82em;
+    line-height: 1.45;
     color: var(--color-text-mid);
+}
+
+/* Markdown blockquotes inside note bodies: tight rhythm (not .article-main blockquote). */
+.comments .card.comment .card-body blockquote,
+.comments-quotes__list .card.comment .card-body blockquote {
+    margin: 0.35rem 0 0.5rem;
+    padding: 0.3rem 0 0.35rem 0.65rem;
+    border-left: 3px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+}
+
+.comments .card.comment .card-body blockquote p,
+.comments-quotes__list .card.comment .card-body blockquote p {
+    font-size: 1em;
+    line-height: 1.45;
+    font-style: italic;
+    color: var(--color-text-mid);
+    margin: 0;
+    padding-left: 0;
+}
+
+.comments .card.comment .card-body > :first-child,
+.comments-quotes__list .card.comment .card-body > :first-child {
+    margin-top: 0;
+}
+
+.comments .card.comment .card-body > :last-child,
+.comments-quotes__list .card.comment .card-body > :last-child {
+    margin-bottom: 0;
+}
+
+.comments .card.comment .card-body,
+.comments-quotes__list .card.comment .card-body {
+    line-height: 1.52;
 }
 
 .comment__reply-blurb blockquote,

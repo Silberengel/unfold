@@ -67,6 +67,34 @@
         flex-direction: column;
         gap: 0.35rem;
     }
+
+    .nostr-address-preview {
+        position: relative;
+    }
+
+    .nostr-address-preview--with-menu .nostr-address-preview__body {
+        padding-right: 2.25rem;
+    }
+
+    .nostr-address-preview__body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding: 0.45rem 0.75rem 0.55rem;
+
+        .card-title,
+        .card-text {
+            margin: 0;
+        }
+    }
+
+    .nostr-address-preview .nostr-preview-card__menu {
+        position: absolute;
+        top: 0.35rem;
+        right: 0.4rem;
+        margin: 0;
+        z-index: 1;
+    }
 }
 
 .nostr-previews {

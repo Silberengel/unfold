@@ -85,10 +85,42 @@
     gap: 0.35rem;
 }
 
+/* naddr previews: avoid global h1–h6 margins + relay tag order quirks; menu out of flow */
+.nostr-preview .nostr-address-preview {
+    position: relative;
+}
+
+.nostr-preview .nostr-address-preview--with-menu .nostr-address-preview__body {
+    padding-right: 2.25rem;
+}
+
+.nostr-preview .nostr-address-preview__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.45rem 0.75rem 0.55rem;
+}
+
+.nostr-preview .nostr-address-preview__body .card-title {
+    margin: 0;
+}
+
+.nostr-preview .nostr-address-preview__body .card-text {
+    margin: 0;
+}
+
 .nostr-preview-card__menu {
     display: flex;
     justify-content: flex-end;
     margin-bottom: 0.35rem;
+}
+
+.nostr-preview .nostr-address-preview .nostr-preview-card__menu {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.4rem;
+    margin: 0;
+    z-index: 1;
 }
 
 .nostr-previews h6 {

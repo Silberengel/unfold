@@ -2847,6 +2847,43 @@ class NostrClient
                         'group_key' => $gkey,
                         'authors_filter' => $g['pubkey'],
                     ]);
+                    // Some relays fail to satisfy combined authors+#d filters for parameterized replaceables.
+                    // Fallback: query by #d only, then enforce author and d-tag match client-side.
+                    $fallbackReq = $this->createNostrRequest(
+                        [$kindEnum],
+                        ['tag' => ['#d', $dTags]],
+                        $this->defaultRelaySet,
+                    );
+                    $fallbackEvents = $this->processResponse(
+                        $fallbackReq->send(),
+                        static fn (object $event) => $event,
+                    );
+                    $fallbackMatched = [];
+                    $expectedPubkey = strtolower((string) $g['pubkey']);
+                    $expectedD = array_fill_keys($dTags, true);
+                    foreach ($fallbackEvents as $ev) {
+                        if (!\is_object($ev)) {
+                            continue;
+                        }
+                        $evPubkey = strtolower((string) ($ev->pubkey ?? ''));
+                        if ($evPubkey !== $expectedPubkey) {
+                            continue;
+                        }
+                        $evD = self::eventDTagValue($ev);
+                        if ($evD === null || !isset($expectedD[$evD])) {
+                            continue;
+                        }
+                        $fallbackMatched[] = $ev;
+                    }
+                    $this->logger->info('[longform_ingest] ingestLongform: fallback #d-only query result', [
+                        'group_key' => $gkey,
+                        'fallback_raw_wire_count' => \count($fallbackEvents),
+                        'fallback_matched_count' => \count($fallbackMatched),
+                    ]);
+                    if ($fallbackMatched !== []) {
+                        $events = $fallbackMatched;
+                        $rawCount = \count($events);
+                    }
                 }
                 $merged = self::mergeNip33ParameterizedWireEvents($events);
                 $mergedDetail = [];
@@ -2860,11 +2897,41 @@ class NostrClient
                     'merged_count' => \count($merged),
                     'one_row_per_nip33_address' => $mergedDetail,
                 ]);
+                $kindInt = (int) $g['kind'];
+                $authorHex = strtolower((string) $g['pubkey']);
+                $expectedAddresses = [];
+                foreach ($dTags as $dt) {
+                    $expectedAddresses[$kindInt.':'.$authorHex.':'.$dt] = true;
+                }
+                $seenAddresses = [];
                 foreach ($merged as $event) {
                     if (!\is_object($event)) {
                         continue;
                     }
+                    $addr = self::nip33ParameterizedReplaceableAddress($event);
+                    if ($addr !== null) {
+                        $seenAddresses[$addr] = true;
+                    }
                     $article = $this->articleFactory->createFromLongFormContentEvent($event);
+                    $this->saveEachArticleToTheDatabase($article);
+                }
+                foreach (array_keys($expectedAddresses) as $coordinate) {
+                    if (isset($seenAddresses[$coordinate])) {
+                        continue;
+                    }
+                    $this->logger->notice('[longform_ingest] ingestLongform: address missing after batch merge; trying author NIP-65 relays', [
+                        'coordinate' => $coordinate,
+                    ]);
+                    $byCoord = $this->getArticlesByCoordinates([$coordinate]);
+                    $evExtra = $byCoord[$coordinate] ?? null;
+                    if ($evExtra === null) {
+                        $this->logger->warning('[longform_ingest] ingestLongform: still no event for coordinate (not on default or author relays)', [
+                            'coordinate' => $coordinate,
+                        ]);
+
+                        continue;
+                    }
+                    $article = $this->articleFactory->createFromLongFormContentEvent($evExtra);
                     $this->saveEachArticleToTheDatabase($article);
                 }
             } catch (\Throwable $e) {

@@ -360,10 +360,13 @@ final class PrewarmCommand extends Command
             $io->success(sprintf('Warmed metadata for %d of %d author(s).', $n, $total));
 
             if ($toWarm !== []) {
+                $domain = trim((string) $this->params->get('nip05_domain'));
+                if ($domain !== '') {
+                    $this->waitForSiteWellKnownBeforeVerification($io, $domain);
+                }
                 $io->writeln('Verifying <comment>NIP-05</comment> (HTTPS <comment>/.well-known/nostr.json</comment>, per identifier)…');
                 $nt = 0;
                 $nv = 0;
-                $domain = trim((string) $this->params->get('nip05_domain'));
                 foreach ($toWarm as $hex) {
                     if (64 !== \strlen($hex) || !ctype_xdigit($hex)) {
                         continue;
@@ -469,6 +472,104 @@ final class PrewarmCommand extends Command
         ));
 
         return Command::SUCCESS;
+    }
+
+    private function waitForSiteWellKnownBeforeVerification(SymfonyStyle $io, string $domain): void
+    {
+        $expected = [];
+        foreach ($this->featuredAuthorRepository->findAllListedOrderByLocalPart() as $row) {
+            $local = trim((string) $row->getLocalPart());
+            $hex = strtolower(trim((string) $row->getPubkeyHex()));
+            if ($local === '' || 64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+                continue;
+            }
+            $expected[$local] = $hex;
+        }
+        if ($expected === []) {
+            return;
+        }
+
+        $io->writeln(sprintf(
+            'Ensuring site NIP-05 directory is current before verification (<comment>%s</comment>, names: <info>%d</info>)…',
+            $domain,
+            \count($expected)
+        ));
+        $url = 'https://'.$domain.'/.well-known/nostr.json';
+        $attempt = 0;
+        $maxAttempts = 4;
+        while ($attempt < $maxAttempts) {
+            $attempt++;
+            $payload = $this->fetchWellKnownNamesMap($url);
+            if ($payload !== null && $this->wellKnownHasExpectedNames($payload, $expected)) {
+                $io->writeln(sprintf('   <info>OK</info> /.well-known/nostr.json is up-to-date (attempt %d/%d).', $attempt, $maxAttempts));
+
+                return;
+            }
+            if ($attempt < $maxAttempts) {
+                usleep(1_500_000);
+            }
+        }
+        $io->warning('Site /.well-known/nostr.json did not reflect current featured authors before verification; NIP-05 checks may fail transiently.');
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function fetchWellKnownNamesMap(string $url): ?array
+    {
+        $ctx = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'header' => "User-Agent: Unfold-Prewarm/1.0\r\nAccept: application/json\r\n",
+                'timeout' => 8,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]);
+        $raw = @file_get_contents($url, false, $ctx);
+        if ($raw === false) {
+            return null;
+        }
+        try {
+            $decoded = json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!\is_array($decoded) || !isset($decoded['names']) || !\is_array($decoded['names'])) {
+            return null;
+        }
+        $out = [];
+        foreach ($decoded['names'] as $k => $v) {
+            if (!\is_string($k) || !\is_string($v)) {
+                continue;
+            }
+            $key = trim($k);
+            $hex = strtolower(trim($v));
+            if ($key === '' || 64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+                continue;
+            }
+            $out[$key] = $hex;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, string> $names
+     * @param array<string, string> $expected
+     */
+    private function wellKnownHasExpectedNames(array $names, array $expected): bool
+    {
+        foreach ($expected as $local => $hex) {
+            if (!isset($names[$local]) || !hash_equals($hex, $names[$local])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

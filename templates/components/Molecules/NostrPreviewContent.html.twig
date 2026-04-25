@@ -1,21 +1,36 @@
 {% if preview.type == 'naddr' %}
-    <div class="card nostr-address-preview">
-        {% set _na_share = nostr_event_share(preview) %}
+    {% set naddr_title = null %}
+    {% set naddr_summary = null %}
+    {% if preview.tags is defined %}
+        {% for tag in preview.tags %}
+            {% if tag[0] == 'title' and naddr_title is null and tag[1] is defined and tag[1]|default('')|trim != '' %}
+                {% set naddr_title = tag[1] %}
+            {% elseif tag[0] == 'summary' and naddr_summary is null and tag[1] is defined and tag[1]|default('')|trim != '' %}
+                {% set naddr_summary = tag[1] %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    {% set _na_share = nostr_event_share(preview) %}
+    <div class="card nostr-address-preview{% if _na_share %} nostr-address-preview--with-menu{% endif %}">
         {% if _na_share %}
             <div class="nostr-preview-card__menu">
                 {% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _na_share, event_menu: true } only %}
             </div>
         {% endif %}
-        {% for tag in preview.tags %}
-            {% if tag[0] == 'title' %}
-                <div class="card-header">
-                    <h5 class="card-title">{{ tag[1] }}</h5>
-                </div>
+        <div class="card-body nostr-address-preview__body">
+            {% if naddr_title %}
+                <h5 class="card-title">{{ naddr_title }}</h5>
             {% endif %}
-            {% if tag[0] == 'summary' %}
-                <p class="card-text">{{ tag[1] }}</p>
-            {% endif %}
-        {% endfor %}
+            <p class="card-text">
+                {% if naddr_summary %}
+                    {{ naddr_summary }}
+                {% elseif preview.content is defined and preview.content|trim != '' %}
+                    {{ preview.content|length > 220 ? preview.content|slice(0, 220) ~ '…' : preview.content }}
+                {% else %}
+                    <span class="text-subtle">—</span>
+                {% endif %}
+            </p>
+        </div>
     </div>
 {% elseif preview.type == 'nevent' %}
     {% if preview.kind == 9802 %}

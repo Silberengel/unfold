@@ -290,6 +290,9 @@ final class MagazineContentService
     {
         $n = 0;
         foreach ($this->getCategorySlugsFromStore() as $catSlug) {
+            // If a category 30040 wasn't persisted during the refresh phase (relay errors/timeouts),
+            // try one direct fetch here so long-form ingest and reports are not silently incomplete.
+            $this->warmCategoryIndexIfMissing($catSlug);
             $all = $this->findAllLongformCoordinatesForCategory($catSlug);
             if ($all === []) {
                 continue;
@@ -331,8 +334,23 @@ final class MagazineContentService
         $totResolved = 0;
         $totMissing = 0;
         foreach ($this->getCategorySlugsFromStore() as $slug) {
+            $this->warmCategoryIndexIfMissing($slug);
             $catIndex = $this->store->getCategory($slug);
             if ($catIndex === null) {
+                $totMissing++;
+                $categories[] = [
+                    'slug' => $slug,
+                    'title' => $slug,
+                    'event_id' => '',
+                    'listed_total' => 0,
+                    'resolved_total' => 0,
+                    'missing_total' => 1,
+                    'entries' => [[
+                        'coordinate' => 'category:'.$slug,
+                        'status' => 'missing',
+                        'reason' => 'category_index_unavailable',
+                    ]],
+                ];
                 continue;
             }
             $title = $slug;
