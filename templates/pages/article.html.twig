@@ -124,6 +124,8 @@
 {#    </pre>#}
     {% set article_coordinate = (article.kind ? article.kind.value : 30023) ~ ':' ~ article.pubkey ~ ':' ~ article.slug %}
     {% set comments_query = { coordinate: article_coordinate, title: article.title|default('') }|merge(article.eventId ? { e: article.eventId } : {}) %}
+    {% set _reply_ctx = comments_data.comment_reply_context|default(comment_reply_context|default(null)) %}
+    {% include 'components/Molecules/ArticleReplyComposer.html.twig' with { comment_reply_context: _reply_ctx } only %}
     <section class="article-comments-async" id="article-comments" aria-label="Comments">
         <div
             data-controller="article-comments"

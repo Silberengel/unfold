@@ -383,6 +383,7 @@ class ArticleController  extends AbstractController
 
         $commentsData = null;
         $commentsPreloaded = false;
+        $commentReplyContext = $this->buildArticleReplyContext($coordinate, $eid, $articleTitle);
         $cached = $commentThreadLoader->tryLoadFromCacheOnly($coordinate, $eid);
         if (null !== $cached) {
             $commentsData = $this->enrichCommentDataWithReplyContext(
@@ -391,6 +392,7 @@ class ArticleController  extends AbstractController
                 $eid,
                 $articleTitle
             );
+            $commentReplyContext = $commentsData['comment_reply_context'] ?? $commentReplyContext;
             $commentsPreloaded = true;
         }
 
@@ -401,7 +403,34 @@ class ArticleController  extends AbstractController
             'content' => $html,
             'comments_data' => $commentsData,
             'comments_preloaded' => $commentsPreloaded,
+            'comment_reply_context' => $commentReplyContext,
         ]);
+    }
+
+    /**
+     * Base article-level reply context so the top "Reply" button can render before async comments load.
+     *
+     * @return array{
+     *     can_publish: bool,
+     *     coordinate: string,
+     *     article_event_id: ?string,
+     *     parent_kind: int,
+     *     rows: array<int, array<string, mixed>>,
+     *     fragment_url: string
+     * }
+     */
+    private function buildArticleReplyContext(string $coordinate, ?string $articleEventId, string $articleTitle): array
+    {
+        $base = [
+            'list' => [],
+            'quotes' => [],
+            'commentLinks' => [],
+            'quoteLinks' => [],
+            'processedContent' => [],
+        ];
+        $enriched = $this->enrichCommentDataWithReplyContext($base, $coordinate, $articleEventId, $articleTitle);
+
+        return $enriched['comment_reply_context'];
     }
 
     /**

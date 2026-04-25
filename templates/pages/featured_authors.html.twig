@@ -39,15 +39,15 @@
         {% if pagination is defined and pagination.last_page > 1 %}
             {% set _page = pagination.page|default(1) %}
             {% set _last = pagination.last_page|default(1) %}
-            <nav class="category-pagination mt-3" aria-label="Featured authors pagination">
-                {% if _page > 1 %}
-                    <a class="btn btn-outline-secondary" href="{{ path('featured_authors', _page > 2 ? { page: _page - 1 } : {}) }}">Newer</a>
-                {% endif %}
-                <span class="mx-2 text-subtle">Page {{ _page }} of {{ _last }}</span>
-                {% if _page < _last %}
-                    <a class="btn btn-outline-secondary" href="{{ path('featured_authors', { page: _page + 1 }) }}">Older</a>
-                {% endif %}
-            </nav>
+            {% set _prev_url = _page > 1 ? path('featured_authors', _page > 2 ? { page: _page - 1 } : {}) : null %}
+            {% set _next_url = _page < _last ? path('featured_authors', { page: _page + 1 }) : null %}
+            {% include 'components/Molecules/Pagination.html.twig' with {
+                page: _page,
+                last_page: _last,
+                prev_url: _prev_url,
+                next_url: _next_url,
+                aria_label: 'Featured authors pagination',
+            } only %}
         {% endif %}
     </div>
 {% endblock %}

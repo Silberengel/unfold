@@ -18,8 +18,13 @@
     {% set _articles_url = _articles_page > 1 ? url('articles', { page: _articles_page }) : url('articles') %}
     {% set _category_slug = sync_slug|default(app.request.attributes.get('slug')) %}
     {% set _category_page = app.request.query.getInt('page', 1) %}
-    {% set _category_url = _category_page > 1 ? url('magazine-category', {slug: _category_slug, page: _category_page}) : url('magazine-category', {slug: _category_slug}) %}
-    {% set _canonical_url = _is_articles_route ? _articles_url : (_is_category_route ? _category_url : url('magazine-category', {slug: _category_slug})) %}
+    {% set _category_has_slug = (_category_slug|default('')|trim) != '' %}
+    {% set _category_url = _category_has_slug
+        ? (_category_page > 1
+            ? url('magazine-category', {slug: _category_slug, page: _category_page})
+            : url('magazine-category', {slug: _category_slug}))
+        : _articles_url %}
+    {% set _canonical_url = _is_articles_route ? _articles_url : (_is_category_route and _category_has_slug ? _category_url : _articles_url) %}
     <meta property="og:title" content="{{ _title|e('html_attr') }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ _canonical_url }}">
@@ -52,21 +57,19 @@
     {% set _last = pagination.last_page|default(1) %}
     {% set _is_articles_route = app.request.attributes.get('_route') == 'articles' %}
     {% set _slug = sync_slug|default(app.request.attributes.get('slug')) %}
-    {% set _prev_url = _is_articles_route
+    {% set _prev_url = _page > 1 ? (_is_articles_route
         ? path('articles', _page > 2 ? { page: _page - 1 } : {})
-        : path('magazine-category', _page > 2 ? { slug: _slug, page: _page - 1 } : { slug: _slug }) %}
-    {% set _next_url = _is_articles_route
+        : path('magazine-category', _page > 2 ? { slug: _slug, page: _page - 1 } : { slug: _slug })) : null %}
+    {% set _next_url = _page < _last ? (_is_articles_route
         ? path('articles', { page: _page + 1 })
-        : path('magazine-category', { slug: _slug, page: _page + 1 }) %}
-    <nav class="category-pagination mt-3" aria-label="Articles pagination">
-        {% if _page > 1 %}
-            <a class="btn btn-outline-secondary" href="{{ _prev_url }}">Newer</a>
-        {% endif %}
-        <span class="mx-2 text-subtle">Page {{ _page }} of {{ _last }}</span>
-        {% if _page < _last %}
-            <a class="btn btn-outline-secondary" href="{{ _next_url }}">Older</a>
-        {% endif %}
-    </nav>
+        : path('magazine-category', { slug: _slug, page: _page + 1 })) : null %}
+    {% include 'components/Molecules/Pagination.html.twig' with {
+        page: _page,
+        last_page: _last,
+        prev_url: _prev_url,
+        next_url: _next_url,
+        aria_label: 'Articles pagination',
+    } only %}
 {% endif %}
 {% endblock %}
 

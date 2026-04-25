@@ -34,6 +34,8 @@ class NostrClient
 
     /** Extra wall time for {@see bin/nostr_relay_request_worker.php} process vs. WebSocket timeout. */
     private const DISCUSSION_WORKER_GRACE_SEC = 5.0;
+    /** Soft wall-time for parallel discussion collection before returning partial results. */
+    private const DISCUSSION_PARALLEL_SOFT_DEADLINE_SEC = 3.5;
 
     /**
      * Hard cap on unique relay URLs for article discussion. More relays do not help much (indexers duplicate)
@@ -1224,7 +1226,7 @@ class NostrClient
      * @param string               $coordinate      kind:pubkey:d-identifier (e.g. longform address)
      * @param null|string          $rootEventHexId  Published article event id (hex) for #e / #q matching
      *
-     * @return array{thread: array<int, object>, quotes: array<int, object>}
+     * @return array{thread: array<int, object>, quotes: array<int, object>, partial?: bool}
      */
     public function getArticleDiscussion(string $coordinate, ?string $rootEventHexId = null): array
     {
@@ -1315,6 +1317,8 @@ class NostrClient
             throw new \RuntimeException('Nostr request failed for article discussion', 0, $e);
         }
 
+        $respondedRelayCount = \count($response);
+        $partial = $respondedRelayCount < \count($plannedRelayUrls);
         $tParse = microtime(true);
         $this->processResponse($response, function ($event) use (&$byId) {
             if (\is_object($event) && isset($event->id)) {
@@ -1369,9 +1373,12 @@ class NostrClient
         $this->logger->info('nostr.article_discussion.done', [
             'thread_count' => \count($thread),
             'quotes_count' => \count($quotes),
+            'partial' => $partial,
+            'responded_relays' => $respondedRelayCount,
+            'planned_relays' => \count($plannedRelayUrls),
         ]);
 
-        return ['thread' => $thread, 'quotes' => $quotes];
+        return ['thread' => $thread, 'quotes' => $quotes, 'partial' => $partial];
     }
 
     /**
@@ -1449,38 +1456,52 @@ class NostrClient
             }
 
             $merged = [];
-            foreach ($procs as $wss => $p) {
-                $p->wait();
-                if (!$p->isSuccessful()) {
-                    $err = $p->getErrorOutput();
-                    $this->logger->warning('nostr.article_discussion.relay_worker_failed', [
-                        'relay' => $wss,
-                        'exit_code' => $p->getExitCode(),
-                        'stderr' => $err !== '' ? $err : null,
-                    ]);
-                    $merged[$wss] = [];
+            $pending = $procs;
+            $deadlineAt = microtime(true) + self::DISCUSSION_PARALLEL_SOFT_DEADLINE_SEC;
+            while ($pending !== []) {
+                foreach ($pending as $wss => $p) {
+                    if ($p->isRunning()) {
+                        continue;
+                    }
+                    unset($pending[$wss]);
+                    if (!$p->isSuccessful()) {
+                        $err = $p->getErrorOutput();
+                        $this->logger->warning('nostr.article_discussion.relay_worker_failed', [
+                            'relay' => $wss,
+                            'exit_code' => $p->getExitCode(),
+                            'stderr' => $err !== '' ? $err : null,
+                        ]);
 
-                    continue;
+                        continue;
+                    }
+                    $out = trim($p->getOutput());
+                    if ($out === '') {
+                        continue;
+                    }
+                    $decoded = base64_decode($out, true);
+                    if ($decoded === false || $decoded === '') {
+                        continue;
+                    }
+                    $chunk = unserialize($decoded, ['allowed_classes' => true]);
+                    if (!\is_array($chunk)) {
+                        continue;
+                    }
+                    $merged = array_replace($merged, $chunk);
                 }
-                $out = trim($p->getOutput());
-                if ($out === '') {
-                    $merged[$wss] = [];
-
-                    continue;
+                if ($pending === []) {
+                    break;
                 }
-                $decoded = base64_decode($out, true);
-                if ($decoded === false || $decoded === '') {
-                    $merged[$wss] = [];
-
-                    continue;
+                if (microtime(true) >= $deadlineAt) {
+                    foreach ($pending as $wss => $p) {
+                        $this->logger->warning('nostr.article_discussion.relay_worker_soft_timeout', [
+                            'relay' => $wss,
+                            'soft_deadline_sec' => self::DISCUSSION_PARALLEL_SOFT_DEADLINE_SEC,
+                        ]);
+                        $p->stop(0.2);
+                    }
+                    break;
                 }
-                $chunk = unserialize($decoded, ['allowed_classes' => true]);
-                if (!\is_array($chunk)) {
-                    $merged[$wss] = [];
-
-                    continue;
-                }
-                $merged = array_replace($merged, $chunk);
+                usleep(100_000);
             }
 
             return $merged;

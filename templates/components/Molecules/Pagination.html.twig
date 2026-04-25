@@ -1,0 +1,19 @@
+{% set _page = page|default(1) %}
+{% set _last = last_page|default(1) %}
+{% if _last > 1 %}
+    <nav class="pager" aria-label="{{ aria_label|default('Pagination') }}">
+        <div class="pager__inner">
+            {% if prev_url is not empty %}
+                <a class="btn btn-outline-secondary pager__btn" href="{{ prev_url }}">Newer</a>
+            {% else %}
+                <span class="btn btn-outline-secondary pager__btn is-disabled" aria-disabled="true">Newer</span>
+            {% endif %}
+            <span class="pager__status text-subtle">Page {{ _page }} of {{ _last }}</span>
+            {% if next_url is not empty %}
+                <a class="btn btn-outline-secondary pager__btn" href="{{ next_url }}">Older</a>
+            {% else %}
+                <span class="btn btn-outline-secondary pager__btn is-disabled" aria-disabled="true">Older</span>
+            {% endif %}
+        </div>
+    </nav>
+{% endif %}

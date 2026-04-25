@@ -93,18 +93,20 @@ final readonly class ArticleCommentThreadLoader
 
         try {
             $discussion = $this->cache->get($cacheKey, function (ItemInterface $item) use ($coordinate, $articleEventHexId, $t0): array {
-                // Prewarm + HTTP should share the same key; 2m expiry caused cold misses during normal use.
-                $item->expiresAfter(86400);
                 $this->logger->info('comments.loader.cache_miss', [
                     'elapsed_since_load_start_ms' => (int) round((microtime(true) - $t0) * 1000),
                 ]);
                 $tNostr = microtime(true);
                 // On failure, let this throw: Symfony cache will not store a value, so a prior good thread is not replaced by [].
                 $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId);
+                $partial = (bool) ($out['partial'] ?? false);
+                // Partial relay snapshots are intentionally short-lived so the next request can pick up late relays.
+                $item->expiresAfter($partial ? 15 : 86400);
                 $this->logger->info('comments.loader.nostr_ok', [
                     'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
                     'thread' => \count($out['thread'] ?? []),
                     'quotes' => \count($out['quotes'] ?? []),
+                    'partial' => $partial,
                 ]);
 
                 return $out;
@@ -193,6 +195,7 @@ final readonly class ArticleCommentThreadLoader
             'commentLinks' => $commentLinks,
             'quoteLinks' => $quoteLinks,
             'processedContent' => $processedContent,
+            'comments_partial' => (bool) ($discussion['partial'] ?? false),
         ];
     }
 

@@ -27,15 +27,15 @@
             {% set _page = pagination.page|default(1) %}
             {% set _last = pagination.last_page|default(1) %}
             {% set _query = query|default('') %}
-            <nav class="category-pagination mt-3" aria-label="Search pagination">
-                {% if _page > 1 %}
-                    <a class="btn btn-outline-secondary" href="{{ path('search', _page > 2 ? { q: _query, page: _page - 1 } : { q: _query }) }}">Newer</a>
-                {% endif %}
-                <span class="mx-2 text-subtle">Page {{ _page }} of {{ _last }}</span>
-                {% if _page < _last %}
-                    <a class="btn btn-outline-secondary" href="{{ path('search', { q: _query, page: _page + 1 }) }}">Older</a>
-                {% endif %}
-            </nav>
+            {% set _prev_url = _page > 1 ? path('search', _page > 2 ? { q: _query, page: _page - 1 } : { q: _query }) : null %}
+            {% set _next_url = _page < _last ? path('search', { q: _query, page: _page + 1 }) : null %}
+            {% include 'components/Molecules/Pagination.html.twig' with {
+                page: _page,
+                last_page: _last,
+                prev_url: _prev_url,
+                next_url: _next_url,
+                aria_label: 'Search pagination',
+            } only %}
         {% endif %}
     </div>
 {% endblock %}

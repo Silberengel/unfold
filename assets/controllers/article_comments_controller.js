@@ -12,6 +12,7 @@ export default class extends Controller {
     static targets = ['container'];
 
     connect() {
+        this.partialReloads = 0;
         this.boundOnAuth = this.onAuthChanged.bind(this);
         window.addEventListener('unfold:auth-changed', this.boundOnAuth);
         if (!this.hasContainerTarget || !this.urlValue) {
@@ -67,6 +68,15 @@ export default class extends Controller {
                     return;
                 }
                 this.containerTarget.innerHTML = html;
+                const isPartial = /data-comments-partial="1"/.test(html);
+                if (isPartial && this.partialReloads < 2) {
+                    this.partialReloads += 1;
+                    window.setTimeout(() => {
+                        if (this.hasContainerTarget) {
+                            void this.load();
+                        }
+                    }, 1200);
+                }
                 const ms = Math.round(performance.now() - t0);
                 if (attempt > 1) {
                     console.info(`[article-comments] fragment OK in ${ms}ms (after ${attempt} attempts)`, this.urlValue);

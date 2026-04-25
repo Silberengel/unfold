@@ -1,0 +1,57 @@
+{% set ctx = comment_reply_context|default(null) %}
+{% if ctx and ctx.can_publish|default(false) %}
+    {% for row in ctx.rows|default([]) %}
+        {% if row.mode|default('') == 'article' %}
+            <div
+                class="comment-reply comment-reply--article card"
+                data-controller="comment-reply"
+                data-comment-reply-publish-url-value="{{ path('comment_reply_publish')|e('html_attr') }}"
+                data-comment-reply-csrf-value="{{ csrf_token('comment_reply')|e('html_attr') }}"
+                data-comment-reply-expected-coordinate-value="{{ ctx.coordinate|e('html_attr') }}"
+                data-comment-reply-article-event-id-value="{{ ctx.article_event_id|default('')|e('html_attr') }}"
+                data-comment-reply-fragment-url-value="{{ ctx.fragment_url|default('')|e('html_attr') }}"
+                data-comment-reply-refresh-after-value="1"
+                data-comment-reply-expected-tags-value='{{ row.expectedTags|default([])|json_encode|e('html_attr') }}'
+                data-comment-reply-parent-kind-value="{{ row.parentKind|default(0) }}"
+                data-comment-reply-parent-id-value="{{ row.parentId|default('')|e('html_attr') }}"
+                data-comment-reply-author-pubkey-value="{{ row.authorPubkey|default('')|e('html_attr') }}"
+            >
+                <div class="card-body comment-reply--article__inner">
+                    <div class="comment-reply__toolbar">
+                        <p class="comment-reply__lede text-subtle">Reply to this note on Nostr (kind 1111).</p>
+                        <button
+                            type="button"
+                            class="btn btn-secondary btn-sm comment-reply__toggle"
+                            data-comment-reply-target="toggleBtn"
+                            data-action="click->comment-reply#togglePanel"
+                            aria-expanded="false"
+                        >Reply</button>
+                    </div>
+                    <div class="comment-reply__panel comment-reply__panel--hidden" data-comment-reply-target="panel">
+                        <form
+                            class="comment-reply__form"
+                            data-action="submit->comment-reply#publish"
+                        >
+                            <div class="comment-reply__body">
+                                <label class="visually-hidden" for="comment-reply-article-body">Your reply</label>
+                                <textarea
+                                    class="form-control"
+                                    id="comment-reply-article-body"
+                                    name="body"
+                                    rows="4"
+                                    required
+                                    minlength="1"
+                                    placeholder="Write a NIP-22 comment (kind 1111)."
+                                ></textarea>
+                            </div>
+                            <div class="comment-reply__actions">
+                                <button class="btn btn-primary" type="submit">Sign &amp; publish</button>
+                            </div>
+                            <p class="comment-reply__hint text-subtle" data-comment-reply-target="hint" aria-live="polite"></p>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+{% endif %}
