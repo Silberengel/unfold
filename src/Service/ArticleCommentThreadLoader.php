@@ -302,6 +302,9 @@ final readonly class ArticleCommentThreadLoader
             $raw = isset($ev->content) ? (string) $ev->content : '';
             $split = $this->splitNip22ReplyBlurb($raw);
             $blurb = $split['blurb'];
+            if ($blurb === null || trim($blurb) === '') {
+                $blurb = $this->replyBlurbFromAddressTag($ev);
+            }
             if (($blurb === null || trim($blurb) === '') && $id !== '' && isset($parentOf[$id])) {
                 $pid = $parentOf[$id];
                 if (isset($idToEvent[$pid])) {
@@ -361,6 +364,42 @@ final readonly class ArticleCommentThreadLoader
         }
 
         return ['blurb' => $first, 'body' => $rest];
+    }
+
+    private function replyBlurbFromAddressTag(object $event): ?string
+    {
+        if (!isset($event->tags) || !\is_array($event->tags)) {
+            return null;
+        }
+        foreach ($event->tags as $row) {
+            if (!\is_array($row) || ($row[0] ?? null) === null || ($row[1] ?? null) === null) {
+                continue;
+            }
+            $name = (string) $row[0];
+            if ($name !== 'a' && $name !== 'A') {
+                continue;
+            }
+            $coord = (string) $row[1];
+            if ($coord === '') {
+                continue;
+            }
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) !== 3) {
+                continue;
+            }
+            $kind = ctype_digit((string) $parts[0]) ? (int) $parts[0] : 0;
+            if (!\in_array($kind, [30023, 30024], true)) {
+                continue;
+            }
+            $dTag = trim((string) $parts[2]);
+            if ($dTag === '') {
+                $dTag = $coord;
+            }
+
+            return '> *'.'Replying to'.'* — '."\n> ".$dTag;
+        }
+
+        return null;
     }
 
     /**

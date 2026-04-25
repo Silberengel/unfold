@@ -51,4 +51,29 @@ class FeaturedAuthorRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * @return list<FeaturedAuthor>
+     */
+    public function findListedOrderByLocalPartPaginated(int $limit, int $offset): array
+    {
+        return $this->createQueryBuilder('f')
+            ->where('f.isListed = :t')
+            ->setParameter('t', true)
+            ->orderBy('f.localPart', 'ASC')
+            ->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function countListed(): int
+    {
+        return (int) $this->createQueryBuilder('f')
+            ->select('COUNT(f.id)')
+            ->where('f.isListed = :t')
+            ->setParameter('t', true)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
 }

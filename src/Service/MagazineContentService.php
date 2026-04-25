@@ -196,9 +196,13 @@ final class MagazineContentService
      * Category listing from the persisted 30040 index and DB only. Does not call relays.
      * Rows come from MySQL only; run `app:prewarm` to sync new `a` tags and replaceable revisions.
      *
-     * @return array{list: list<Article>, category: array{title: string, summary: string}}
+     * @return array{
+     *     list: list<Article>,
+     *     category: array{title: string, summary: string},
+     *     pagination: array{page: int, per_page: int, total: int, last_page: int}
+     * }
      */
-    public function getCategoryPageData(string $slug): array
+    public function getCategoryPageData(string $slug, int $page = 1, int $perPage = 25): array
     {
         $this->warmCategoryIndexIfMissing($slug);
         $catIndex = $this->store->getCategory($slug);
@@ -256,9 +260,24 @@ final class MagazineContentService
         $category['title'] = $category['title'] ?? '';
         $category['summary'] = $category['summary'] ?? '';
 
+        $perPage = max(1, $perPage);
+        $page = max(1, $page);
+        $total = \count($list);
+        $lastPage = max(1, (int) \ceil($total / $perPage));
+        if ($page > $lastPage) {
+            $page = $lastPage;
+        }
+        $offset = ($page - 1) * $perPage;
+
         return [
-            'list' => $list,
+            'list' => \array_slice($list, $offset, $perPage),
             'category' => $category,
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+            ],
         ];
     }
 

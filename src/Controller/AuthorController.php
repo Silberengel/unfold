@@ -14,6 +14,7 @@ use App\Service\ProfilePaymentLinksBuilder;
 use Exception;
 use swentel\nostr\Key\Key;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -24,6 +25,7 @@ class AuthorController extends AbstractController
      */
     #[Route('/p/{npub}', name: 'author-profile', requirements: ['npub' => '^npub1.*'])]
     public function index(
+        Request $request,
         $npub,
         NostrClient $nostrClient,
         CacheService $cacheService,
@@ -44,29 +46,15 @@ class AuthorController extends AbstractController
         $bundle = $cacheService->getMetadataBundle($npub);
         $author = $bundle['content'];
         $kind0Tags = $bundle['kind0_tags'];
-        // Retrieve long-form content for the author
-        try {
-            $list = $nostrClient->getLongFormContentForPubkey($npub);
-        } catch (Exception $e) {
-            $list = [];
+        $perPage = 25;
+        $page = max(1, $request->query->getInt('page', 1));
+        $total = $articleRepository->countByPubkey($pubkey);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        if ($page > $lastPage) {
+            $page = $lastPage;
         }
-
-        // Also look for articles in the database by pubkey
-        $dbArticles = $articleRepository->findByPubkey($pubkey, 25);
-        $list = array_merge($list, $dbArticles);
-
-        $articles = [];
-        // Deduplicate by slugs
-        foreach ($list as $item) {
-            if (!key_exists((string) $item->getSlug(), $articles)) {
-                $articles[(string) $item->getSlug()] = $item;
-            }
-        }
-
-        // Sort articles by date
-        usort($articles, function ($a, $b) {
-            return $b->getCreatedAt() <=> $a->getCreatedAt();
-        });
+        $offset = ($page - 1) * $perPage;
+        $articles = $articleRepository->findByPubkeyPaginated($pubkey, $perPage, $offset);
 
         $kind10133 = [];
         try {
@@ -92,6 +80,12 @@ class AuthorController extends AbstractController
             'profile_websites' => $profileIdentityLinks->buildWebsites($author, $kind0Tags),
             'profile_nip05' => $profileNip05,
             'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, $extraPayto),
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+            ],
         ]);
     }
 

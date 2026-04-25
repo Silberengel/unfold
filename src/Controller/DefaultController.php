@@ -8,6 +8,7 @@ use App\Service\MagazineContentService;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -27,13 +28,15 @@ class DefaultController extends AbstractController
     }
 
     #[Route('/cat/{slug}', name: 'magazine-category')]
-    public function magCategory(string $slug): Response
+    public function magCategory(Request $request, string $slug): Response
     {
-        $data = $this->magazineContent->getCategoryPageData($slug);
+        $page = max(1, $request->query->getInt('page', 1));
+        $data = $this->magazineContent->getCategoryPageData($slug, $page, 25);
 
         return $this->render('pages/category.html.twig', [
             'list' => $data['list'],
             'category' => $data['category'],
+            'pagination' => $data['pagination'],
             'sync_slug' => $slug,
         ]);
     }

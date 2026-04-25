@@ -54,6 +54,42 @@ class ArticleRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function countSearchArticles(string $query): int
+    {
+        $qb = $this->createQueryBuilder('a')
+            ->select('COUNT(a.id)');
+
+        $searchTerms = explode(' ', trim($query));
+        $conditions = $qb->expr()->orX();
+
+        foreach ($searchTerms as $index => $term) {
+            $term = trim($term);
+            if (empty($term)) {
+                continue;
+            }
+
+            $paramName = 'term' . $index;
+            $termCondition = $qb->expr()->orX(
+                $qb->expr()->like('a.title', ':' . $paramName),
+                $qb->expr()->like('a.content', ':' . $paramName),
+                $qb->expr()->like('a.summary', ':' . $paramName)
+            );
+            $conditions->add($termCondition);
+            $qb->setParameter($paramName, '%' . $term . '%');
+        }
+
+        if (\count($conditions->getParts()) === 0) {
+            return 0;
+        }
+
+        return (int) $qb
+            ->where($conditions)
+            ->andWhere('a.content IS NOT NULL')
+            ->andWhere('LENGTH(a.content) > 250')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /**
      * List-card fields only: avoids loading `content` / `raw` (can be very large) for home/category featured rows.
      *
@@ -167,6 +203,28 @@ class ArticleRepository extends ServiceEntityRepository
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
+    }
+
+    public function findByPubkeyPaginated(string $pubkey, int $limit, int $offset): array
+    {
+        return $this->createQueryBuilder('a')
+            ->where('a.pubkey = :pubkey')
+            ->setParameter('pubkey', $pubkey)
+            ->orderBy('a.createdAt', 'DESC')
+            ->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function countByPubkey(string $pubkey): int
+    {
+        return (int) $this->createQueryBuilder('a')
+            ->select('COUNT(a.id)')
+            ->where('a.pubkey = :pubkey')
+            ->setParameter('pubkey', $pubkey)
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 
     /**

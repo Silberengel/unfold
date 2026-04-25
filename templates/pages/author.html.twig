@@ -13,6 +13,19 @@
         <hr class="author-profile__divider" />
 
         <twig:Organisms:CardList :list="articles" class="article-list"></twig:Organisms:CardList>
+        {% if pagination is defined and pagination.last_page > 1 %}
+            {% set _page = pagination.page|default(1) %}
+            {% set _last = pagination.last_page|default(1) %}
+            <nav class="category-pagination mt-3" aria-label="Author articles pagination">
+                {% if _page > 1 %}
+                    <a class="btn btn-outline-secondary" href="{{ path('author-profile', _page > 2 ? { npub: npub, page: _page - 1 } : { npub: npub }) }}">Newer</a>
+                {% endif %}
+                <span class="mx-2 text-subtle">Page {{ _page }} of {{ _last }}</span>
+                {% if _page < _last %}
+                    <a class="btn btn-outline-secondary" href="{{ path('author-profile', { npub: npub, page: _page + 1 }) }}">Older</a>
+                {% endif %}
+            </nav>
+        {% endif %}
     </div>
 {% endblock %}
 

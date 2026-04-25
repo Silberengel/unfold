@@ -13,7 +13,6 @@ export default class extends Controller {
         articleEventId: String,
         fragmentUrl: String,
         refreshAfter: { type: Boolean, default: true },
-        blurbLabel: String,
         expectedTags: Array,
         parentKind: Number,
         parentId: String,
@@ -68,16 +67,12 @@ export default class extends Controller {
             return;
         }
         this.setHint('Preparing event…');
-        // `nostr-tools` entry pulls @noble/curves (bare spec → breaks in AssetMapper). NIP-19 only needs bech32 helpers.
-        const { naddrEncode, neventEncode } = await import('nostr-tools/nip19');
-        const link = this.buildParentBech32(naddrEncode, neventEncode);
-        // NIP-22 quote line: must still mention nostr:… for server validation; UI strips this (see formatReplyBlurbForDisplay).
-        const blurb = `> Replying to **${this.blurbLabelValue}** (nostr:${link})\n\n`;
         const unsigned = {
             kind: 1111,
             created_at: Math.floor(Date.now() / 1000),
             tags: this._tags,
-            content: blurb + text,
+            // Keep user-authored content clean; reply context is encoded in NIP-22 tags.
+            content: text,
         };
         let signed;
         try {
@@ -136,27 +131,6 @@ export default class extends Controller {
 
     hasNip07() {
         return typeof window.nostr !== 'undefined' && typeof window.nostr.signEvent === 'function';
-    }
-
-    /**
-     * @param {function(object): string} naddrEncode
-     * @param {function(object): string} neventEncode
-     */
-    buildParentBech32(naddrEncode, neventEncode) {
-        const allZero = /^0{64}$/.test(this.parentIdValue);
-        const parts = (this.expectedCoordinateValue || '').split(':');
-        const k = parts[0] ? parseInt(parts[0], 10) : 30023;
-        const pub = parts[1] || this.authorPubkeyValue;
-        const d = parts[2] || '';
-        if (allZero && d !== '') {
-            return naddrEncode({ kind: k, pubkey: pub, identifier: d, relays: [] });
-        }
-        return neventEncode({
-            id: this.parentIdValue,
-            kind: this.parentKindValue,
-            pubkey: this.authorPubkeyValue,
-            relays: [],
-        });
     }
 
     /**

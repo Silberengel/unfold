@@ -569,16 +569,25 @@ class ArticleController  extends AbstractController
     }
 
     /**
-     * Display latest 20 community articles
+     * Display latest community articles (paginated).
      */
     #[Route('/articles', name: 'articles')]
-    public function latestArticles(EntityManagerInterface $entityManager): Response
+    public function latestArticles(Request $request, EntityManagerInterface $entityManager): Response
     {
         set_time_limit(300); // 5 minutes
         ini_set('max_execution_time', '300');
 
-        $articles = $entityManager->getRepository(Article::class)
-            ->findBy([], ['createdAt' => 'DESC'], 20);
+        $perPage = 25;
+        $page = max(1, $request->query->getInt('page', 1));
+        $offset = ($page - 1) * $perPage;
+        $repo = $entityManager->getRepository(Article::class);
+        $total = $repo->count([]);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        if ($page > $lastPage) {
+            $page = $lastPage;
+            $offset = ($page - 1) * $perPage;
+        }
+        $articles = $repo->findBy([], ['createdAt' => 'DESC'], $perPage, $offset);
 
         $category = (object) [
             'title' => 'Community Articles',
@@ -589,6 +598,12 @@ class ArticleController  extends AbstractController
             'category' => $category,
             'list' => $articles,
             'sync_slug' => '',
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+            ],
         ]);
     }
 

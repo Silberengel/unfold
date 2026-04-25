@@ -6,7 +6,6 @@ namespace App\Service;
 
 use App\Entity\User;
 use App\Enum\KindsEnum;
-use nostriphant\NIP19\Bech32;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Event\Event as NostrWireEvent;
 use swentel\nostr\Key\Key;
@@ -83,13 +82,8 @@ final readonly class CommentReplyService
             return ['ok' => false, 'error' => 'Tags must include a/A for this article', 'code' => 400];
         }
 
-        if (!$this->contentBlurbReferencesParent(
-            $wire->getContent(),
-            $expectedCoordinate,
-            $parentKind,
-            $parentId
-        )) {
-            return ['ok' => false, 'error' => 'Reply must start with a quote line (>) linking the parent via nostr:nevent1 / naddr1 (reply blurb)', 'code' => 400];
+        if (!$this->tagsReferenceParent($wire->getTags(), $expectedCoordinate, $parentKind, $parentId)) {
+            return ['ok' => false, 'error' => 'Tags must reference the selected parent (a/A for article or e/E for comment)', 'code' => 400];
         }
 
         $rawParentAuthor = isset($payload['parent_author_pubkey']) && \is_string($payload['parent_author_pubkey'])
@@ -142,53 +136,42 @@ final readonly class CommentReplyService
         return false;
     }
 
-    private function contentBlurbReferencesParent(
-        string $content,
+    /**
+     * @param array<int, mixed> $tags
+     */
+    private function tagsReferenceParent(
+        array $tags,
         string $articleCoordinate,
         int $parentKind,
         string $parentIdHex
     ): bool {
-        $head = \strlen($content) > 800 ? substr($content, 0, 800) : $content;
-        if (!str_contains($head, "\n\n")) {
-            return false;
-        }
-        [$blurb] = explode("\n\n", $head, 2);
-        $blurb = trim($blurb);
-        if ($blurb === '' || !str_starts_with($blurb, '>')) {
-            return false;
-        }
-        if (!preg_match('/nostr:(nevent1[0-9a-z]+|naddr1[0-9a-z]+|note1[0-9a-z]+)/i', $blurb, $m)) {
-            return false;
-        }
-        try {
-            $decoded = new Bech32($m[1]);
-        } catch (\Throwable) {
-            return false;
-        }
-        if ($decoded->type === 'nevent') {
-            $id = $decoded->data->id ?? null;
-
-            return \is_string($id) && 64 === \strlen($id) && ctype_xdigit($id) && hash_equals($parentIdHex, $id);
-        }
-        if ($decoded->type === 'note') {
-            $id = $decoded->data->identifier ?? null;
-
-            return \is_string($id) && 64 === \strlen($id) && ctype_xdigit($id) && hash_equals($parentIdHex, $id);
-        }
-        if ($decoded->type === 'naddr') {
-            $d = $decoded->data;
-            $coord = $d->kind.':'.$d->pubkey.':'.$d->identifier;
-            if (!\in_array($parentKind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
-                return false;
+        if (\in_array($parentKind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+            foreach ($tags as $row) {
+                if (!\is_array($row) || ($row[0] ?? null) === null) {
+                    continue;
+                }
+                $n = (string) $row[0];
+                if (($n === 'a' || $n === 'A') && ($row[1] ?? '') === $articleCoordinate) {
+                    return true;
+                }
             }
-            if (!hash_equals($articleCoordinate, $coord)) {
-                return false;
-            }
-            $zero = str_repeat('0', 64);
 
-            return hash_equals($parentIdHex, $zero);
+            return false;
+        }
+        if ($parentKind === KindsEnum::COMMENTS->value) {
+            foreach ($tags as $row) {
+                if (!\is_array($row) || ($row[0] ?? null) === null) {
+                    continue;
+                }
+                $n = (string) $row[0];
+                if (($n === 'e' || $n === 'E') && \is_string($row[1] ?? null) && hash_equals($parentIdHex, (string) $row[1])) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
-        return false;
+        return true;
     }
 }

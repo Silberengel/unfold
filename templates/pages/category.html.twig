@@ -12,13 +12,21 @@
     {% set _title = category.title|default('') %}
     {% set _summary = category.summary|default('')|striptags|u.truncate(159, '…') %}
     {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+    {% set _is_articles_route = app.request.attributes.get('_route') == 'articles' %}
+    {% set _is_category_route = app.request.attributes.get('_route') == 'magazine-category' %}
+    {% set _articles_page = app.request.query.getInt('page', 1) %}
+    {% set _articles_url = _articles_page > 1 ? url('articles', { page: _articles_page }) : url('articles') %}
+    {% set _category_slug = sync_slug|default(app.request.attributes.get('slug')) %}
+    {% set _category_page = app.request.query.getInt('page', 1) %}
+    {% set _category_url = _category_page > 1 ? url('magazine-category', {slug: _category_slug, page: _category_page}) : url('magazine-category', {slug: _category_slug}) %}
+    {% set _canonical_url = _is_articles_route ? _articles_url : (_is_category_route ? _category_url : url('magazine-category', {slug: _category_slug})) %}
     <meta property="og:title" content="{{ _title|e('html_attr') }}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ app.request.attributes.get('_route') == 'articles' ? url('articles') : url('magazine-category', {slug: sync_slug|default(app.request.attributes.get('slug'))}) }}">
+    <meta property="og:url" content="{{ _canonical_url }}">
     <meta property="og:description" content="{{ (_summary != '' ? _summary : _title)|e('html_attr') }}">
     <meta property="og:image" content="{{ _og_image|e('html_attr') }}">
     <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
-    <link rel="canonical" href="{{ app.request.attributes.get('_route') == 'articles' ? url('articles') : url('magazine-category', {slug: sync_slug|default(app.request.attributes.get('slug'))}) }}">
+    <link rel="canonical" href="{{ _canonical_url }}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ _title|e('html_attr') }}">
     <meta name="twitter:description" content="{{ (_summary != '' ? _summary : _title)|e('html_attr') }}">
@@ -39,6 +47,27 @@
     <div class="category-body">
         <twig:Organisms:CardList :list="list" class="article-list" />
     </div>
+{% if pagination is defined and pagination.last_page > 1 %}
+    {% set _page = pagination.page|default(1) %}
+    {% set _last = pagination.last_page|default(1) %}
+    {% set _is_articles_route = app.request.attributes.get('_route') == 'articles' %}
+    {% set _slug = sync_slug|default(app.request.attributes.get('slug')) %}
+    {% set _prev_url = _is_articles_route
+        ? path('articles', _page > 2 ? { page: _page - 1 } : {})
+        : path('magazine-category', _page > 2 ? { slug: _slug, page: _page - 1 } : { slug: _slug }) %}
+    {% set _next_url = _is_articles_route
+        ? path('articles', { page: _page + 1 })
+        : path('magazine-category', { slug: _slug, page: _page + 1 }) %}
+    <nav class="category-pagination mt-3" aria-label="Articles pagination">
+        {% if _page > 1 %}
+            <a class="btn btn-outline-secondary" href="{{ _prev_url }}">Newer</a>
+        {% endif %}
+        <span class="mx-2 text-subtle">Page {{ _page }} of {{ _last }}</span>
+        {% if _page < _last %}
+            <a class="btn btn-outline-secondary" href="{{ _next_url }}">Older</a>
+        {% endif %}
+    </nav>
+{% endif %}
 {% endblock %}
 
 {% block aside %}
