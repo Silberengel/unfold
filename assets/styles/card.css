@@ -36,7 +36,7 @@ h2.card-title {
 }
 
 .article-list .card {
-    margin-bottom: 1rem;
+    margin-bottom: 1.75rem;
     min-width: 0; /* column flex: do not let cover images set unshrinkable row width */
 }
 

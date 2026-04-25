@@ -1,4 +1,6 @@
-<a {% if path('magazine-category', { 'slug' : slug }) in app.request.uri %}class="active"{% endif %}
-   href="{{ path('magazine-category', { 'slug' : slug }) }}">
-    {{ title }}
-</a>
+{% set nav_active = app.request.attributes.get('_route') == 'magazine-category' and app.request.attributes.get('slug') == slug %}
+<a
+    class="header__cat-link{{ nav_active ? ' header__cat-link--active' : '' }}"
+    href="{{ path('magazine-category', { slug: slug }) }}"
+    {% if nav_active %}aria-current="page"{% endif %}
+>{{ title }}</a>

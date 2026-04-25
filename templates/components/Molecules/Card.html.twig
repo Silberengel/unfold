@@ -14,9 +14,15 @@
         <a href="{{ (article.pubkey and npub_from_hex(article.pubkey) != '') ? path('article', { npub: npub_from_hex(article.pubkey), slug: article.slug }) : path('article-legacy-redirect', { slug: article.slug }) }}">
             <div class="card-header">
                 {% if category %}<small class="text-uppercase">{{ category }}</small>{% endif %}
-                {% if article.image %}
-                    <img src="{{ article.image }}" alt="Cover image for {{ card_title != '' ? card_title : (article.slug|default('')) }}" onerror="this.style.display='none';" >
-                {% endif %}
+                <img
+                    src="{{ article_card_cover(article.image, article.pubkey) }}"
+                    alt="{{ ('Illustration for ' ~ (card_title != '' ? card_title : (article.slug|default('')|replace({'-': ' '})|title)))|e('html_attr') }}"
+                    width="800"
+                    height="450"
+                    loading="lazy"
+                    decoding="async"
+                    onerror="this.onerror=null;this.style.display='none';"
+                >
             </div>
             <div class="card-body">
                     <h2 class="card-title">{% if card_title != '' %}{{ card_title }}{% else %}{{ article.slug|default('')|replace({'-': ' '})|title }}{% endif %}</h2>

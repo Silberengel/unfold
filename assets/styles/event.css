@@ -94,8 +94,11 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     width: 100%;
-    color: var(--color-text-mid);
-    font-size: 0.95rem;
+    font-family: var(--font-family), sans-serif;
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--color-text-mid) 50%, var(--color-bg) 50%);
 }
 
 .event-page a:focus-visible {
