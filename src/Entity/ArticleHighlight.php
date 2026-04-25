@@ -145,12 +145,16 @@ class ArticleHighlight
         return HighlightEventTags::contextFromTags($this->tags);
     }
 
-    /** Renders: full `content` in <mark> when `context` is empty; else `context` quote with `content` substring marked. */
+    /**
+     * HTML for the home aside and article hover cards: when a `context` tag exists, the full quote is
+     * shown with `content` marked inside it; otherwise the event `content` only in a <mark>. The
+     * rendered article body still only wraps the `content` passage (see ArticleBodyHighlightInjector).
+     */
     public function getBodyHtml(): string
     {
-        $ctx = $this->getContextText();
-        $body = (string) $this->getContent();
-
-        return HighlightEventTags::buildHighlightedBodyHtml($ctx, $body);
+        return HighlightEventTags::buildHighlightedBodyHtml(
+            $this->getContextText(),
+            (string) $this->getContent()
+        );
     }
 }

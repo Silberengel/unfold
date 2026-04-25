@@ -449,7 +449,6 @@ class ArticleController  extends AbstractController
                     'authorPubkey' => $h->getAuthorPubkey(),
                     'dateLabel' => $this->formatHighlightListDate($h->getEventCreatedAt()),
                 ]),
-                'bodyHtml' => $h->getBodyHtml(),
             ];
         }
         if ($out === []) {

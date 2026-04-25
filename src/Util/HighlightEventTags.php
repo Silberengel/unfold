@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace App\Util;
 
 /**
- * NIP-84 (kind 9802) in this app:
- * — Event **`content`**: the highlighted words (a substring to mark when `context` exists, or the whole note when it does not).
- * — Optional **`context` tag**: the **full quote** in which to show that highlight; the event `content` is highlighted **inside** the context.
- * — No / empty `context` → show `content` **entirely** wrapped in the highlighter <mark> (not plain text only).
- *
- * @param list<array<int, string>>|list<array> $tags
+ * NIP-84 (kind 9802): {@see buildHighlightedBodyHtml} drives list/hover-card HTML (full `context`
+ * with `content` marked when both exist). In-article marks are applied separately and only wrap
+ * the `content` substring in the article body ({@see \App\Service\ArticleBodyHighlightInjector}).
  */
 final class HighlightEventTags
 {
@@ -45,11 +42,11 @@ final class HighlightEventTags
     }
 
     /**
-     * Renders the full quote and wraps the `content` substring in <mark> when a context tag is present;
-     * otherwise the entire `content` is wrapped in <mark> (no surrounding quote).
+     * Card / aside body: with `context`, show the full quote and mark the `content` substring; with
+     * empty `context`, wrap all of `content` in one <mark>.
      *
-     * @param string $contextQuote  Text from the `context` tag (the full quote). Empty means “no context”.
-     * @param string $contentField  The event's `content` field: highlight to find within `contextQuote` when set.
+     * @param string $contextQuote  Text from the `context` tag. Empty means no surrounding quote.
+     * @param string $contentField  The event’s `content` (highlighted phrase).
      *
      * @return string safe HTML
      */

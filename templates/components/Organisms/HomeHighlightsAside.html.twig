@@ -22,7 +22,6 @@
                                     <div class="home-aside-highlights__quote home-aside-highlights__quote--html user-highlight__body">{{ _html|raw }}</div>
                                 {% else %}
                                     {% set _prew = h.content|default('')|trim %}
-                                    {% if _prew == '' %}{% set _prew = h.contextText|default('')|trim %}{% endif %}
                                     {% if _prew == '' %}{% set _prew = h.quoteExcerpt|default('')|trim %}{% endif %}
                                     <div class="home-aside-highlights__quote home-aside-highlights__quote--plain">{{ _prew|u.truncate(200, '…') }}</div>
                                 {% endif %}

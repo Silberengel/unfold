@@ -131,6 +131,9 @@ export default class extends Controller {
         if (!this.hasPopoverTarget) {
             return;
         }
+        if (!this._pinnedId && !this._openId) {
+            return;
+        }
         const t = event.target;
         if (this.popoverTarget.contains(t)) {
             return;
@@ -205,11 +208,7 @@ export default class extends Controller {
         } else {
             this._clearHoverLeaveTimer();
         }
-        this.popoverInnerTarget.innerHTML =
-            (meta.headHtml || '') +
-            '<div class="user-highlight__body user-highlight__body--popover">' +
-            (meta.bodyHtml || '') +
-            '</div>';
+        this.popoverInnerTarget.innerHTML = meta.headHtml || '';
         this._placePopover(mark);
         this.popoverTarget.hidden = false;
     }

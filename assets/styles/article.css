@@ -449,11 +449,12 @@
     max-width: min(24rem, calc(100vw - 1.5rem));
     margin: 0;
     padding: 0.65rem 2rem 0.85rem 0.85rem;
-    border: 1px solid color-mix(in srgb, var(--color-border) 80%, var(--color-bg) 20%);
+    border: 1px solid color-mix(in srgb, var(--color-border) 75%, var(--color-bg) 25%);
     border-radius: 0.45rem;
     color: var(--color-text);
-    background: var(--color-bg);
-    box-shadow: 0 0.4rem 1.25rem rgba(0, 0, 0, 0.12);
+    /* Slightly above page bg so the card reads as a raised surface */
+    background: color-mix(in srgb, var(--color-bg) 88%, #fff 12%);
+    box-shadow: 0 0.4rem 1.25rem rgba(0, 0, 0, 0.14);
     pointer-events: auto;
 }
 
@@ -488,14 +489,8 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 0.4rem 0.75rem;
-    margin: 0 0 0.4rem;
+    margin: 0;
     font-size: 0.86rem;
-}
-
-.user-highlight__body--popover {
-    margin-top: 0.3rem;
-    max-height: 40vh;
-    overflow: auto;
 }
 
 /* Full `context` quote + optional <mark> on the `content` substring (highlighter, not a box) */
