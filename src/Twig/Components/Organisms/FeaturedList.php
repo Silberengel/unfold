@@ -94,8 +94,8 @@ final class FeaturedList
 
     private static function isNewer(FeaturedArticleCard $a, FeaturedArticleCard $b): bool
     {
-        $ca = $a->getCreatedAt();
-        $cb = $b->getCreatedAt();
+        $ca = $a->getDisplayAt();
+        $cb = $b->getDisplayAt();
         if ($ca === null) {
             return false;
         }

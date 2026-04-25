@@ -16,6 +16,7 @@ final readonly class FeaturedArticleCard
         private ?string $summary,
         private ?string $image,
         private ?\DateTimeImmutable $createdAt,
+        private ?\DateTimeImmutable $publishedAt,
         private ?string $pubkey,
     ) {
     }
@@ -48,6 +49,16 @@ final readonly class FeaturedArticleCard
     public function getCreatedAt(): ?\DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getPublishedAt(): ?\DateTimeImmutable
+    {
+        return $this->publishedAt;
+    }
+
+    public function getDisplayAt(): ?\DateTimeImmutable
+    {
+        return $this->publishedAt ?? $this->createdAt;
     }
 
     public function getPubkey(): ?string

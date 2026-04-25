@@ -51,7 +51,7 @@
         'description': _desc,
         'image': _og_image,
         'url': _canonical,
-        'datePublished': (article.publishedAt ?? article.createdAt)|date('c'),
+        'datePublished': article.displayDateTime|date('c'),
         'mainEntityOfPage': {'@type': 'WebPage', '@id': _canonical},
         'publisher': {'@type': 'Organization', 'name': website_name},
         'author': {'@type': 'Person', 'name': _author_name != '' ? _author_name : (npub|default('Author'))}
@@ -80,12 +80,8 @@
                     <twig:Molecules:UserFromNpub ident="{{ article.pubkey }}" />
                 </span>
                 <span>
-                    {% if article.publishedAt is not null %}
-                        <small>{{ article.publishedAt|date('F j, Y') }}</small>
-                    {% else %}
-                        <small>
-{#                            <twig:ux:icon name="heroicons:pencil" class="icon" /> #}
-                            {{ article.createdAt|date('F j, Y') }}</small><br>
+                    {% if article.displayDateTime %}
+                        <small>{{ article.displayDateTime|date('F j, Y') }}</small>
                     {% endif %}
                 </span>
             </div>

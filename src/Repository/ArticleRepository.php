@@ -104,7 +104,7 @@ class ArticleRepository extends ServiceEntityRepository
         $conn = $this->getEntityManager()->getConnection();
         $qb = $conn->createQueryBuilder();
         $qb
-            ->select('a.id', 'a.slug', 'a.title', 'a.summary', 'a.image', 'a.created_at', 'a.pubkey')
+            ->select('a.id', 'a.slug', 'a.title', 'a.summary', 'a.image', 'a.created_at', 'a.published_at', 'a.pubkey')
             ->from('article', 'a')
             ->where($qb->expr()->in('a.slug', ':slugs'))
             ->setParameter('slugs', $slugs, ArrayParameterType::STRING)
@@ -115,6 +115,7 @@ class ArticleRepository extends ServiceEntityRepository
         $out = [];
         foreach ($rows as $row) {
             $ca = $row['created_at'] ?? null;
+            $pa = $row['published_at'] ?? null;
             $out[] = new FeaturedArticleCard(
                 isset($row['id']) ? (int) $row['id'] : null,
                 isset($row['slug']) ? (string) $row['slug'] : null,
@@ -122,6 +123,7 @@ class ArticleRepository extends ServiceEntityRepository
                 isset($row['summary']) ? (string) $row['summary'] : null,
                 isset($row['image']) ? (string) $row['image'] : null,
                 $ca !== null && $ca !== '' ? new \DateTimeImmutable((string) $ca) : null,
+                $pa !== null && $pa !== '' ? new \DateTimeImmutable((string) $pa) : null,
                 isset($row['pubkey']) ? (string) $row['pubkey'] : null,
             );
         }

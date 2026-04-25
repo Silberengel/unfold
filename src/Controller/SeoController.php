@@ -300,7 +300,7 @@ final class SeoController extends AbstractController
         $entryId = 'urn:web:'.$this->urlHostId($request)
             .':db-article:'.($dbId !== null && $dbId !== '' ? (string) $dbId : \spl_object_id($article));
 
-        $pub = $article->getPublishedAt() ?? $article->getCreatedAt() ?? $tArticle;
+        $pub = $article->getDisplayDateTime() ?? $tArticle;
         $out = "\n  <entry>";
         $out .= "\n    <title>".$this->xmlText($title)."</title>";
         $out .= "\n    <link href=\"".$this->xmlAttr($permalink)."\" rel=\"alternate\" type=\"text/html\"/>";

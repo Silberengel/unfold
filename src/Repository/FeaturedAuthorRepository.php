@@ -52,6 +52,25 @@ class FeaturedAuthorRepository extends ServiceEntityRepository
     }
 
     /**
+     * Listed authors who first appeared in a category index, most recently added first.
+     * {@see FeaturedAuthor::createdAt} is set when the row is created (sync discovered the pubkey in an `a` tag).
+     *
+     * @return list<FeaturedAuthor>
+     */
+    public function findListedMostRecentlyAdded(int $limit, int $offset = 0): array
+    {
+        return $this->createQueryBuilder('f')
+            ->where('f.isListed = :t')
+            ->setParameter('t', true)
+            ->orderBy('f.createdAt', 'DESC')
+            ->addOrderBy('f.id', 'DESC')
+            ->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * @return list<FeaturedAuthor>
      */
     public function findListedOrderByLocalPartPaginated(int $limit, int $offset): array

@@ -1,0 +1,32 @@
+{% if rows is defined and rows is not empty %}
+    <section class="sidebar-featured-authors" aria-label="{{ 'sidebar.featured_authors'|trans }}">
+        <h2 class="sidebar-featured-authors__title">{{ 'sidebar.featured_authors'|trans }}</h2>
+        <ul class="sidebar-featured-authors__grid" role="list">
+            {% for row in rows %}
+                {% set _name = row.display_name|default('')|trim %}
+                {% set _label = _name != '' ? _name : (row.npub|shortenNpub) %}
+                {% set _avatar_src = row.picture|default('')|trim != '' ? row.picture : asset('icons/favicon-96x96.png') %}
+                <li class="sidebar-featured-authors__item">
+                    <a
+                        class="sidebar-featured-authors__link"
+                        href="{{ path('author-profile', { npub: row.npub }) }}"
+                        title="{{ _label|e('html_attr') }}"
+                    >
+                        <span class="sidebar-featured-authors__avatar">
+                            <img
+                                src="{{ _avatar_src|e('html_attr') }}"
+                                alt=""
+                                width="40"
+                                height="40"
+                                loading="lazy"
+                                decoding="async"
+                                onerror="this.onerror=null;this.src='{{ asset('icons/favicon-96x96.png')|e('js') }}';"
+                            >
+                        </span>
+                        <span class="visually-hidden">{{ _label }}</span>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    </section>
+{% endif %}

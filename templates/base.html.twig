@@ -37,6 +37,10 @@
 <div class="layout">
     <nav>
         <twig:UserMenu />
+        {% set _sidebar_fa = sidebar_featured_author_rows(12) %}
+        {% if _sidebar_fa is not empty %}
+            {% include 'components/Organisms/SidebarFeaturedAuthors.html.twig' with { rows: _sidebar_fa } only %}
+        {% endif %}
         {% block nav %}{% endblock %}
     </nav>
     <main>

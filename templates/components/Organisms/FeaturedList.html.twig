@@ -13,9 +13,9 @@
                         </div>
                         <div class="card-body">
                             <h2 class="card-title">{{ feature.title }}</h2>
-                            {% if feature.createdAt %}
+                            {% if feature.displayAt %}
                                 <p class="featured-list__meta">
-                                    <time datetime="{{ feature.createdAt|date('c') }}">{{ feature.createdAt|date('F j, Y') }}</time>
+                                    <time datetime="{{ feature.displayAt|date('c') }}">{{ feature.displayAt|date('F j, Y') }}</time>
                                 </p>
                             {% endif %}
                             <p class="lede truncate">
@@ -32,9 +32,9 @@
                             <a href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}">
                                 <div class="card-body">
                                     <h2 class="card-title">{{ item.title }}</h2>
-                                    {% if item.createdAt %}
+                                    {% if item.displayAt %}
                                         <p class="featured-list__meta">
-                                            <time datetime="{{ item.createdAt|date('c') }}">{{ item.createdAt|date('F j, Y') }}</time>
+                                            <time datetime="{{ item.displayAt|date('c') }}">{{ item.displayAt|date('F j, Y') }}</time>
                                         </p>
                                     {% endif %}
                                     <p class="lede truncate">

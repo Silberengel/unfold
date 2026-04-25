@@ -8,7 +8,7 @@
                 {% if not is_author_profile %}
                     <p>by <twig:Molecules:UserFromNpub ident="{{ article.pubkey }}" /></p>
                 {% endif %}
-                <small>{{ article.createdAt|date('F j Y') }}</small>
+                <small>{{ article.displayDateTime|date('F j Y') }}</small>
             {% endif %}
         </div>
         <a href="{{ (article.pubkey and npub_from_hex(article.pubkey) != '') ? path('article', { npub: npub_from_hex(article.pubkey), slug: article.slug }) : path('article-legacy-redirect', { slug: article.slug }) }}">

@@ -227,6 +227,14 @@ class Article
         return $this;
     }
 
+    /**
+     * Prefer NIP-23 {@see publishedAt} for display/SEO; fall back to event {@see createdAt}.
+     */
+    public function getDisplayDateTime(): ?\DateTimeImmutable
+    {
+        return $this->publishedAt ?? $this->createdAt;
+    }
+
     public function getTopics()
     {
         return $this->topics;
