@@ -11,18 +11,15 @@
 {#            </li>#}
 {#        </ul>#}
         {% endif %}
-        <ul class="user-nav">
+        <ul class="user-nav user-menu__account-nav" role="list">
 {#            <li>#}
 {#                <a href="{{ path('editor-create') }}">Write an article</a>#}
 {#            </li>#}
             <li>
-                <a href="{{ path('search') }}">{{ 'heading.search'|trans }}</a>
-            </li>
-{#            <li>#}
-{#                <a href="{{ path('app_index_index') }}">{{ 'heading.index'|trans }}</a>#}
-{#            </li>#}
-            <li>
                 <a href="/logout" data-action="live#$render">{{ 'heading.logout'|trans }}</a>
+            </li>
+            <li>
+                <a href="{{ path('search') }}">{{ 'heading.search'|trans }}</a>
             </li>
         </ul>
     {% else %}

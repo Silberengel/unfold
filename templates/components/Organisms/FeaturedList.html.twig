@@ -30,6 +30,9 @@
                     {% if item != feature %}
                         <div class="card">
                             <a href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}">
+                                <div class="card-header">
+                                    <img src="{{ article_card_cover(item.image, item.pubkey) }}" alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}" width="1200" height="675" loading="lazy" decoding="async">
+                                </div>
                                 <div class="card-body">
                                     <h2 class="card-title">{{ item.title }}</h2>
                                     {% if item.displayAt %}

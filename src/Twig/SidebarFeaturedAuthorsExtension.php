@@ -20,7 +20,7 @@ final class SidebarFeaturedAuthorsExtension extends AbstractExtension
     {
         return [
             new TwigFunction('sidebar_featured_author_rows', function (int $limit = 12): array {
-                return $this->featuredAuthorListedRows->buildListedByLocalPartPage($limit, 0);
+                return $this->featuredAuthorListedRows->buildSidebarRows($limit);
             }),
         ];
     }

@@ -422,8 +422,48 @@ main {
         margin-top: 152px;
     }
 
-    .user-menu {
-        top: 162px;
+    /* In-flow left column: <nav> clears the fixed #site-header. */
+    .layout > nav {
+        margin-top: 152px;
+    }
+
+    /*
+     * Left column account block: keep it in document flow (not position:fixed) so order is
+     * badge → logout / search → featured authors. Fixed positioning removed the menu from the flow
+     * so the featured block sat under the header or overlapped.
+     */
+    .layout > nav .user-menu:not(.user-menu--inline) {
+        position: static;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        top: auto;
+        left: auto;
+    }
+
+    .layout > nav .user-menu .notice {
+        margin-top: 0;
+        margin-bottom: 0.3rem;
+    }
+
+    /* Tight stack: badge, then logout, then search */
+    .layout > nav .user-menu .user-menu__account-nav {
+        margin: 0.4rem 0 0.35rem;
+        padding: 0;
+    }
+
+    .layout > nav .user-menu .user-menu__account-nav li {
+        margin: 0.2rem 0 0;
+    }
+
+    .layout > nav .user-menu .user-menu__account-nav li:first-child {
+        margin-top: 0;
+    }
+
+    /* More separation before the featured block (sibling in <nav>, after this menu). */
+    .layout > nav .sidebar-featured-authors {
+        margin-top: 1.35rem;
+        padding-top: 1.15rem;
     }
 }
 

@@ -201,7 +201,7 @@ svg.icon {
     padding: 1rem 1.125rem 1.2rem;
 }
 
-/* Lead card only: 16:9 cover frame (Molecules/FeaturedList — side cards have no .card-header). */
+/* 16:9 cover frame (lead + stacked side cards in FeaturedList). */
 .featured-list .card > a > .card-header {
     margin: 0;
     width: 100%;
