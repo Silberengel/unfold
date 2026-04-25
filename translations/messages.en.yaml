@@ -1,9 +1,16 @@
 sidebar:
     featured_authors: 'Featured authors'
     topics: 'Topics'
+    highlights: 'Highlights'
+    highlight_view: 'View highlight: %title%'
 topic:
     browse: 'Articles with this tag'
     empty: 'No published articles with this tag yet.'
+highlight:
+    section_title: 'Highlights'
+    section_lede: 'NIP-84 (kind 9802). The note’s `content` is the highlighted phrase. If a `context` tag is set, that tag is the full quote and the `content` text is marked inside it; otherwise only `content` is shown.'
+    popover: 'Highlight'
+    close: 'Close'
 text:
     byline: 'By'
     search: 'Search...'

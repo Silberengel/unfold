@@ -13,6 +13,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Loads Nostr article discussion: NIP-22 (1111) + legacy kind 1 replies, plus quotes/reposts (q / a tags).
+ * Kind-9802 highlights are not in this response; they live in `article_highlight`.
  *
  * Reply blurbs mirror the jumble client: resolve the parent from `e` / `E` tags (NIP-10, `reply` marker,
  * last-of-sequence), then show a short preview of the parent’s body (see jumble `ParentNotePreview`). Inline
@@ -140,7 +141,7 @@ final readonly class ArticleCommentThreadLoader
      */
     private function cacheKeyForThread(string $coordinate, ?string $articleEventHexId): string
     {
-        return 'comments_v5_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? ''));
+        return 'comments_v6_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? ''));
     }
 
     /**

@@ -164,16 +164,7 @@
 
 .comments-quotes__title {
     font-size: 1.25rem;
-    margin: 0 0 0.35rem;
-}
-
-.comments-quotes__lede {
-    font-size: 0.95rem;
-    margin: 0 0 1.25rem;
-}
-
-.comments-quotes__lede code {
-    font-size: 0.9em;
+    margin: 0 0 0.9rem;
 }
 
 .comments-quotes__sep {
@@ -429,4 +420,112 @@
 .reply-toast--error {
     border-color: #a12b2b;
     background: #fdecec;
+}
+
+/* NIP-84: kind-9802 marks in .article-main + client popover (no separate thread list) */
+.article-body-highlight {
+    cursor: pointer;
+    scroll-margin-top: 6rem;
+}
+
+.article-body-highlight--target {
+    box-shadow: inset 0 -2px 0 0 var(--color-secondary);
+    background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
+    transition: background 0.35s ease, box-shadow 0.35s ease;
+}
+
+.article-body-highlight:focus-visible {
+    outline: 2px solid var(--color-focus-ring, var(--color-primary));
+    outline-offset: 2px;
+}
+
+.article-body-highlight__popover[hidden] {
+    display: none;
+}
+
+.article-body-highlight__popover {
+    position: fixed;
+    z-index: 200;
+    max-width: min(24rem, calc(100vw - 1.5rem));
+    margin: 0;
+    padding: 0.65rem 2rem 0.85rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--color-border) 80%, var(--color-bg) 20%);
+    border-radius: 0.45rem;
+    color: var(--color-text);
+    background: var(--color-bg);
+    box-shadow: 0 0.4rem 1.25rem rgba(0, 0, 0, 0.12);
+    pointer-events: auto;
+}
+
+.article-body-highlight__close {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.35rem;
+    margin: 0;
+    border: 0;
+    padding: 0.15rem 0.4rem;
+    line-height: 1;
+    font-size: 1.35rem;
+    color: var(--color-text-mid);
+    background: transparent;
+    border-radius: 0.2rem;
+    cursor: pointer;
+}
+
+.article-body-highlight__close:hover,
+.article-body-highlight__close:focus-visible {
+    color: var(--color-text);
+    outline: 2px solid var(--color-focus-ring, var(--color-primary));
+}
+
+.article-body-highlight__inner {
+    position: relative;
+}
+
+.article-body-highlight__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem 0.75rem;
+    margin: 0 0 0.4rem;
+    font-size: 0.86rem;
+}
+
+.user-highlight__body--popover {
+    margin-top: 0.3rem;
+    max-height: 40vh;
+    overflow: auto;
+}
+
+/* Full `context` quote + optional <mark> on the `content` substring (highlighter, not a box) */
+.user-highlight__body {
+    margin: 0.35rem 0 0;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--color-text);
+    font-family: var(--main-body-font), serif;
+}
+
+/* In-flow highlighter marker (NIP-84: `content` inside `context` quote) */
+.article-main mark.user-highlight__marker,
+.user-highlight__body mark.user-highlight__marker,
+mark.user-highlight__marker {
+    margin: 0;
+    padding: 0.08em 0.1em 0.12em;
+    border-radius: 0.12em;
+    font: inherit;
+    line-height: inherit;
+    color: inherit;
+    background: color-mix(in srgb, #7ad67a 38%, #f0e8a0 62%);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+/* When `content` is not a substring of `context` (rare) */
+.user-highlight__marker-orphan {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-text-mid);
 }

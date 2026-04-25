@@ -12,6 +12,7 @@ use App\Service\CacheService;
 use App\Service\FeaturedAuthorSync;
 use App\Service\MagazineContentService;
 use App\Service\Nip05VerificationService;
+use App\Service\HighlightSyncService;
 use App\Service\MagazineRefresher;
 use App\Service\Nip09DeletionApplier;
 use App\Service\NostrClient;
@@ -30,12 +31,12 @@ use Symfony\Component\Console\Terminal;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
- * Prewarms magazine index cache, author metadata cache, and optional comment thread cache.
- * Does not persist comments to MySQL; comments are cache-only in this app.
+ * Prewarms magazine index cache, author metadata cache, optional comment thread cache, and
+ * kind-9802 highlights into MySQL. Comments remain cache-only; highlights use `article_highlight`.
  */
 #[AsCommand(
     name: 'app:prewarm',
-    description: 'Refresh magazine indices, NIP-09 deletions, profile metadata, NIP-05 verification cache, and comment caches',
+    description: 'Refresh magazine indices, NIP-09 deletions, profile metadata, NIP-05, comment caches, and highlight DB',
 )]
 final class PrewarmCommand extends Command
 {
@@ -53,6 +54,7 @@ final class PrewarmCommand extends Command
         private readonly Nip05VerificationService $nip05Verification,
         private readonly ProfileIdentityLinksBuilder $profileIdentityLinks,
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
+        private readonly HighlightSyncService $highlightSyncService,
     ) {
         parent::__construct();
     }
@@ -69,7 +71,10 @@ final class PrewarmCommand extends Command
             ->addOption('metadata-limit', null, InputOption::VALUE_REQUIRED, 'Max distinct author pubkeys to warm (0 = all)', '0')
             ->addOption('metadata-batch', null, InputOption::VALUE_REQUIRED, 'Kind-0 metadata: pubkeys per Nostr REQ (batched)', '50')
             ->addOption('comments-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to warm comment cache for (0 = all, order: createdAt DESC; excludes generic /articles feed-only rows)', '10')
-            ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the whole comments phase (Nostr fetches are slow; a single long thread can exceed a short budget; use 1200+ if prewarming many articles)', '600');
+            ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the whole comments phase (Nostr fetches are slow; a single long thread can exceed a short budget; use 1200+ if prewarming many articles)', '600')
+            ->addOption('no-highlights', null, InputOption::VALUE_NONE, 'Skip kind-9802 highlight fetch → MySQL')
+            ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine articles to sync highlights for (0 = all)', '0')
+            ->addOption('highlights-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the highlight sync phase', '600');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -404,71 +409,129 @@ final class PrewarmCommand extends Command
 
         if ($input->getOption('no-comments')) {
             $io->note('Skipping comments (--no-comments).');
+        } else {
+            $maxArticles = (int) $input->getOption('comments-max');
+
+            $io->section('Comment / interaction cache');
+            $commentBudgetSeconds = max(1, (int) $input->getOption('comments-budget'));
+            $commentPhaseStart = microtime(true);
+            $deadline = $commentPhaseStart + $commentBudgetSeconds;
+            $magazineList = $this->magazineContent->getAllMagazineCategoryArticlesForSyndication();
+            if ($maxArticles > 0) {
+                $magazineList = \array_slice($magazineList, 0, $maxArticles);
+            }
+            $articles = $magazineList;
+            $articleCount = \count($articles);
+            $w = 0;
+            if ($articleCount === 0) {
+                $io->note('No articles in DB to scan for comment cache.');
+            } else {
+                $cBar = $this->createPrewarmProgressBar($io, $articleCount, 'Comment threads');
+                $cBar->start();
+                try {
+                    /** @var Article $article */
+                    foreach ($articles as $article) {
+                        if (microtime(true) >= $deadline) {
+                            $io->warning(sprintf(
+                                'Comment phase stopped: comments-budget reached (%s).',
+                                $this->formatCommentBudgetSecondsPair(microtime(true) - $commentPhaseStart, $commentBudgetSeconds),
+                            ));
+                            break;
+                        }
+                        $slug = trim((string) $article->getSlug());
+                        $pubkey = (string) $article->getPubkey();
+                        if ($slug === '' || strlen($pubkey) !== 64) {
+                            $cBar->advance(1);
+                            $cBar->setMessage('skip · invalid row');
+
+                            continue;
+                        }
+                        $kind = $article->getKind()?->value ?? 30023;
+                        $coordinate = $kind.':'.$pubkey.':'.$slug;
+                        $msg = $slug;
+                        if (strlen($msg) > 56) {
+                            $msg = substr($msg, 0, 53).'…';
+                        }
+                        $cBar->setMessage($msg);
+                        $eventHex = (string) ($article->getEventId() ?? '');
+                        try {
+                            $this->commentThreadLoader->load($coordinate, $eventHex !== '' ? $eventHex : null);
+                            ++$w;
+                        } catch (\Throwable $e) {
+                            $this->logger->warning('app:prewarm comment load', ['coord' => $coordinate, 'error' => $e->getMessage()]);
+                        }
+                        $cBar->advance(1);
+                    }
+                } finally {
+                    $this->finishPrewarmProgressBarWithoutFillingToMax($cBar, $io);
+                }
+            }
+            $io->success(sprintf(
+                'Warmed comment cache for %d of %d article(s). Comment phase wall time %s.',
+                $w,
+                $articleCount,
+                $this->formatCommentBudgetSecondsPair(microtime(true) - $commentPhaseStart, $commentBudgetSeconds),
+            ));
+        }
+
+        if ($input->getOption('no-highlights')) {
+            $io->note('Skipping highlight DB sync (--no-highlights).');
 
             return Command::SUCCESS;
         }
 
-        $maxArticles = (int) $input->getOption('comments-max');
-
-        $io->section('Comment / interaction cache');
-        $commentBudgetSeconds = max(1, (int) $input->getOption('comments-budget'));
-        $commentPhaseStart = microtime(true);
-        $deadline = $commentPhaseStart + $commentBudgetSeconds;
-        $magazineList = $this->magazineContent->getAllMagazineCategoryArticlesForSyndication();
-        if ($maxArticles > 0) {
-            $magazineList = \array_slice($magazineList, 0, $maxArticles);
+        $maxH = (int) $input->getOption('highlights-max');
+        $io->section('Highlights (kind 9802 → MySQL)');
+        $hBudget = max(1, (int) $input->getOption('highlights-budget'));
+        $hStart = microtime(true);
+        $hDeadline = $hStart + $hBudget;
+        $hList = $this->magazineContent->getAllMagazineCategoryArticlesForSyndication();
+        if ($maxH > 0) {
+            $hList = \array_slice($hList, 0, $maxH);
         }
-        $articles = $magazineList;
-        $articleCount = \count($articles);
-        $w = 0;
-        if ($articleCount === 0) {
-            $io->note('No articles in DB to scan for comment cache.');
+        $hCount = \count($hList);
+        $hW = 0;
+        if ($hCount === 0) {
+            $io->note('No articles in DB to scan for highlights.');
         } else {
-            $cBar = $this->createPrewarmProgressBar($io, $articleCount, 'Comment threads');
-            $cBar->start();
+            $hBar = $this->createPrewarmProgressBar($io, $hCount, 'Kind 9802 highlights');
+            $hBar->start();
             try {
                 /** @var Article $article */
-                foreach ($articles as $article) {
-                    if (microtime(true) >= $deadline) {
-                        $io->warning(sprintf(
-                            'Comment phase stopped: comments-budget reached (%s).',
-                            $this->formatCommentBudgetSecondsPair(microtime(true) - $commentPhaseStart, $commentBudgetSeconds),
-                        ));
+                foreach ($hList as $article) {
+                    if (microtime(true) >= $hDeadline) {
+                        $io->warning(sprintf('Highlight phase stopped: highlights-budget reached (%d s).', $hBudget));
                         break;
                     }
                     $slug = trim((string) $article->getSlug());
                     $pubkey = (string) $article->getPubkey();
                     if ($slug === '' || strlen($pubkey) !== 64) {
-                        $cBar->advance(1);
-                        $cBar->setMessage('skip · invalid row');
-
+                        $hBar->advance(1);
+                        $hBar->setMessage('skip · invalid row');
                         continue;
                     }
-                    $kind = $article->getKind()?->value ?? 30023;
-                    $coordinate = $kind.':'.$pubkey.':'.$slug;
-                    $msg = $slug;
-                    if (strlen($msg) > 56) {
-                        $msg = substr($msg, 0, 53).'…';
+                    $tmsg = $slug;
+                    if (strlen($tmsg) > 56) {
+                        $tmsg = substr($tmsg, 0, 53).'…';
                     }
-                    $cBar->setMessage($msg);
-                    $eventHex = (string) ($article->getEventId() ?? '');
+                    $hBar->setMessage($tmsg);
                     try {
-                        $this->commentThreadLoader->load($coordinate, $eventHex !== '' ? $eventHex : null);
-                        ++$w;
+                        $hW += $this->highlightSyncService->syncForArticle($article);
                     } catch (\Throwable $e) {
-                        $this->logger->warning('app:prewarm comment load', ['coord' => $coordinate, 'error' => $e->getMessage()]);
+                        $this->logger->warning('app:prewarm highlight', ['slug' => $slug, 'error' => $e->getMessage()]);
                     }
-                    $cBar->advance(1);
+                    $hBar->advance(1);
                 }
             } finally {
-                $this->finishPrewarmProgressBarWithoutFillingToMax($cBar, $io);
+                $this->finishPrewarmProgressBarWithoutFillingToMax($hBar, $io);
             }
         }
         $io->success(sprintf(
-            'Warmed comment cache for %d of %d article(s). Comment phase wall time %s.',
-            $w,
-            $articleCount,
-            $this->formatCommentBudgetSecondsPair(microtime(true) - $commentPhaseStart, $commentBudgetSeconds),
+            'Highlight rows written/updated: <info>%d</info> (articles scanned: <info>%d</info>, wall time <info>%.0f</info>s / %d s).',
+            $hW,
+            $hCount,
+            microtime(true) - $hStart,
+            $hBudget
         ));
 
         return Command::SUCCESS;

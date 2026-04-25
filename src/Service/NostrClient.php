@@ -1240,6 +1240,7 @@ class NostrClient
 
     /**
      * NIP-22 kind 1111 thread, legacy kind 1 replies (pre-NIP-22 clients), and quote/repost-style references.
+     * Kind 9802 highlights are excluded; they are stored in `article_highlight` via {@see fetchHighlightEventsForArticle()}.
      *
      * @param string               $coordinate      kind:pubkey:d-identifier (e.g. longform address)
      * @param null|string          $rootEventHexId  Published article event id (hex) for #e / #q matching
@@ -1397,6 +1398,94 @@ class NostrClient
         ]);
 
         return ['thread' => $thread, 'quotes' => $quotes, 'partial' => $partial];
+    }
+
+    /**
+     * Fetches kind 9802 (highlights) that reference the long-form address. Used for DB ingest only.
+     *
+     * @return list<object> unique wire events by id
+     */
+    public function fetchHighlightEventsForArticle(string $coordinate): array
+    {
+        $parts = explode(':', $coordinate, 3);
+        if (\count($parts) < 3) {
+            throw new \InvalidArgumentException('Invalid coordinate format, expected kind:pubkey:identifier');
+        }
+        $pubkey = $parts[1];
+
+        $tRelays = microtime(true);
+        $authorRelays = $this->getAuthorNip65RelaysList($pubkey);
+        $this->logger->info('nostr.highlight_relay_list', [
+            'elapsed_ms' => (int) round((microtime(true) - $tRelays) * 1000),
+            'author_relay_count' => \count($authorRelays),
+        ]);
+
+        $baseForDiscussion = $this->configuredArticleRelayUrlList();
+        $mergedForDiscussion = $this->withAggrNostrLandIfUserSubscribesNostrLand(
+            array_merge($baseForDiscussion, $authorRelays)
+        );
+        $plannedRelayUrls = array_values(array_unique($mergedForDiscussion, \SORT_REGULAR));
+        if (\count($plannedRelayUrls) > self::MAX_DISCUSSION_RELAY_URLS) {
+            $plannedRelayUrls = \array_slice($plannedRelayUrls, 0, self::MAX_DISCUSSION_RELAY_URLS);
+        }
+        $limH = 200;
+        $filters = [];
+        $f = new Filter();
+        $f->setKinds([KindsEnum::HIGHLIGHTS->value]);
+        $f->setTag('#a', [$coordinate]);
+        $f->setLimit($limH);
+        $filters[] = $f;
+        $f = new Filter();
+        $f->setKinds([KindsEnum::HIGHLIGHTS->value]);
+        $f->setTag('#A', [$coordinate]);
+        $f->setLimit($limH);
+        $filters[] = $f;
+
+        $subscription = new Subscription();
+        $subscriptionId = $subscription->setId();
+        $requestMessage = new RequestMessage($subscriptionId, $filters);
+
+        $this->logger->info('nostr.highlight_req', [
+            'subscription_id' => $subscriptionId,
+            'coordinate' => $coordinate,
+            'relay_count' => \count($plannedRelayUrls),
+        ]);
+
+        try {
+            if (!\is_file($this->projectDir.'/bin/nostr_relay_request_worker.php') || \count($plannedRelayUrls) <= 1) {
+                $forSeq = $this->capRelayUrlsForSequentialPath($plannedRelayUrls);
+                $response = $this->sendArticleDiscussionToRelaysSequential($forSeq, $requestMessage);
+            } else {
+                try {
+                    $response = $this->sendArticleDiscussionToRelaysParallel($plannedRelayUrls, $requestMessage);
+                } catch (\Throwable $e) {
+                    $this->logger->warning('nostr.highlight.parallel_failed', [
+                        'message' => $e->getMessage(),
+                        'exception_class' => \get_class($e),
+                    ]);
+                    $forSeq = $this->capRelayUrlsForSequentialPath($plannedRelayUrls);
+                    $response = $this->sendArticleDiscussionToRelaysSequential($forSeq, $requestMessage);
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('nostr.highlight_req_failed: '.$e->getMessage(), [
+                'coordinate' => $coordinate,
+            ]);
+            throw new \RuntimeException('Nostr request failed for highlights', 0, $e);
+        }
+
+        $byId = [];
+        $this->processResponse($response, function ($event) use (&$byId) {
+            if (\is_object($event) && isset($event->id) && (int) ($event->kind ?? 0) === KindsEnum::HIGHLIGHTS->value) {
+                $byId[(string) $event->id] = $event;
+            }
+
+            return null;
+        });
+
+        $this->logger->info('nostr.highlight_done', ['count' => \count($byId)]);
+
+        return array_values($byId);
     }
 
     /**
@@ -1660,6 +1749,10 @@ class NostrClient
     private function eventIsArticleQuote(object $event, string $coordinate, ?string $rootEventHexId): bool
     {
         $kind = (int) ($event->kind ?? 0);
+        if ($kind === KindsEnum::HIGHLIGHTS->value) {
+            // Highlights are stored in `article_highlight`, not the discussion/quote list.
+            return false;
+        }
         if ($kind === KindsEnum::COMMENTS->value) {
             foreach ($event->tags ?? [] as $tag) {
                 if (!\is_array($tag) || \count($tag) < 2) {
@@ -1693,17 +1786,6 @@ class NostrClient
                     continue;
                 }
                 if (($tag[0] ?? '') === 'a' && (string) ($tag[1] ?? '') === $coordinate) {
-                    return true;
-                }
-            }
-        }
-        if ($kind === KindsEnum::HIGHLIGHTS->value) {
-            foreach ($event->tags ?? [] as $tag) {
-                if (!\is_array($tag) || \count($tag) < 2) {
-                    continue;
-                }
-                $n = (string) ($tag[0] ?? '');
-                if (($n === 'a' || $n === 'A') && (string) ($tag[1] ?? '') === $coordinate) {
                     return true;
                 }
             }
@@ -1759,7 +1841,6 @@ class NostrClient
             KindsEnum::REPOST->value,
             KindsEnum::GENERIC_REPOST->value,
             KindsEnum::COMMENTS->value,
-            KindsEnum::HIGHLIGHTS->value,
         ];
         $qVals = [$coordinate];
         if ($rootEventHexId !== null && $rootEventHexId !== '') {
@@ -1775,17 +1856,6 @@ class NostrClient
         $f->setKinds([KindsEnum::GENERIC_REPOST->value]);
         $f->setTag('#a', [$coordinate]);
         $f->setLimit(50);
-        $filters[] = $f;
-
-        $f = new Filter();
-        $f->setKinds([KindsEnum::HIGHLIGHTS->value]);
-        $f->setTag('#a', [$coordinate]);
-        $f->setLimit(40);
-        $filters[] = $f;
-        $f = new Filter();
-        $f->setKinds([KindsEnum::HIGHLIGHTS->value]);
-        $f->setTag('#A', [$coordinate]);
-        $f->setLimit(40);
         $filters[] = $f;
 
         return $filters;

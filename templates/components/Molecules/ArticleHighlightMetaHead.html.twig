@@ -1,0 +1,8 @@
+<div class="article-body-highlight__head">
+    <div class="article-body-highlight__who">
+        <twig:Molecules:UserFromNpub ident="{{ authorPubkey }}" />
+    </div>
+    {% if dateLabel|default('')|trim != '' %}
+        <span class="text-subtle article-body-highlight__when">{{ dateLabel }}</span>
+    {% endif %}
+</div>

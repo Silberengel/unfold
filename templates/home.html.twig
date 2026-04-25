@@ -32,6 +32,5 @@
 {% endblock %}
 
 {% block aside %}
-{#    <h6>Magazines</h6>#}
-{#    <twig:Organisms:ZineList />#}
+    {% include 'components/Organisms/HomeHighlightsAside.html.twig' with { highlights: home_highlights|default([]) } only %}
 {% endblock %}

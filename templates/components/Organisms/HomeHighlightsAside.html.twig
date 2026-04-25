@@ -1,0 +1,38 @@
+{% if highlights is defined and highlights is not empty %}
+    <section class="home-aside-highlights" aria-label="{{ 'sidebar.highlights'|trans }}">
+        <h2 class="home-aside-highlights__title">{{ 'sidebar.highlights'|trans }}</h2>
+        <div class="home-aside-highlights__scroller">
+            <ul class="home-aside-highlights__list" role="list">
+            {% for h in highlights %}
+                {% set art = h.article %}
+                {% if art %}
+                    {% set _np = npub_from_hex(art.pubkey|default('')) %}
+                    {% if _np != '' and art.slug|default('') != '' %}
+                        <li class="home-aside-highlights__item">
+                            <div class="home-aside-highlights__item-inner">
+                                <a
+                                    class="home-aside-highlights__hit"
+                                    href="{{ path('article', { npub: _np, slug: art.slug }) ~ '#h-' ~ h.eventId }}"
+                                    aria-label="{{ 'sidebar.highlight_view'|trans({ '%title%': art.title|default('') })|e('html_attr') }}"
+                                >
+                                    <span class="visually-hidden">{{ 'sidebar.highlight_view'|trans({ '%title%': art.title|default('') }) }}</span>
+                                </a>
+                                {% set _html = h.bodyHtml|default('')|trim %}
+                                {% if _html != '' %}
+                                    <div class="home-aside-highlights__quote home-aside-highlights__quote--html user-highlight__body">{{ _html|raw }}</div>
+                                {% else %}
+                                    {% set _prew = h.content|default('')|trim %}
+                                    {% if _prew == '' %}{% set _prew = h.contextText|default('')|trim %}{% endif %}
+                                    {% if _prew == '' %}{% set _prew = h.quoteExcerpt|default('')|trim %}{% endif %}
+                                    <div class="home-aside-highlights__quote home-aside-highlights__quote--plain">{{ _prew|u.truncate(200, '…') }}</div>
+                                {% endif %}
+                                <span class="home-aside-highlights__meta text-subtle">{{ art.title|default('')|u.truncate(52, '…') }}</span>
+                            </div>
+                        </li>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            </ul>
+        </div>
+    </section>
+{% endif %}

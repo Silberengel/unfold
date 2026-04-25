@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Repository\ArticleHighlightRepository;
 use App\Service\MagazineContentService;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -16,6 +17,7 @@ class DefaultController extends AbstractController
 {
     public function __construct(
         private readonly MagazineContentService $magazineContent,
+        private readonly ArticleHighlightRepository $articleHighlightRepository,
     ) {
     }
 
@@ -26,6 +28,7 @@ class DefaultController extends AbstractController
 
         return $this->render('home.html.twig', [
             'home_featured_tiles' => $this->magazineContent->buildHomeMixedFeaturedWallTiles($categoryATags),
+            'home_highlights' => $this->articleHighlightRepository->findRecentForHome(40),
         ]);
     }
 
