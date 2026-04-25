@@ -22,8 +22,10 @@ class DefaultController extends AbstractController
     #[Route('/', name: 'home')]
     public function index(): Response
     {
+        $categoryATags = $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly();
+
         return $this->render('home.html.twig', [
-            'indices' => $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly(),
+            'home_featured_tiles' => $this->magazineContent->buildHomeMixedFeaturedWallTiles($categoryATags),
         ]);
     }
 

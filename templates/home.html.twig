@@ -26,10 +26,8 @@
 {% endblock %}
 
 {% block body %}
-    <div class="home-body">
-        {% for item in indices %}
-            <twig:Organisms:FeaturedList :category="item" class="featured-list"/>
-        {% endfor %}
+    <div class="home-body home-body--wall">
+        {% include 'components/Organisms/FeaturedWall.html.twig' with { tiles: home_featured_tiles|default([]) } only %}
     </div>
 {% endblock %}
 

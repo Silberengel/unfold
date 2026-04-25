@@ -1,0 +1,41 @@
+{#
+  Single masonry wall: mixed categories (round-robin), same tile styling as the former per-section list.
+#}
+{% if tiles is not empty %}
+    <div
+        class="featured-list featured-list--wall"
+        role="region"
+        aria-label="{{ (website_name ~ ' — featured articles')|e('html_attr') }}"
+    >
+        {% for tile in tiles %}
+            {% set item = tile.article %}
+            {% set _hue = (tile.categoryTitle|default('x')|length * 47) % 360 %}
+            <article class="featured-tile" style="--tile-hue: {{ _hue }};">
+                <a
+                    class="featured-tile__link"
+                    href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}"
+                >
+                    <div class="featured-tile__head">
+                        <span class="featured-tile__cat">{{ tile.categoryTitle }}</span>
+                    </div>
+                    <div class="featured-tile__media featured-tile__media--ar{{ loop.index0 % 4 }}">
+                        <img
+                            src="{{ article_card_cover(item.image, item.pubkey) }}"
+                            alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
+                            width="1200"
+                            height="675"
+                            loading="lazy"
+                            decoding="async"
+                        >
+                    </div>
+                    <div class="card-body">
+                        <h2 class="card-title">{{ item.title }}</h2>
+                        <p class="lede truncate">
+                            {{ item.summary }}
+                        </p>
+                    </div>
+                </a>
+            </article>
+        {% endfor %}
+    </div>
+{% endif %}

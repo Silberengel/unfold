@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Dto\FeaturedArticleCard;
 use App\Entity\Article;
 use App\Entity\Event;
 use App\Enum\EventStatusEnum;
@@ -628,5 +629,141 @@ final class MagazineContentService
             }
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * Interleaves up to four articles per home category in round-robin order (one “wall” mixing all topics).
+     * Duplicate slugs across categories are skipped so each article appears at most once.
+     *
+     * @param list<array<int, string>> $categoryATags
+     *
+     * @return list<array{article: FeaturedArticleCard, categoryTitle: string}>
+     */
+    public function buildHomeMixedFeaturedWallTiles(array $categoryATags): array
+    {
+        $blocks = [];
+        foreach ($categoryATags as $row) {
+            $coord = $row[1] ?? '';
+            if (!\is_string($coord) || $coord === '') {
+                continue;
+            }
+            $b = $this->buildCategoryFeaturedBlock($coord);
+            if ($b !== null && $b['cards'] !== []) {
+                $blocks[] = $b;
+            }
+        }
+        if ($blocks === []) {
+            return [];
+        }
+
+        $pointers = array_fill(0, \count($blocks), 0);
+        $seenSlugs = [];
+        $out = [];
+
+        while (true) {
+            $roundAdded = false;
+            for ($i = 0, $n = \count($blocks); $i < $n; ++$i) {
+                while (isset($blocks[$i]['cards'][$pointers[$i]])) {
+                    $card = $blocks[$i]['cards'][$pointers[$i]];
+                    $slug = \trim((string) $card->getSlug());
+                    if ($slug !== '' && isset($seenSlugs[$slug])) {
+                        ++$pointers[$i];
+                        continue;
+                    }
+                    if ($slug !== '') {
+                        $seenSlugs[$slug] = true;
+                    }
+                    $out[] = [
+                        'article' => $card,
+                        'categoryTitle' => $blocks[$i]['title'],
+                    ];
+                    ++$pointers[$i];
+                    $roundAdded = true;
+                    break;
+                }
+            }
+            if (!$roundAdded) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Same resolution as {@see \App\Twig\Components\Organisms\FeaturedList} (4 cards per category).
+     *
+     * @return null|array{title: string, cards: list<FeaturedArticleCard>}
+     */
+    private function buildCategoryFeaturedBlock(string $categoryCoord): ?array
+    {
+        $parts = explode(':', $categoryCoord, 3);
+        if (\count($parts) < 3) {
+            return null;
+        }
+        $slug = $parts[2];
+        $catIndex = $this->store->getCategory($slug);
+        if (!\is_object($catIndex) || !\method_exists($catIndex, 'getTags')) {
+            return null;
+        }
+
+        $title = '';
+        $slugs = [];
+        foreach ($catIndex->getTags() as $tag) {
+            if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
+                $title = (string) $tag[1];
+            }
+            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
+                $segs = explode(':', (string) $tag[1], 3);
+                $slugs[] = \trim((string) end($segs));
+                if (\count($slugs) >= 5) {
+                    break;
+                }
+            }
+        }
+
+        if ($title === '') {
+            $title = $slug;
+        }
+        if ($slugs === []) {
+            return null;
+        }
+
+        $articles = $this->articleRepository->findFeaturedCardsBySlugs($slugs);
+        $slugMap = [];
+        foreach ($articles as $article) {
+            $articleSlug = \trim((string) $article->getSlug());
+            if ($articleSlug !== '') {
+                if (!isset($slugMap[$articleSlug])) {
+                    $slugMap[$articleSlug] = $article;
+                } elseif ($this->featuredCardIsNewer($article, $slugMap[$articleSlug])) {
+                    $slugMap[$articleSlug] = $article;
+                }
+            }
+        }
+        $orderedList = [];
+        foreach ($slugs as $articleSlug) {
+            $articleSlug = \trim((string) $articleSlug);
+            if ($articleSlug !== '' && isset($slugMap[$articleSlug])) {
+                $orderedList[] = $slugMap[$articleSlug];
+            }
+        }
+        $cards = \array_slice($orderedList, 0, 4);
+
+        return ['title' => $title, 'cards' => $cards];
+    }
+
+    private function featuredCardIsNewer(FeaturedArticleCard $a, FeaturedArticleCard $b): bool
+    {
+        $ca = $a->getDisplayAt();
+        $cb = $b->getDisplayAt();
+        if ($ca === null) {
+            return false;
+        }
+        if ($cb === null) {
+            return true;
+        }
+
+        return $ca > $cb;
     }
 }

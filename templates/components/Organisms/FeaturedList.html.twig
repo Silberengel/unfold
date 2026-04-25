@@ -1,54 +1,39 @@
 <div>
     {% if list %}
-        <div class="featured-cat">
-            <small>{{ title }}</small>
-        </div>
-        <div {{ attributes }}>
-            <div>
-                {% set feature = list[0] %}
-                <div class="card">
-                    <a href="{{ (feature.pubkey and npub_from_hex(feature.pubkey) != '') ? path('article', { npub: npub_from_hex(feature.pubkey), slug: feature.slug }) : path('article-legacy-redirect', { slug: feature.slug }) }}">
-                        <div class="card-header">
-                            <img src="{{ article_card_cover(feature.image, feature.pubkey) }}" alt="{{ ('Illustration for ' ~ feature.title)|e('html_attr') }}" width="1200" height="675" loading="lazy" decoding="async">
+        {% set _hue = (title|default('x')|length * 47) % 360 %}
+        <div
+            {{ attributes.defaults({ class: 'featured-list featured-list--wall' }) }}
+            role="region"
+            aria-label="{{ title|e('html_attr') }}"
+        >
+            {% for item in list %}
+                <article class="featured-tile" style="--tile-hue: {{ _hue }};">
+                    <a
+                        class="featured-tile__link"
+                        href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}"
+                    >
+                        <div class="featured-tile__head">
+                            <span class="featured-tile__cat">{{ title }}</span>
+                        </div>
+                        <div class="featured-tile__media featured-tile__media--ar{{ loop.index0 % 4 }}">
+                            <img
+                                src="{{ article_card_cover(item.image, item.pubkey) }}"
+                                alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
+                                width="1200"
+                                height="675"
+                                loading="lazy"
+                                decoding="async"
+                            >
                         </div>
                         <div class="card-body">
-                            <h2 class="card-title">{{ feature.title }}</h2>
-                            {% if feature.displayAt %}
-                                <p class="featured-list__meta">
-                                    <time datetime="{{ feature.displayAt|date('c') }}">{{ feature.displayAt|date('F j, Y') }}</time>
-                                </p>
-                            {% endif %}
+                            <h2 class="card-title">{{ item.title }}</h2>
                             <p class="lede truncate">
-                                {{ feature.summary }}
+                                {{ item.summary }}
                             </p>
                         </div>
                     </a>
-                </div>
-            </div>
-            <div>
-                {% for item in list %}
-                    {% if item != feature %}
-                        <div class="card">
-                            <a href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}">
-                                <div class="card-header">
-                                    <img src="{{ article_card_cover(item.image, item.pubkey) }}" alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}" width="1200" height="675" loading="lazy" decoding="async">
-                                </div>
-                                <div class="card-body">
-                                    <h2 class="card-title">{{ item.title }}</h2>
-                                    {% if item.displayAt %}
-                                        <p class="featured-list__meta">
-                                            <time datetime="{{ item.displayAt|date('c') }}">{{ item.displayAt|date('F j, Y') }}</time>
-                                        </p>
-                                    {% endif %}
-                                    <p class="lede truncate">
-                                        {{ item.summary }}
-                                    </p>
-                                </div>
-                            </a>
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
+                </article>
+            {% endfor %}
         </div>
     {% endif %}
 </div>
