@@ -5,13 +5,58 @@ declare(strict_types=1);
 namespace App\Util;
 
 /**
- * NIP-84 (kind 9802): {@see buildHighlightedBodyHtml} drives list/hover-card HTML (full `context`
- * with `content` marked when both exist). In-article marks are applied separately and only wrap
- * the `content` substring in the article body ({@see \App\Service\ArticleBodyHighlightInjector}).
+ * NIP-84 (kind 9802): optional `context` = full visible passage; `content` = highlighted range
+ * (marked inside that passage when `context` exists, otherwise only `content` in a mark).
+ * In-article marks: {@see \App\Service\ArticleBodyHighlightInjector}.
  */
 final class HighlightEventTags
 {
     public const HIGHLIGHT_MARK_CLASS = 'user-highlight__marker';
+
+    /**
+     * Turn one Nostr tag (array, associative array, or object from JSON) into an ordered list of
+     * string cells. Relay clients and json_decode vary; without this, `context` tags are often skipped.
+     *
+     * @return list<string>|null empty tag rows become null
+     */
+    public static function nostrTagRowToList(mixed $tag): ?array
+    {
+        if (\is_object($tag)) {
+            $tag = \array_values((array) $tag);
+        }
+        if (!\is_array($tag)) {
+            return null;
+        }
+        $out = [];
+        foreach ($tag as $cell) {
+            $out[] = (string) $cell;
+        }
+        if ($out === []) {
+            return null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Canonical tag list for JSON storage (list of list of strings).
+     *
+     * @param list<mixed> $tags
+     *
+     * @return list<list<string>>
+     */
+    public static function normalizeTagsForStorage(array $tags): array
+    {
+        $out = [];
+        foreach ($tags as $tag) {
+            $row = self::nostrTagRowToList($tag);
+            if (null !== $row && $row !== []) {
+                $out[] = $row;
+            }
+        }
+
+        return $out;
+    }
 
     /**
      * The full passage from the `context` tag (one tag may split across many values in some clients).
@@ -20,14 +65,15 @@ final class HighlightEventTags
     {
         $parts = [];
         foreach ($tags as $t) {
-            if (!\is_array($t) || \count($t) < 2) {
+            $row = self::nostrTagRowToList($t);
+            if (null === $row || \count($row) < 2) {
                 continue;
             }
-            if (strtolower((string) ($t[0] ?? '')) !== 'context') {
+            if (strtolower($row[0]) !== 'context') {
                 continue;
             }
-            for ($i = 1, $c = \count($t); $i < $c; ++$i) {
-                $p = (string) ($t[$i] ?? '');
+            for ($i = 1, $c = \count($row); $i < $c; ++$i) {
+                $p = $row[$i];
                 if ($p !== '') {
                     $parts[] = $p;
                 }
@@ -42,8 +88,8 @@ final class HighlightEventTags
     }
 
     /**
-     * Card / aside body: with `context`, show the full quote and mark the `content` substring; with
-     * empty `context`, wrap all of `content` in one <mark>.
+     * With `context`, show the full quote and mark the `content` substring. With no `context`, wrap
+     * all of `content` in one mark.
      *
      * @param string $contextQuote  Text from the `context` tag. Empty means no surrounding quote.
      * @param string $contentField  The event’s `content` (highlighted phrase).
@@ -84,6 +130,14 @@ final class HighlightEventTags
 
     private static function markHtml(string $innerText): string
     {
+        return self::markHighlightSpanHtml($innerText);
+    }
+
+    /**
+     * Single highlighted span (inner text escaped). Used in cards and by {@see buildHighlightedBodyHtml}.
+     */
+    public static function markHighlightSpanHtml(string $innerText): string
+    {
         $e = \htmlspecialchars($innerText, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
 
         return '<mark class="'.self::HIGHLIGHT_MARK_CLASS.'">'.$e.'</mark>';
@@ -97,14 +151,15 @@ final class HighlightEventTags
     public static function excerptFromTextquoteselectorTags(array $tags): string
     {
         foreach ($tags as $t) {
-            if (!\is_array($t) || \count($t) < 2) {
+            $row = self::nostrTagRowToList($t);
+            if (null === $row || \count($row) < 2) {
                 continue;
             }
-            if (strtolower((string) ($t[0] ?? '')) !== 'textquoteselector') {
+            if (strtolower($row[0]) !== 'textquoteselector') {
                 continue;
             }
-            for ($i = 1, $c = \count($t); $i < $c; ++$i) {
-                $p = \trim((string) ($t[$i] ?? ''));
+            for ($i = 1, $c = \count($row); $i < $c; ++$i) {
+                $p = \trim($row[$i]);
                 if ($p !== '') {
                     return \mb_substr($p, 0, 400);
                 }

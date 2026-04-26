@@ -65,6 +65,7 @@ final class HighlightSyncService
             if (!\is_array($tags)) {
                 $tags = [];
             }
+            $tags = HighlightEventTags::normalizeTagsForStorage($tags);
             $content = (string) ($ev->content ?? '');
             $ca = (int) ($ev->created_at ?? 0);
             if ($ca < 0) {

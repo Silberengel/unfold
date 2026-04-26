@@ -146,9 +146,9 @@ class ArticleHighlight
     }
 
     /**
-     * HTML for the home aside and article hover cards: when a `context` tag exists, the full quote is
-     * shown with `content` marked inside it; otherwise the event `content` only in a <mark>. The
-     * rendered article body still only wraps the `content` passage (see ArticleBodyHighlightInjector).
+     * Card body HTML: the optional `context` tag is the full passage; the event `content` is
+     * highlighted (marked) where it appears inside that text. If there is no `context` tag, only
+     * `content` is wrapped in a mark.
      */
     public function getBodyHtml(): string
     {

@@ -21,6 +21,8 @@ parameters:
       'wss://nostr.einundzwei.space'
       ]
     # Kind-0 / profile fetches (author metadata, prewarm). Tried first, then default + article_relays (deduped).
+    # Also used as a second pass for kind 30040 (magazine category indices) and category long-form ingest
+    # when article_relays return nothing — not used for the generic /articles DB listing or getArticles().
     profile_relays: [
       'wss://relay.damus.io',
       'wss://nos.lol',

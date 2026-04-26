@@ -44,6 +44,12 @@ class NostrClient
     private const MAX_DISCUSSION_RELAY_URLS = 10;
 
     /**
+     * Kind-9802 highlight ingest ({@see fetchHighlightEventsForArticle} / prewarm): main + article + profile
+     * + author NIP-65, deduped. Higher than {@see MAX_DISCUSSION_RELAY_URLS} so profile relays are not dropped.
+     */
+    private const MAX_HIGHLIGHT_RELAY_URLS = 32;
+
+    /**
      * {@see Request::send()} hits relays sequentially; profile pages (metadata, long-form list, 10133) used
      * the full default+article+profile list (~8–9 wss) → 2 slow relays can exceed PHP’s 30s default max_execution_time.
      */
@@ -169,6 +175,44 @@ class NostrClient
         $relaySet = new RelaySet();
         foreach ($this->configuredArticleRelayUrlList() as $url) {
             $relaySet->addRelay(new Relay($url));
+        }
+
+        return $relaySet;
+    }
+
+    /**
+     * Configured profile relays (kind-0 / NIP-05 hints) that are not already in the article relay list.
+     * Used as a second pass for magazine 30040 and category long-form ingest when article relays return nothing.
+     * Intentionally excludes merging article URLs again — {@see createRelaySet()} prepends article relays.
+     *
+     * @return list<string>
+     */
+    private function profileRelayUrlsExcludedFromArticleRelays(): array
+    {
+        $article = array_fill_keys($this->configuredArticleRelayUrlList(), true);
+        $out = [];
+        foreach ($this->profileRelayUrlList() as $u) {
+            if (!isset($article[$u])) {
+                $out[] = $u;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Relay set built only from the given URLs (no implicit article-relay merge).
+     */
+    private function createRelaySetFromUrlsOnly(array $relayUrls): RelaySet
+    {
+        $relaySet = new RelaySet();
+        $seen = [];
+        foreach ($relayUrls as $relayUrl) {
+            if (!\is_string($relayUrl) || $relayUrl === '' || isset($seen[$relayUrl])) {
+                continue;
+            }
+            $seen[$relayUrl] = true;
+            $relaySet->addRelay(new Relay($relayUrl));
         }
 
         return $relaySet;
@@ -1401,7 +1445,10 @@ class NostrClient
     }
 
     /**
-     * Fetches kind 9802 (highlights) that reference the long-form address. Used for DB ingest only.
+     * Fetches kind 9802 (highlights) that reference the long-form address. Used for DB ingest only
+     * ({@see HighlightSyncService} / prewarm). Relays: {@see configuredArticleRelayUrlList} (main +
+     * article_relays), then config {@see profileRelayUrlList}, then author NIP-65, deduped (cap
+     * {@see MAX_HIGHLIGHT_RELAY_URLS}).
      *
      * @return list<object> unique wire events by id
      */
@@ -1420,13 +1467,19 @@ class NostrClient
             'author_relay_count' => \count($authorRelays),
         ]);
 
-        $baseForDiscussion = $this->configuredArticleRelayUrlList();
+        $baseArticle = $this->configuredArticleRelayUrlList();
+        $profileConfigured = $this->profileRelayUrlList();
         $mergedForDiscussion = $this->withAggrNostrLandIfUserSubscribesNostrLand(
-            array_merge($baseForDiscussion, $authorRelays)
+            array_merge($baseArticle, $profileConfigured, $authorRelays)
         );
         $plannedRelayUrls = array_values(array_unique($mergedForDiscussion, \SORT_REGULAR));
-        if (\count($plannedRelayUrls) > self::MAX_DISCUSSION_RELAY_URLS) {
-            $plannedRelayUrls = \array_slice($plannedRelayUrls, 0, self::MAX_DISCUSSION_RELAY_URLS);
+        $relayCountBeforeCap = \count($plannedRelayUrls);
+        if ($relayCountBeforeCap > self::MAX_HIGHLIGHT_RELAY_URLS) {
+            $this->logger->notice('nostr.highlight_relay_cap', [
+                'max' => self::MAX_HIGHLIGHT_RELAY_URLS,
+                'had' => $relayCountBeforeCap,
+            ]);
+            $plannedRelayUrls = \array_slice($plannedRelayUrls, 0, self::MAX_HIGHLIGHT_RELAY_URLS);
         }
         $limH = 200;
         $filters = [];
@@ -2763,13 +2816,26 @@ class NostrClient
      * The magazine root uses the site d_tag from config. Each category uses the full child d
      * (third segment of the root "a" address). A category 30040 lists 30023 article "a" tags, not
      * further nested 30040 indices.
+     *
+     * Tries article relays first; if no 30040 is found, retries on config `profile_relays` not
+     * already listed in `article_relays` (see prewarm / category discovery).
      */
     public function getMagazineIndex(mixed $npub, mixed $dTag): ?PublicationEventEntity
     {
         $urls = $this->configuredArticleRelayUrlList();
         $relaysForLog = implode(', ', array_map(self::relayLogLabel(...), $urls));
+        $result = $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet, $relaysForLog);
+        if ($result !== null) {
+            return $result;
+        }
+        $profileExtra = $this->profileRelayUrlsExcludedFromArticleRelays();
+        if ($profileExtra === []) {
+            return null;
+        }
+        $pfSet = $this->createRelaySetFromUrlsOnly($profileExtra);
+        $relaysForLog2 = implode(', ', array_map(self::relayLogLabel(...), $profileExtra)).' (profile_relays)';
 
-        return $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet, $relaysForLog);
+        return $this->queryMagazineIndex($npub, $dTag, $pfSet, $relaysForLog2);
     }
 
     private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet, string $relaysForLog): ?PublicationEventEntity
@@ -2821,10 +2887,80 @@ class NostrClient
     }
 
     /**
+     * Single long-form coordinate on config profile relays only (not already in article_relays).
+     */
+    private function tryFetchLongformCoordinateOnProfileRelays(string $coordinate): ?object
+    {
+        $extra = $this->profileRelayUrlsExcludedFromArticleRelays();
+        if ($extra === []) {
+            return null;
+        }
+        $parts = explode(':', $coordinate, 3);
+        if (\count($parts) !== 3) {
+            return null;
+        }
+        $kind = (int) $parts[0];
+        $pubkey = strtolower($parts[1]);
+        $slug = trim((string) $parts[2]);
+        $kindEnum = KindsEnum::tryFrom($kind);
+        if ($kindEnum === null || $pubkey === '' || $slug === '') {
+            return null;
+        }
+        $pfSet = $this->createRelaySetFromUrlsOnly($extra);
+        try {
+            $request = $this->createNostrRequest(
+                [$kindEnum],
+                ['authors' => [$pubkey], 'tag' => ['#d', [$slug]]],
+                $pfSet,
+            );
+            $events = $this->processResponse(
+                $request->send(),
+                static fn (object $event) => $event,
+            );
+            $ev = $this->pickEventForNip33OrFirst($events, $kind, $pubkey, $slug);
+            if ($ev !== null) {
+                return $ev;
+            }
+            $fallbackReq = $this->createNostrRequest(
+                [$kindEnum],
+                ['tag' => ['#d', [$slug]]],
+                $pfSet,
+            );
+            $fallbackEvents = $this->processResponse(
+                $fallbackReq->send(),
+                static fn (object $event) => $event,
+            );
+            $matched = [];
+            foreach ($fallbackEvents as $ev2) {
+                if (!\is_object($ev2)) {
+                    continue;
+                }
+                if (strtolower((string) ($ev2->pubkey ?? '')) !== $pubkey) {
+                    continue;
+                }
+                $d = self::eventDTagValue($ev2);
+                if ($d === null || trim((string) $d) !== $slug) {
+                    continue;
+                }
+                $matched[] = $ev2;
+            }
+
+            return $matched === [] ? null : $this->pickEventForNip33OrFirst($matched, $kind, $pubkey, $slug);
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    /**
      * Batch-fetch latest longform for category `a` coordinates; one Nostr call per (author × kind)
      * group. Uses the same full article {@see $defaultRelaySet} as kind 30040 index queries so merged
      * NIP-33 results are not stuck on a single relay’s copy. {@see saveEachArticleToTheDatabase}
      * upserts by NIP-33 address.
+     *
+     * After article relays return nothing (or some addresses stay missing), retries use config
+     * `profile_relays` not already in `article_relays`. The generic community listing at `/articles`
+     * is DB-only and does not add a profile-relay pass; {@see getArticles} stays article-relays-only.
      *
      * @param list<string> $addresses kind:pubkey:identifier
      */
@@ -2955,6 +3091,63 @@ class NostrClient
                         $rawCount = \count($events);
                     }
                 }
+                if ($rawCount === 0) {
+                    $profileExtra = $this->profileRelayUrlsExcludedFromArticleRelays();
+                    if ($profileExtra !== []) {
+                        $pfSet = $this->createRelaySetFromUrlsOnly($profileExtra);
+                        $this->logger->info('[longform_ingest] ingestLongform: no rows on article relays; trying profile_relays', [
+                            'group_key' => $gkey,
+                            'relays' => implode(', ', array_map(self::relayLogLabel(...), $profileExtra)),
+                        ]);
+                        $requestPf = $this->createNostrRequest(
+                            [$kindEnum],
+                            ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
+                            $pfSet,
+                        );
+                        $events = $this->processResponse(
+                            $requestPf->send(),
+                            static fn (object $event) => $event,
+                        );
+                        $rawCount = \count($events);
+                        if ($rawCount === 0) {
+                            $fallbackPf = $this->createNostrRequest(
+                                [$kindEnum],
+                                ['tag' => ['#d', $dTags]],
+                                $pfSet,
+                            );
+                            $fallbackEventsPf = $this->processResponse(
+                                $fallbackPf->send(),
+                                static fn (object $event) => $event,
+                            );
+                            $fallbackMatchedPf = [];
+                            $expectedPubkeyPf = strtolower((string) $g['pubkey']);
+                            $expectedDPf = array_fill_keys($dTags, true);
+                            foreach ($fallbackEventsPf as $ev) {
+                                if (!\is_object($ev)) {
+                                    continue;
+                                }
+                                $evPubkey = strtolower((string) ($ev->pubkey ?? ''));
+                                if ($evPubkey !== $expectedPubkeyPf) {
+                                    continue;
+                                }
+                                $evD = self::eventDTagValue($ev);
+                                if ($evD === null || !isset($expectedDPf[$evD])) {
+                                    continue;
+                                }
+                                $fallbackMatchedPf[] = $ev;
+                            }
+                            $this->logger->info('[longform_ingest] ingestLongform: profile_relays #d-only fallback', [
+                                'group_key' => $gkey,
+                                'fallback_raw_wire_count' => \count($fallbackEventsPf),
+                                'fallback_matched_count' => \count($fallbackMatchedPf),
+                            ]);
+                            if ($fallbackMatchedPf !== []) {
+                                $events = $fallbackMatchedPf;
+                                $rawCount = \count($events);
+                            }
+                        }
+                    }
+                }
                 $merged = self::mergeNip33ParameterizedWireEvents($events);
                 $mergedDetail = [];
                 foreach ($merged as $ev) {
@@ -2995,7 +3188,10 @@ class NostrClient
                     $byCoord = $this->getArticlesByCoordinates([$coordinate]);
                     $evExtra = $byCoord[$coordinate] ?? null;
                     if ($evExtra === null) {
-                        $this->logger->warning('[longform_ingest] ingestLongform: still no event for coordinate (not on default or author relays)', [
+                        $evExtra = $this->tryFetchLongformCoordinateOnProfileRelays($coordinate);
+                    }
+                    if ($evExtra === null) {
+                        $this->logger->warning('[longform_ingest] ingestLongform: still no event for coordinate (not on article, author, or profile relays)', [
                             'coordinate' => $coordinate,
                         ]);
 

@@ -429,9 +429,12 @@
 }
 
 .article-body-highlight--target {
-    box-shadow: inset 0 -2px 0 0 var(--color-secondary);
-    background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
-    transition: background 0.35s ease, box-shadow 0.35s ease;
+    box-shadow: none;
+    background: transparent;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
+    text-underline-offset: 0.12em;
+    transition: text-decoration-color 0.25s ease;
 }
 
 .article-body-highlight:focus-visible {
@@ -493,7 +496,7 @@
     font-size: 0.86rem;
 }
 
-/* Full `context` quote + optional <mark> on the `content` substring (highlighter, not a box) */
+/* Full `context` quote + optional <mark> on the `content` substring (body copy, not a box) */
 .user-highlight__body {
     margin: 0.35rem 0 0;
     font-size: 0.95rem;
@@ -502,10 +505,23 @@
     font-family: var(--main-body-font), serif;
 }
 
-/* In-flow highlighter marker (NIP-84: `content` inside `context` quote) */
-.article-main mark.user-highlight__marker,
-.user-highlight__body mark.user-highlight__marker,
-mark.user-highlight__marker {
+/* In-flow article body: interactive but no highlighter fill (cards below own the color) */
+.article-main mark.user-highlight__marker {
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    font: inherit;
+    line-height: inherit;
+    color: inherit;
+    background: transparent;
+    box-shadow: none;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+/* Popover + home aside: full context where present, `content` visibly marked */
+.article-body-highlight__body mark.user-highlight__marker,
+.home-aside-highlights__quote--html mark.user-highlight__marker {
     margin: 0;
     padding: 0.08em 0.1em 0.12em;
     border-radius: 0.12em;

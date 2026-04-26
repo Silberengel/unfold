@@ -208,7 +208,10 @@ export default class extends Controller {
         } else {
             this._clearHoverLeaveTimer();
         }
-        this.popoverInnerTarget.innerHTML = meta.headHtml || '';
+        const head = meta.headHtml || '';
+        const body = (meta.bodyHtml || '').trim();
+        this.popoverInnerTarget.innerHTML =
+            head + (body !== '' ? `<div class="article-body-highlight__body user-highlight__body">${body}</div>` : '');
         this._placePopover(mark);
         this.popoverTarget.hidden = false;
     }
