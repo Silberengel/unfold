@@ -10,6 +10,7 @@ use DOMDocument;
 use DOMElement;
 use DOMText;
 use DOMXPath;
+use swentel\nostr\Key\Key;
 
 /**
  * Injects kind-9802 highlight ranges into the rendered article body by finding each event’s
@@ -25,6 +26,11 @@ final class ArticleBodyHighlightInjector
     private DOMDocument $dom;
 
     private ?DOMElement $root = null;
+
+    public function __construct(
+        private readonly CacheService $cacheService,
+    ) {
+    }
 
     /**
      * @param list<ArticleHighlight> $highlights
@@ -48,12 +54,13 @@ final class ArticleBodyHighlightInjector
         }
 
         $injected = [];
-        foreach ($sorted as $h) {
-            $eid = \strtolower($h->getEventId());
-            if (64 !== \strlen($eid) || !ctype_xdigit($eid)) {
+        $groups = $this->groupHighlightsForInjection($sorted);
+        foreach ($groups as $group) {
+            if ($group === []) {
                 continue;
             }
-            if ($this->tryInjectOneHighlight($this->root, $h, $eid)) {
+            $added = $this->tryInjectHighlightGroup($this->root, $group);
+            foreach ($added as $eid) {
                 $injected[] = $eid;
             }
         }
@@ -153,19 +160,132 @@ final class ArticleBodyHighlightInjector
         return null;
     }
 
-    private function tryInjectOneHighlight(DOMElement $root, ArticleHighlight $h, string $eid): bool
+    /**
+     * @param list<ArticleHighlight> $group same highlight text; oldest first
+     *
+     * @return list<string> event ids that were applied
+     */
+    private function tryInjectHighlightGroup(DOMElement $root, array $group): array
     {
-        $resolved = $this->resolveInjectionNeedle($h);
+        if ($group === []) {
+            return [];
+        }
+        $first = $group[0];
+        $eid = \strtolower($first->getEventId());
+        if (64 !== \strlen($eid) || !ctype_xdigit($eid)) {
+            return [];
+        }
+        $outEids = [];
+        foreach ($group as $h) {
+            $id = \strtolower($h->getEventId());
+            if (64 === \strlen($id) && ctype_xdigit($id)) {
+                $outEids[] = $id;
+            }
+        }
+        if ($outEids === []) {
+            return [];
+        }
+        $authorJson = $this->buildHighlightAuthorsJson($group);
+        $resolved = $this->resolveInjectionNeedle($first);
         foreach ($this->needleSearchVariants($resolved) as $needle) {
             if ($needle === '') {
                 continue;
             }
-            if ($this->tryWrapInDocument($root, $needle, $eid)) {
-                return true;
+            if ($this->tryWrapInDocument($root, $needle, $eid, $authorJson)) {
+                return $outEids;
             }
         }
 
-        return false;
+        return [];
+    }
+
+    /**
+     * @param list<ArticleHighlight> $sorted by created_at asc
+     *
+     * @return list<list<ArticleHighlight>>
+     */
+    private function groupHighlightsForInjection(array $sorted): array
+    {
+        $buckets = [];
+        foreach ($sorted as $h) {
+            $resolved = $this->resolveInjectionNeedle($h);
+            if ($resolved === '') {
+                continue;
+            }
+            $key = HighlightEventTags::stringForSearch(\trim($resolved));
+            if ($key === '') {
+                $key = 'x'.\md5($resolved);
+            }
+            if (!isset($buckets[$key])) {
+                $buckets[$key] = [];
+            }
+            $buckets[$key][] = $h;
+        }
+        $groups = \array_values($buckets);
+        \usort(
+            $groups,
+            static function (array $a, array $b): int {
+                $ta = $a[0] instanceof ArticleHighlight ? $a[0]->getEventCreatedAt() : 0;
+                $tb = $b[0] instanceof ArticleHighlight ? $b[0]->getEventCreatedAt() : 0;
+
+                return $ta <=> $tb;
+            }
+        );
+
+        return $groups;
+    }
+
+    /**
+     * NIP-84: same highlighted passage → one mark, dedupe authors by npub, profile from cache.
+     *
+     * @param list<ArticleHighlight> $group
+     */
+    private function buildHighlightAuthorsJson(array $group): string
+    {
+        $key = new Key();
+        $byNpub = [];
+        foreach ($group as $h) {
+            $eidH = $h->getEventId();
+            if (64 !== \strlen($eidH) || !ctype_xdigit($eidH)) {
+                continue;
+            }
+            $pk = $h->getAuthorPubkey();
+            if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
+                continue;
+            }
+            try {
+                $npub = $key->convertPublicKeyToBech32($pk);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (isset($byNpub[$npub])) {
+                continue;
+            }
+            $name = '';
+            $pic = '';
+            try {
+                $meta = $this->cacheService->getMetadata($npub);
+                if (isset($meta->display_name) && \is_string($meta->display_name) && $meta->display_name !== '') {
+                    $name = $meta->display_name;
+                } elseif (isset($meta->name) && \is_string($meta->name) && $meta->name !== '') {
+                    $name = $meta->name;
+                }
+                if (isset($meta->picture) && \is_string($meta->picture) && $meta->picture !== '') {
+                    $pic = $meta->picture;
+                } elseif (isset($meta->image) && \is_string($meta->image) && $meta->image !== '') {
+                    $pic = $meta->image;
+                }
+            } catch (\Throwable) {
+            }
+            $byNpub[$npub] = [
+                'e' => \strtolower($eidH),
+                'n' => $npub,
+                'a' => $name,
+                'p' => $pic,
+            ];
+        }
+
+        return \json_encode(\array_values($byNpub), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
     }
 
     private function resolveInjectionNeedle(ArticleHighlight $h): string
@@ -224,7 +344,7 @@ final class ArticleBodyHighlightInjector
         ]);
     }
 
-    private function tryWrapInDocument(DOMElement $root, string $needle, string $eventId): bool
+    private function tryWrapInDocument(DOMElement $root, string $needle, string $eventId, string $authorJson = ''): bool
     {
         $textNodes = $this->collectTextNodes($root);
         if ($textNodes === []) {
@@ -303,7 +423,8 @@ final class ArticleBodyHighlightInjector
                 $off,
                 $nLen,
                 $eventId,
-                0 === $i
+                0 === $i,
+                $authorJson
             )) {
                 return false;
             }
@@ -375,7 +496,7 @@ final class ArticleBodyHighlightInjector
         return true;
     }
 
-    private function wrapTextSlice(DOMText $textNode, int $uOffset, int $uLength, string $eventId, bool $firstInReadingOrder): bool
+    private function wrapTextSlice(DOMText $textNode, int $uOffset, int $uLength, string $eventId, bool $firstInReadingOrder, string $authorJson = ''): bool
     {
         if ($uLength < 1) {
             return false;
@@ -406,6 +527,9 @@ final class ArticleBodyHighlightInjector
         $mark->setAttribute('class', 'user-highlight__marker');
         if ($firstInReadingOrder) {
             $mark->setAttribute('id', 'highlight-'.$eventId);
+        }
+        if ($authorJson !== '') {
+            $mark->setAttribute('data-hl', $authorJson);
         }
         $mark->appendChild($this->dom->createTextNode($match));
         $parent->insertBefore($mark, $ref);

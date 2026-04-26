@@ -3,6 +3,62 @@ import { Controller } from '@hotwired/stimulus';
 const LOADING_HTML = `<div class="nostr-preview__loading text-center my-2"><span class="nostr-preview__spinner" role="status" aria-label="Loading"></span><span class="nostr-preview__loading-text ms-2">Loading preview…</span></div>`;
 const UNAVAILABLE_HTML = `<div class="alert alert-warning my-2" role="status">Preview unavailable.</div>`;
 
+/**
+ * @param {HTMLElement} el
+ * @param {string} type
+ * @param {string} decodedStr
+ * @returns {boolean}
+ */
+function isPreviewForSameArticleOnPage(el, type, decodedStr) {
+    const root = el.closest('[data-nostr-page-article-coordinate]');
+    if (!root) {
+        return false;
+    }
+    const pageCoord = root.getAttribute('data-nostr-page-article-coordinate') || '';
+    const pageEid = (root.getAttribute('data-nostr-page-article-event-id') || '').toLowerCase();
+    const pagePubHex = (root.getAttribute('data-nostr-page-article-pubkey-hex') || '').toLowerCase();
+    const pageNpub = root.getAttribute('data-nostr-page-article-npub') || '';
+    if (!pageCoord) {
+        return false;
+    }
+    let d;
+    try {
+        d = JSON.parse(decodedStr);
+    } catch {
+        return false;
+    }
+    if (type === 'naddr' && d && d.pubkey != null) {
+        const identRaw = d.identifier != null ? d.identifier : (d.specifier != null ? d.specifier : null);
+        if (identRaw == null) {
+            return false;
+        }
+        const k = d.kind != null ? parseInt(String(d.kind), 10) : 30023;
+        const ident = String(identRaw);
+        let pk = String(d.pubkey);
+        if (/^[0-9a-fA-F]{64}$/.test(pk)) {
+            pk = pk.toLowerCase();
+        } else if (pk.startsWith('npub1') && pageNpub) {
+            if (pk !== pageNpub) {
+                return false;
+            }
+            pk = pagePubHex;
+        } else {
+            return false;
+        }
+        if (!pk || pk.length !== 64) {
+            return false;
+        }
+        const candidate = `${k}:${pk}:${ident}`;
+
+        return candidate === pageCoord;
+    }
+    if (type === 'nevent' && d && d.id && pageEid) {
+        return String(d.id).toLowerCase() === pageEid;
+    }
+
+    return false;
+}
+
 export default class extends Controller {
     static values = {
         identifier: String,
@@ -14,6 +70,13 @@ export default class extends Controller {
     static targets = ['container'];
 
     connect() {
+        if (this.typeValue === 'naddr' || this.typeValue === 'nevent') {
+            if (isPreviewForSameArticleOnPage(this.element, this.typeValue, this.decodedValue)) {
+                this.element.setAttribute('hidden', '');
+                this.element.setAttribute('data-nostr-preview-suppressed', 'same-page-article');
+                return;
+            }
+        }
         this.fetchPreview();
     }
 

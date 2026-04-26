@@ -722,6 +722,13 @@ aside {
     color: inherit;
 }
 
+/* Lead-in to the (truncated) highlight was removed so line-clamp shows the mark, not only context. */
+.home-aside-highlights__quote--html .user-highlight__elide {
+    font-style: normal;
+    color: var(--color-text-mid, #6b6b6b);
+    user-select: none;
+}
+
 .home-aside-highlights__meta {
     display: block;
     font-size: 0.7rem;

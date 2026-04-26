@@ -59,7 +59,14 @@
 {% endblock %}
 
 {% block body %}
-<div class="article-page-root">
+{% set article_coordinate = (article.kind ? article.kind.value : 30023) ~ ':' ~ (article.pubkey|lower) ~ ':' ~ article.slug %}
+<div
+    class="article-page-root"
+    data-nostr-page-article-coordinate="{{ article_coordinate|e('html_attr') }}"
+    data-nostr-page-article-pubkey-hex="{{ article.pubkey|lower|e('html_attr') }}"
+    data-nostr-page-article-npub="{{ (npub|default(''))|e('html_attr') }}"
+    data-nostr-page-article-event-id="{{ article.eventId|default('')|e('html_attr') }}"
+>
 
     {% if is_granted('ROLE_ADMIN') %}
     <button class="btn btn-primary" onclick="navigator.clipboard.writeText('30023:{{ article.pubkey }}:{{ article.slug }}')">
@@ -98,7 +105,7 @@
             </div>
         {% endif %}
 
-        <div class="article-main">
+        <div class="article-main" data-controller="user-highlight-tooltip">
             {{ content|raw }}
         </div>
 
@@ -118,7 +125,6 @@
     {#    <pre>#}
 {#        {{ article.content }}#}
 {#    </pre>#}
-    {% set article_coordinate = (article.kind ? article.kind.value : 30023) ~ ':' ~ article.pubkey ~ ':' ~ article.slug %}
     {% set comments_query = { coordinate: article_coordinate, title: article.title|default('') }|merge(article.eventId ? { e: article.eventId } : {}) %}
     {% set _reply_ctx = comments_data.comment_reply_context|default(comment_reply_context|default(null)) %}
     {% include 'components/Molecules/ArticleReplyComposer.html.twig' with { comment_reply_context: _reply_ctx } only %}

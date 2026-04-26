@@ -139,22 +139,25 @@ class ArticleHighlight
         return $this;
     }
 
-    /** The full quote from the optional `context` tag. Event `content` is highlighted *inside* this when present. */
+    /** The full quote from the `context` tag (empty if absent). */
     public function getContextText(): string
     {
         return HighlightEventTags::contextFromTags($this->tags);
     }
 
     /**
-     * Card body HTML: the optional `context` tag is the full passage; the event `content` is
-     * highlighted (marked) where it appears inside that text. If there is no `context` tag, only
-     * `content` is wrapped in a mark.
+     * Card body HTML (home aside, line-clamp): `context` = full quote, `content` = highlighted part.
+     * If there is no `context` (or it is empty), the passage is the same as `content`. The passage
+     * is aligned so the clamped block starts at the highlight, not with long unmarked lead-in text.
      */
     public function getBodyHtml(): string
     {
-        return HighlightEventTags::buildHighlightedBodyHtml(
-            $this->getContextText(),
-            (string) $this->getContent()
+        $c = (string) $this->getContent();
+
+        return HighlightEventTags::buildHighlightedBodyHtmlForNarrowList(
+            HighlightEventTags::fullPassageForHighlightDisplay($c, $this->tags),
+            $c,
+            0
         );
     }
 }

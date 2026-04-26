@@ -459,3 +459,88 @@
     line-height: 1.5;
     color: var(--color-text-mid);
 }
+
+/* Hover tooltip: all highlighters for this passage (from data-hl) */
+.user-highlight__tip-popover {
+    min-width: 10rem;
+    max-width: min(22rem, 92vw);
+    padding: 0.5rem 0.65rem 0.6rem;
+    border-radius: 0.35rem;
+    background: var(--color-bg, #fff);
+    border: 1px solid color-mix(in srgb, var(--color-text-mid) 18%, var(--color-bg) 82%);
+    box-shadow: 0 0.15rem 0.75rem color-mix(in srgb, #000 12%, transparent);
+    font-size: 0.88rem;
+    line-height: 1.35;
+    pointer-events: auto;
+}
+
+.user-highlight__tip-popover[hidden] {
+    display: none !important;
+}
+
+.user-highlight__tip-head {
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-mid, #6b6b6b);
+    margin-bottom: 0.4rem;
+}
+
+.user-highlight__tip-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.user-highlight__tip-item {
+    margin: 0;
+}
+
+.user-highlight__tip-popover .user-badge--in-tip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    color: var(--color-text, #111);
+    max-width: 100%;
+}
+
+.user-highlight__tip-popover .user-badge--in-tip:hover {
+    text-decoration: underline;
+}
+
+.user-highlight__tip-popover .user-badge__avatar--in-tip {
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-text-mid) 12%, var(--color-bg) 88%);
+    font-size: 0.65rem;
+    font-weight: 600;
+}
+
+.user-highlight__tip-popover .user-badge__avatar-fallback--dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.user-highlight__tip-popover .user-badge__name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

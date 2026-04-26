@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Util;
 
 /**
- * NIP-84 (kind 9802): optional `context` = full visible passage; `content` = highlighted range
- * (marked inside that passage when `context` exists, otherwise only `content` in a mark).
- * In-article marks: {@see \App\Service\ArticleBodyHighlightInjector}.
+ * NIP-84 (kind 9802): `context` tag = full quote; the event’s `.content` = the highlighted part of
+ * that quote. If there is no `context` tag (or it is empty), the passage to display is the same
+ * as `.content` (entirely highlighted). In-article marks: {@see \App\Service\ArticleBodyHighlightInjector}.
  */
 final class HighlightEventTags
 {
@@ -22,11 +22,13 @@ final class HighlightEventTags
     public static function nostrTagRowToList(mixed $tag): ?array
     {
         if (\is_object($tag)) {
-            $tag = \array_values((array) $tag);
+            $tag = (array) $tag;
         }
         if (!\is_array($tag)) {
             return null;
         }
+        \ksort($tag, \SORT_NUMERIC);
+        $tag = \array_values($tag);
         $out = [];
         foreach ($tag as $cell) {
             $out[] = (string) $cell;
@@ -63,13 +65,44 @@ final class HighlightEventTags
      */
     public static function contextFromTags(array $tags): string
     {
+        return self::valuesFromNostrTagName($tags, 'context');
+    }
+
+    /**
+     * Same shape as the `context` tag: one or more `textquoteselector` rows (used for excerpts only).
+     */
+    public static function textquoteselectorPassageFromTags(array $tags): string
+    {
+        return self::valuesFromNostrTagName($tags, 'textquoteselector');
+    }
+
+    /**
+     * Full “quote” passage for cards: the `context` tag when present and non-empty, otherwise
+     * the same string as the event’s `.content` (no surrounding quote beyond the highlight).
+     */
+    public static function fullPassageForHighlightDisplay(string $eventContent, array $tags): string
+    {
+        $ctx = \trim(self::contextFromTags($tags));
+        if ($ctx !== '') {
+            return $ctx;
+        }
+
+        return \trim((string) $eventContent);
+    }
+
+    /**
+     * @param list<mixed> $tags
+     */
+    private static function valuesFromNostrTagName(array $tags, string $nameLower): string
+    {
         $parts = [];
         foreach ($tags as $t) {
             $row = self::nostrTagRowToList($t);
             if (null === $row || \count($row) < 2) {
                 continue;
             }
-            if (strtolower($row[0]) !== 'context') {
+            $k = self::normalizeNostrTagKey($row[0]);
+            if ($k !== $nameLower) {
                 continue;
             }
             for ($i = 1, $c = \count($row); $i < $c; ++$i) {
@@ -85,6 +118,14 @@ final class HighlightEventTags
         $joined = \implode(' ', $parts);
 
         return \mb_substr($joined, 0, 8000);
+    }
+
+    private static function normalizeNostrTagKey(string $k): string
+    {
+        $k = (string) \preg_replace('/^\x{FEFF}/u', '', $k);
+        $k = \ltrim($k, "\0..\x1F");
+
+        return \strtolower(\trim($k));
     }
 
     /**
@@ -155,11 +196,14 @@ final class HighlightEventTags
      * Find `content` inside `context` (literal or after Unicode/Nostr normalization). Returns half-open
      * mb indices into $context, or null.
      *
+     * $context and $content must be the same strings used for final HTML (trim + line ending
+     * normalization) — see {@see buildHighlightedBodyHtml}.
+     *
      * @return array{0: int, 1: int}|null
      */
     public static function findContentSpanInContext(string $context, string $content): ?array
     {
-        $q = self::normalizeLineEndingsForHighlight($context);
+        $q = $context;
         if ($q === '' || $content === '') {
             return null;
         }
@@ -173,6 +217,26 @@ final class HighlightEventTags
                 $len = \mb_strlen($needle, 'UTF-8');
 
                 return [$p, $p + $len];
+            }
+        }
+        $qR = self::replaceTypographicQuotesForSearch($q);
+        if ($qR !== $q) {
+            foreach (self::highlightContentSearchVariants($content) as $needle) {
+                $needle = self::normalizeLineEndingsForHighlight($needle);
+                if ($needle === '') {
+                    continue;
+                }
+                foreach ([$needle, self::replaceTypographicQuotesForSearch($needle)] as $nTry) {
+                    if ($nTry === '') {
+                        continue;
+                    }
+                    $p = \mb_strpos($qR, $nTry, 0, 'UTF-8');
+                    if (false !== $p) {
+                        $len = \mb_strlen($nTry, 'UTF-8');
+
+                        return [$p, $p + $len];
+                    }
+                }
             }
         }
         $hS = self::stringForSearch($q);
@@ -274,18 +338,16 @@ final class HighlightEventTags
     }
 
     /**
-     * With `context`, show the full quote and mark the `content` substring. With no `context`, wrap
-     * all of `content` in one mark.
-     *
-     * @param string $contextQuote  Text from the `context` tag. Empty means no surrounding quote.
-     * @param string $contentField  The event’s `content` (highlighted phrase).
+     * @param string $contextQuote  Passage: `context` tag, or the same as `$contentField` when there
+     *                               is no `context` (caller should use {@see fullPassageForHighlightDisplay}).
+     * @param string $contentField  The event’s `content` (highlighted substring of the passage).
      *
      * @return string safe HTML
      */
     public static function buildHighlightedBodyHtml(string $contextQuote, string $contentField): string
     {
-        $q = self::normalizeLineEndingsForHighlight((string) $contextQuote);
-        $hi = self::normalizeLineEndingsForHighlight((string) $contentField);
+        $q = \trim(self::normalizeLineEndingsForHighlight((string) $contextQuote));
+        $hi = \trim(self::normalizeLineEndingsForHighlight((string) $contentField));
         if ($q === '' && $hi === '') {
             return '';
         }
@@ -294,6 +356,9 @@ final class HighlightEventTags
         }
         if ($hi === '') {
             return self::escapeWithNl2br($q);
+        }
+        if ($q === $hi) {
+            return '<mark class="'.self::HIGHLIGHT_MARK_CLASS.'">'.self::escapeWithNl2br($q).'</mark>';
         }
         $span = self::findContentSpanInContext($q, $hi);
         if (null !== $span) {
@@ -307,6 +372,61 @@ final class HighlightEventTags
 
         // Substring not found after normalization / variants: show the full context quote, then the highlight so the card is not empty.
         return self::escapeWithNl2br($q).'<p class="user-highlight__marker-orphan">'.self::markHtml($hi).'</p>';
+    }
+
+    /**
+     * For narrow list layouts (e.g. home aside with {@see buildHighlightedBodyHtml} + line-clamp): if the
+     * `content` is not at the start of the passage, drop the text before the highlight so the
+     * clamped block begins at (or a few characters before) the mark and the user actually sees
+     * the highlight.
+     *
+     * @param int $includeCharsOfContextBeforeHighlight  Extra characters to keep before the
+     *                                                   highlight (0 = passage starts with `content`)
+     */
+    public static function buildHighlightedBodyHtmlForNarrowList(
+        string $contextQuote,
+        string $contentField,
+        int $includeCharsOfContextBeforeHighlight = 0,
+    ): string {
+        $q = \trim(self::normalizeLineEndingsForHighlight((string) $contextQuote));
+        $hi = \trim(self::normalizeLineEndingsForHighlight((string) $contentField));
+        if ($q === '' && $hi === '') {
+            return '';
+        }
+        if ($q === '' || $hi === '') {
+            return self::buildHighlightedBodyHtml($q, $hi);
+        }
+        if ($q === $hi) {
+            return self::buildHighlightedBodyHtml($q, $hi);
+        }
+        $span = self::findContentSpanInContext($q, $hi);
+        if (null === $span) {
+            return self::buildHighlightedBodyHtml($q, $hi);
+        }
+        [$st] = $span;
+        if (0 === $st) {
+            return self::buildHighlightedBodyHtml($q, $hi);
+        }
+        $lead = \max(0, $includeCharsOfContextBeforeHighlight);
+        $offset = \max(0, $st - $lead);
+        if (0 === $offset) {
+            return self::buildHighlightedBodyHtml($q, $hi);
+        }
+        $q2 = \mb_substr($q, $offset, null, 'UTF-8');
+        if ($q2 === '') {
+            return self::buildHighlightedBodyHtml($q, $hi);
+        }
+        $html = self::buildHighlightedBodyHtml($q2, $hi);
+
+        return self::omittedTextPrefixHtml().$html;
+    }
+
+    /**
+     * Safe “earlier text omitted” marker before a truncated passage in list cards.
+     */
+    public static function omittedTextPrefixHtml(): string
+    {
+        return '<span class="user-highlight__elide" aria-hidden="true">&#8230;</span> ';
     }
 
     public static function escapeWithNl2br(string $s): string
@@ -341,7 +461,7 @@ final class HighlightEventTags
             if (null === $row || \count($row) < 2) {
                 continue;
             }
-            if (strtolower($row[0]) !== 'textquoteselector') {
+            if (self::normalizeNostrTagKey($row[0]) !== 'textquoteselector') {
                 continue;
             }
             for ($i = 1, $c = \count($row); $i < $c; ++$i) {
