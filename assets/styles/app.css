@@ -243,7 +243,8 @@ svg.icon {
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: hsl(var(--tile-hue) 26% 32%);
+    /* Blend hue toward body mid-gray so every tile hue stays ≥4.5:1 on dark head strip */
+    color: color-mix(in srgb, hsl(var(--tile-hue) 26% 50%) 38%, var(--color-text-mid) 62%);
     line-height: 1.35;
 }
 
@@ -355,7 +356,7 @@ svg.icon {
     font-size: 0.78rem;
     font-weight: 400;
     line-height: 1.35;
-    color: color-mix(in srgb, var(--color-text-mid) 48%, var(--color-bg) 52%);
+    color: var(--color-text-mid);
     margin: 0.15rem 0 0.45rem;
 }
 
@@ -385,7 +386,7 @@ svg.icon {
     font-size: 0.78rem;
     font-weight: 400;
     line-height: 1.35;
-    color: color-mix(in srgb, var(--color-text-mid) 48%, var(--color-bg) 52%);
+    color: var(--color-text-mid);
 }
 
 .article-list .metadata p {

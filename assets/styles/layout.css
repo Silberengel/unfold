@@ -463,8 +463,18 @@ a.nostr-share-menu__action {
 }
 
 /* Main content */
+:root {
+    /* Clears fixed #site-header; keep in sync with main margin-top per breakpoint below. */
+    --site-fixed-header-offset: 140px;
+}
+
+/* #:target / in-page links: scroll position leaves room under the fixed bar (scroll-margin on inline <mark> is unreliable alone). */
+html {
+    scroll-padding-top: calc(var(--site-fixed-header-offset) + 0.75rem);
+}
+
 main {
-    margin-top: 140px;
+    margin-top: var(--site-fixed-header-offset);
     flex-grow: 1;
     min-width: 0; /* flex item: allow shrinking below wide images / intrinsic min-content */
     padding: 1em;
@@ -480,19 +490,19 @@ main {
 }
 
 @media (min-width: 1025px) {
-    /* Match extra header padding-top so content and menu clear the fixed bar */
-    main {
-        margin-top: 152px;
+    :root {
+        --site-fixed-header-offset: 152px;
     }
 
+    /* Match extra header padding-top so content and menu clear the fixed bar */
     /* In-flow left column: <nav> clears the fixed #site-header. */
     .layout > nav {
-        margin-top: 152px;
+        margin-top: var(--site-fixed-header-offset);
     }
 
     /* Right column: same clearance as <main> so the highlights pane is not under #site-header. */
     .layout > aside {
-        margin-top: 152px;
+        margin-top: var(--site-fixed-header-offset);
         /* Default: do not stretch — avoids a full-height empty column on pages with blank <aside> (e.g. article). */
         align-self: flex-start;
     }
@@ -709,10 +719,30 @@ dt {
     aside {
         display: none; /* Hide the sidebars on small screens */
     }
+    /* Home: keep highlights — stack <aside> under the featured wall (same DOM order; row layout would squeeze it beside main). */
+    .layout:has(.home-body--wall) {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .layout:has(.home-body--wall) > aside {
+        display: block;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        flex-shrink: 0;
+        margin-top: 0.5rem;
+        padding: 0 1em 1.75rem;
+        box-sizing: border-box;
+    }
     /* Fixed header is taller than 90px (safe-area + logo row + title padding). Match it or the first
        main content (e.g. featured authors intro) sits under the bar and looks “cut off” at the top. */
+    :root {
+        --site-fixed-header-offset: max(7.25rem, calc(4.8rem + env(safe-area-inset-top, 0px)));
+    }
+
     main {
-        margin-top: max(7.25rem, calc(4.8rem + env(safe-area-inset-top, 0px)));
+        margin-top: var(--site-fixed-header-offset);
         width: 100%;
     }
 }

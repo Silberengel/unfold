@@ -98,7 +98,7 @@
     font-size: 0.78rem;
     font-weight: 400;
     line-height: 1.35;
-    color: color-mix(in srgb, var(--color-text-mid) 50%, var(--color-bg) 50%);
+    color: var(--color-text-mid);
 }
 
 .event-page a:focus-visible {

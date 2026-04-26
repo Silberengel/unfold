@@ -73,7 +73,7 @@ final class PrewarmCommand extends Command
             ->addOption('comments-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to warm comment cache for (0 = all, order: createdAt DESC; excludes generic /articles feed-only rows)', '10')
             ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the whole comments phase (Nostr fetches are slow; a single long thread can exceed a short budget; use 1200+ if prewarming many articles)', '600')
             ->addOption('no-highlights', null, InputOption::VALUE_NONE, 'Skip kind-9802 highlight fetch → MySQL')
-            ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine articles to sync highlights for (0 = all)', '0')
+            ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to sync highlights for (0 = all; each Nostr fetch is slow — default 25 keeps prewarm bounded)', '25')
             ->addOption('highlights-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the highlight sync phase', '600');
     }
 
@@ -491,6 +491,7 @@ final class PrewarmCommand extends Command
         }
         $hCount = \count($hList);
         $hW = 0;
+        $hScanned = 0;
         if ($hCount === 0) {
             $io->note('No articles in DB to scan for highlights.');
         } else {
@@ -503,6 +504,7 @@ final class PrewarmCommand extends Command
                         $io->warning(sprintf('Highlight phase stopped: highlights-budget reached (%d s).', $hBudget));
                         break;
                     }
+                    ++$hScanned;
                     $slug = trim((string) $article->getSlug());
                     $pubkey = (string) $article->getPubkey();
                     if ($slug === '' || strlen($pubkey) !== 64) {
@@ -527,8 +529,9 @@ final class PrewarmCommand extends Command
             }
         }
         $io->success(sprintf(
-            'Highlight rows written/updated: <info>%d</info> (articles scanned: <info>%d</info>, wall time <info>%.0f</info>s / %d s).',
+            'Highlight rows written/updated: <info>%d</info> (articles scanned: <info>%d</info> of %d, wall time <info>%.0f</info>s / %d s budget).',
             $hW,
+            $hScanned,
             $hCount,
             microtime(true) - $hStart,
             $hBudget

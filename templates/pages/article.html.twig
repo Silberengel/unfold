@@ -59,11 +59,7 @@
 {% endblock %}
 
 {% block body %}
-<div
-    data-controller="article-highlight"
-    class="article-page-root"
-    data-action="click@window->article-highlight#closeOnOutside keydown@window->article-highlight#onKeydown"
->
+<div class="article-page-root">
 
     {% if is_granted('ROLE_ADMIN') %}
     <button class="btn btn-primary" onclick="navigator.clipboard.writeText('30023:{{ article.pubkey }}:{{ article.slug }}')">
@@ -102,7 +98,7 @@
             </div>
         {% endif %}
 
-        <div class="article-main" data-article-highlight-target="article">
+        <div class="article-main">
             {{ content|raw }}
         </div>
 
@@ -115,21 +111,6 @@
         </div>
         {% endif %}
 
-    </div>
-
-    {% if article_highlights_client_json|default('')|trim != '' %}
-        <script type="application/json" id="article-highlights-client-json" data-article-highlight-target="meta">{{ article_highlights_client_json|raw }}</script>
-    {% endif %}
-    <div
-        class="article-body-highlight__popover"
-        data-article-highlight-target="popover"
-        data-article-highlight-turbo-permanent
-        hidden
-        role="dialog"
-        aria-label="{{ 'highlight.popover'|trans }}"
-    >
-        <button type="button" class="article-body-highlight__close" data-action="article-highlight#closePopover" aria-label="{{ 'highlight.close'|trans }}">×</button>
-        <div class="article-body-highlight__inner" data-article-highlight-target="popoverInner"></div>
     </div>
 
     <hr class="divider" />

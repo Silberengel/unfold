@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Entity\Article;
-use App\Entity\ArticleHighlight;
 use App\Repository\ArticleHighlightRepository;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Enum\KindsEnum;
@@ -407,7 +406,6 @@ class ArticleController  extends AbstractController
         $highlights = $articleHighlightRepository->findByArticle($article);
         $injection = $articleBodyHighlightInjector->inject($html, $highlights);
         $html = $injection['html'];
-        $highlightsClientJson = $this->buildHighlightsClientJson($highlights, $injection['injectedEventIds']);
 
         return $this->render('pages/article.html.twig', [
             'article' => $article,
@@ -417,65 +415,7 @@ class ArticleController  extends AbstractController
             'comments_data' => $commentsData,
             'comments_preloaded' => $commentsPreloaded,
             'comment_reply_context' => $commentReplyContext,
-            'article_highlights_client_json' => $highlightsClientJson,
         ]);
-    }
-
-    /**
-     * @param list<ArticleHighlight> $highlights
-     * @param list<string>            $injectedEventIds
-     */
-    private function buildHighlightsClientJson(array $highlights, array $injectedEventIds): ?string
-    {
-        if ($injectedEventIds === []) {
-            return null;
-        }
-        $byId = [];
-        foreach ($highlights as $h) {
-            $id = \strtolower($h->getEventId());
-            if (64 === \strlen($id) && ctype_xdigit($id)) {
-                $byId[$id] = $h;
-            }
-        }
-        $out = [];
-        foreach ($injectedEventIds as $eid) {
-            $eid = \strtolower($eid);
-            $h = $byId[$eid] ?? null;
-            if (! $h instanceof ArticleHighlight) {
-                continue;
-            }
-            $out[$eid] = [
-                'headHtml' => $this->renderView('components/Molecules/ArticleHighlightMetaHead.html.twig', [
-                    'authorPubkey' => $h->getAuthorPubkey(),
-                    'dateLabel' => $this->formatHighlightListDate($h->getEventCreatedAt()),
-                ]),
-                'bodyHtml' => $h->getBodyHtml(),
-            ];
-        }
-        if ($out === []) {
-            return null;
-        }
-
-        return \json_encode(
-            $out,
-            \JSON_THROW_ON_ERROR
-                | \JSON_UNESCAPED_UNICODE
-                | \JSON_HEX_TAG
-                | \JSON_HEX_AMP
-                | \JSON_HEX_APOS
-                | \JSON_HEX_QUOT
-        );
-    }
-
-    private function formatHighlightListDate(int $unix): string
-    {
-        if ($unix <= 0) {
-            return '';
-        }
-        $tz = new \DateTimeZone(@\date_default_timezone_get() ?: 'UTC');
-        $dt = (new \DateTimeImmutable('@'.(string) $unix))->setTimezone($tz);
-
-        return $dt->format('F j, Y');
     }
 
     /**
@@ -665,7 +605,6 @@ class ArticleController  extends AbstractController
             'author' => $user->getMetadata(),
             'npub' => $previewNpub,
             'comments_preloaded' => false,
-            'article_highlights_client_json' => null,
         ]);
     }
 

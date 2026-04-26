@@ -422,79 +422,7 @@
     background: #fdecec;
 }
 
-/* NIP-84: kind-9802 marks in .article-main + client popover (no separate thread list) */
-.article-body-highlight {
-    cursor: pointer;
-    scroll-margin-top: 6rem;
-}
-
-.article-body-highlight--target {
-    box-shadow: none;
-    background: transparent;
-    text-decoration: underline;
-    text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
-    text-underline-offset: 0.12em;
-    transition: text-decoration-color 0.25s ease;
-}
-
-.article-body-highlight:focus-visible {
-    outline: 2px solid var(--color-focus-ring, var(--color-primary));
-    outline-offset: 2px;
-}
-
-.article-body-highlight__popover[hidden] {
-    display: none;
-}
-
-.article-body-highlight__popover {
-    position: fixed;
-    z-index: 200;
-    max-width: min(24rem, calc(100vw - 1.5rem));
-    margin: 0;
-    padding: 0.65rem 2rem 0.85rem 0.85rem;
-    border: 1px solid color-mix(in srgb, var(--color-border) 75%, var(--color-bg) 25%);
-    border-radius: 0.45rem;
-    color: var(--color-text);
-    /* Slightly above page bg so the card reads as a raised surface */
-    background: color-mix(in srgb, var(--color-bg) 88%, #fff 12%);
-    box-shadow: 0 0.4rem 1.25rem rgba(0, 0, 0, 0.14);
-    pointer-events: auto;
-}
-
-.article-body-highlight__close {
-    position: absolute;
-    top: 0.2rem;
-    right: 0.35rem;
-    margin: 0;
-    border: 0;
-    padding: 0.15rem 0.4rem;
-    line-height: 1;
-    font-size: 1.35rem;
-    color: var(--color-text-mid);
-    background: transparent;
-    border-radius: 0.2rem;
-    cursor: pointer;
-}
-
-.article-body-highlight__close:hover,
-.article-body-highlight__close:focus-visible {
-    color: var(--color-text);
-    outline: 2px solid var(--color-focus-ring, var(--color-primary));
-}
-
-.article-body-highlight__inner {
-    position: relative;
-}
-
-.article-body-highlight__head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.4rem 0.75rem;
-    margin: 0;
-    font-size: 0.86rem;
-}
+/* NIP-84: kind-9802 marks in .article-main (fragment id highlight-<event id> for deep links) */
 
 /* Full `context` quote + optional <mark> on the `content` substring (body copy, not a box) */
 .user-highlight__body {
@@ -505,32 +433,23 @@
     font-family: var(--main-body-font), serif;
 }
 
-/* In-flow article body: interactive but no highlighter fill (cards below own the color) */
-.article-main mark.user-highlight__marker {
-    margin: 0;
-    padding: 0;
-    border-radius: 0;
-    font: inherit;
-    line-height: inherit;
-    color: inherit;
-    background: transparent;
-    box-shadow: none;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-}
-
-/* Popover + home aside: full context where present, `content` visibly marked */
-.article-body-highlight__body mark.user-highlight__marker,
+/* In-flow + aside: same NIP-84 mark treatment; scroll-margin in article for #highlight-… links */
+.article-main mark.user-highlight__marker,
 .home-aside-highlights__quote--html mark.user-highlight__marker {
     margin: 0;
     padding: 0.08em 0.1em 0.12em;
     border-radius: 0.12em;
     font: inherit;
     line-height: inherit;
-    color: inherit;
-    background: color-mix(in srgb, #7ad67a 38%, #f0e8a0 62%);
+    color: var(--color-highlight-mark-fg);
+    background: color-mix(in srgb, #7ad67a 30%, #f0e8a0 70%);
+    box-shadow: none;
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
+}
+
+.article-main mark.user-highlight__marker {
+    scroll-margin-top: calc(var(--site-fixed-header-offset, 140px) + 0.75rem);
 }
 
 /* When `content` is not a substring of `context` (rare) */

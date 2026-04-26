@@ -19,6 +19,3 @@ import './styles/form.css';
 import './styles/notice.css';
 import './styles/spinner.css';
 import './styles/a2hs.css';
-
-
-console.log('This log comes from assets/app.js - welcome to AssetMapper! 🎉');

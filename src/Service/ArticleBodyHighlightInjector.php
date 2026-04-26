@@ -449,7 +449,7 @@ final class ArticleBodyHighlightInjector
             }
             if ('mark' === $n) {
                 $cl = (string) $p->getAttribute('class');
-                if (\str_contains($cl, 'article-body-highlight')) {
+                if (\str_contains($cl, 'user-highlight__marker')) {
                     return false;
                 }
             }
@@ -487,15 +487,9 @@ final class ArticleBodyHighlightInjector
         if (! $mark) {
             return false;
         }
-        $mark->setAttribute('class', 'user-highlight__marker article-body-highlight');
+        $mark->setAttribute('class', 'user-highlight__marker');
         if ($firstInReadingOrder) {
             $mark->setAttribute('id', 'highlight-'.$eventId);
-            $mark->setAttribute('tabindex', '0');
-        }
-        $mark->setAttribute('data-event-id', $eventId);
-        $mark->setAttribute('data-article-body-highlight', '1');
-        if (! $firstInReadingOrder) {
-            $mark->setAttribute('data-article-body-highlight-continuation', '1');
         }
         $mark->appendChild($this->dom->createTextNode($match));
         $parent->insertBefore($mark, $ref);

@@ -521,7 +521,8 @@ final class MagazineContentService
      * Union of every article referenced by a category index (root 30040). Use this for magazine-wide
      * Atom and comment prewarm so "newest" tracks the magazine, not the generic community list.
      *
-     * Dedupes by slug (newest {@see Article::getCreatedAt} wins). Only PUBLISHED/ARCHIVED rows.
+     * Each category contributes at most the first page from {@see getCategoryPageData} (default 25
+     * `a` tags). Dedupes by slug (newest {@see Article::getCreatedAt} wins). Only PUBLISHED/ARCHIVED.
      *
      * @return list<Article> Newest first
      */

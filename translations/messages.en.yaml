@@ -9,8 +9,6 @@ topic:
 highlight:
     section_title: 'Highlights'
     section_lede: 'NIP-84 (kind 9802). The optional `context` tag is the full passage; `content` is the part marked inside it. If `context` is missing, only `content` is shown in a mark.'
-    popover: 'Highlight'
-    close: 'Close'
 text:
     byline: 'By'
     search: 'Search...'

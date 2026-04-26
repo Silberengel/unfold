@@ -9,16 +9,19 @@
     --color-bg-light: #2a2a2a;  /* Slightly lighter charcoal */
     --color-bg-primary: #2e1f2e; /* Muted aubergine for a rich, elegant feel */
     --color-text: #f5f5f5;       /* Soft white for readability */
-    --color-text-mid: #d8d8d8;   /* Warm light gray — use on dark bg for ≥4.5:1 vs --color-bg */
+    --color-text-mid: #d8d8d8;   /* Warm light gray — ≥4.5:1 vs --color-bg for body copy */
     --color-text-contrast: #000; /* Black text for contrast */
-    --color-primary: #5F7355;   /* Plum primary color */
-    --color-secondary: #495544; /*  secondary color */
+    /* Green accents: tuned for ≥4.5:1 as *text* on --color-bg / --color-bg-light; black (#000) on primary fill ≥4.5:1 */
+    --color-primary: #6d8a62;
+    --color-secondary: #7a9e82;
     --color-border: #3a3a3a;     /* Subtle gray border */
     /* Aliases / derived (WCAG AA on typical surfaces when paired as documented) */
     --color-text-light: var(--color-text-mid); /* deprecated name: use --color-text-mid */
     --color-footer-bg: var(--color-bg-light);
     --color-footer-text: var(--color-text);
-    --color-footer-link: var(--color-primary);
+    --color-footer-link: var(--color-secondary); /* primary on footer bg was below 4.5:1 */
+    /* NIP-84 highlight mark: light yellow-green fill needs dark ink (not inherited light body text) */
+    --color-highlight-mark-fg: #1a1a1a;
     --color-link: var(--color-secondary);
     --color-link-hover: var(--color-text);
     --color-focus-ring: var(--color-secondary);

@@ -79,9 +79,9 @@ export default class extends Controller {
                 }
                 const ms = Math.round(performance.now() - t0);
                 if (attempt > 1) {
-                    console.info(`[article-comments] fragment OK in ${ms}ms (after ${attempt} attempts)`, this.urlValue);
+                    console.debug(`[article-comments] fragment OK in ${ms}ms (after ${attempt} attempts)`, this.urlValue);
                 } else {
-                    console.info(`[article-comments] fragment OK in ${ms}ms`, this.urlValue);
+                    console.debug(`[article-comments] fragment OK in ${ms}ms`, this.urlValue);
                 }
                 window.clearTimeout(timer);
                 return;
