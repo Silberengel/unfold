@@ -88,6 +88,192 @@ final class HighlightEventTags
     }
 
     /**
+     * Same character normalization as {@see \App\Service\ArticleBodyHighlightInjector} so
+     * `content` can match the `context` tag when Unicode (NBSP, soft hyphen, etc.) differs — NIP-84
+     * requires `content` to be a substring of the passage, but clients often diverge on code points.
+     */
+    public static function stringForSearch(string $s): string
+    {
+        $L = \mb_strlen($s, 'UTF-8');
+        $out = '';
+        for ($i = 0; $i < $L; ++$i) {
+            $ch = \mb_substr($s, $i, 1, 'UTF-8');
+            $out .= self::searchCharacterNormalized($ch);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<int> length L+1; cuml[i] = "search" string length of prefix s[0..i) after per-char normalization
+     */
+    public static function buildCumulativeSearchLens(string $s): array
+    {
+        $L = \mb_strlen($s, 'UTF-8');
+        $cuml = [0];
+        for ($i = 0; $i < $L; ++$i) {
+            $ch = \mb_substr($s, $i, 1, 'UTF-8');
+            $add = self::searchCharacterNormalized($ch);
+            $cuml[] = $cuml[$i] + \mb_strlen($add, 'UTF-8');
+        }
+
+        return $cuml;
+    }
+
+    /**
+     * @return array{0: int, 1: int}  half-open [start, end) in mb char indices of $orig
+     */
+    public static function mapSearchStringRangeToOrigStringRange(string $orig, int $nStart, int $nEnd): array
+    {
+        $L = \mb_strlen($orig, 'UTF-8');
+        $cuml = self::buildCumulativeSearchLens($orig);
+        if (0 > $nStart || $nStart > $cuml[$L] || $nEnd < $nStart || $nEnd > $cuml[$L]) {
+            return [0, 0];
+        }
+        $startO = -1;
+        for ($i = 0; $i < $L; ++$i) {
+            if ($cuml[$i + 1] > $nStart) {
+                $startO = $i;
+                break;
+            }
+        }
+        if ($startO < 0) {
+            return [0, 0];
+        }
+        $endO = $L;
+        for ($e = 0; $e <= $L; ++$e) {
+            if ($cuml[$e] >= $nEnd) {
+                $endO = $e;
+                break;
+            }
+        }
+
+        return [$startO, $endO];
+    }
+
+    /**
+     * Find `content` inside `context` (literal or after Unicode/Nostr normalization). Returns half-open
+     * mb indices into $context, or null.
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    public static function findContentSpanInContext(string $context, string $content): ?array
+    {
+        $q = self::normalizeLineEndingsForHighlight($context);
+        if ($q === '' || $content === '') {
+            return null;
+        }
+        foreach (self::highlightContentSearchVariants($content) as $needle) {
+            $needle = self::normalizeLineEndingsForHighlight($needle);
+            if ($needle === '') {
+                continue;
+            }
+            $p = \mb_strpos($q, $needle, 0, 'UTF-8');
+            if (false !== $p) {
+                $len = \mb_strlen($needle, 'UTF-8');
+
+                return [$p, $p + $len];
+            }
+        }
+        $hS = self::stringForSearch($q);
+        foreach (self::highlightContentSearchVariants($content) as $needle) {
+            $needle = self::normalizeLineEndingsForHighlight($needle);
+            if ($needle === '') {
+                continue;
+            }
+            $nS = self::stringForSearch($needle);
+            if ($nS === '') {
+                continue;
+            }
+            $pN = \mb_strpos($hS, $nS, 0, 'UTF-8');
+            if (false === $pN) {
+                continue;
+            }
+            $nEnd = $pN + \mb_strlen($nS, 'UTF-8');
+            [$a, $b] = self::mapSearchStringRangeToOrigStringRange($q, $pN, $nEnd);
+            if ($b > $a) {
+                return [$a, $b];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function highlightContentSearchVariants(string $content): array
+    {
+        if ($content === '') {
+            return [];
+        }
+        $candidates = [
+            $content,
+            self::replaceTypographicQuotesForSearch($content),
+        ];
+        $t = \trim($content);
+        if ($t !== '' && $t !== $content) {
+            $candidates[] = $t;
+        }
+        if (\class_exists(\Normalizer::class)) {
+            $c = \Normalizer::normalize($content, \Normalizer::FORM_C);
+            if (\is_string($c) && $c !== '' && $c !== $content) {
+                $candidates[] = $c;
+            }
+        }
+        $out = [];
+        $seen = [];
+        foreach ($candidates as $n) {
+            if ($n === '' || isset($seen[$n])) {
+                continue;
+            }
+            $seen[$n] = true;
+            $out[] = $n;
+        }
+
+        return $out;
+    }
+
+    private static function replaceTypographicQuotesForSearch(string $s): string
+    {
+        return \strtr($s, [
+            "\xC2\xA0" => ' ', // nbsp
+            "\xE2\x80\x99" => "'",
+            "\xE2\x80\x98" => "'",
+            "\xE2\x80\x9C" => '"',
+            "\xE2\x80\x9D" => '"',
+            "\xE2\x80\x93" => '-',
+            "\xE2\x80\x94" => '-',
+        ]);
+    }
+
+    private static function normalizeLineEndingsForHighlight(string $s): string
+    {
+        return \str_replace("\r\n", "\n", \str_replace("\r", "\n", $s));
+    }
+
+    private static function searchCharacterNormalized(string $ch): string
+    {
+        if ($ch === "\xC2\xAD") { // U+00AD soft hyphen
+            return '';
+        }
+        if ($ch === "\xE2\x80\x8B" // U+200B
+            || $ch === "\xE2\x80\x8C" // U+200C
+            || $ch === "\xE2\x80\x8D" // U+200D
+            || $ch === "\xEF\xBB\xBF" // U+FEFF
+        ) {
+            return '';
+        }
+        if ($ch === "\xC2\xA0" // U+00A0
+            || $ch === "\xE2\x80\xAF" // U+202F narrow no-break
+        ) {
+            return ' ';
+        }
+
+        return $ch;
+    }
+
+    /**
      * With `context`, show the full quote and mark the `content` substring. With no `context`, wrap
      * all of `content` in one mark.
      *
@@ -98,8 +284,8 @@ final class HighlightEventTags
      */
     public static function buildHighlightedBodyHtml(string $contextQuote, string $contentField): string
     {
-        $q = (string) $contextQuote;
-        $hi = (string) $contentField;
+        $q = self::normalizeLineEndingsForHighlight((string) $contextQuote);
+        $hi = self::normalizeLineEndingsForHighlight((string) $contentField);
         if ($q === '' && $hi === '') {
             return '';
         }
@@ -109,17 +295,17 @@ final class HighlightEventTags
         if ($hi === '') {
             return self::escapeWithNl2br($q);
         }
-        $pos = \mb_strpos($q, $hi, 0, 'UTF-8');
-        if ($pos !== false) {
-            $len = \mb_strlen($hi, 'UTF-8');
-            $before = \mb_substr($q, 0, $pos, 'UTF-8');
-            $match = \mb_substr($q, $pos, $len, 'UTF-8');
-            $after = \mb_substr($q, $pos + $len, null, 'UTF-8');
+        $span = self::findContentSpanInContext($q, $hi);
+        if (null !== $span) {
+            [$start, $end] = $span;
+            $before = \mb_substr($q, 0, $start, 'UTF-8');
+            $match = \mb_substr($q, $start, $end - $start, 'UTF-8');
+            $after = \mb_substr($q, $end, null, 'UTF-8');
 
             return self::escapeWithNl2br($before).self::markHtml($match).self::escapeWithNl2br($after);
         }
 
-        // Substring not found: show the full context quote, then the highlight line so the note is not empty.
+        // Substring not found after normalization / variants: show the full context quote, then the highlight so the card is not empty.
         return self::escapeWithNl2br($q).'<p class="user-highlight__marker-orphan">'.self::markHtml($hi).'</p>';
     }
 

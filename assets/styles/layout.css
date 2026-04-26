@@ -647,6 +647,51 @@ aside {
     text-decoration: none;
 }
 
+/* Highlight author (small badge link) + date above quote; badge is clickable, rest of row opens article. */
+.home-aside-highlights__byline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.5rem;
+    margin: 0 0 0.35rem;
+    position: relative;
+    z-index: 3;
+    font-family: var(--font-family), system-ui, sans-serif;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
+.home-aside-highlights__who {
+    display: inline-flex;
+    max-width: 100%;
+    pointer-events: auto;
+}
+
+.home-aside-highlights__byline .user-badge {
+    gap: 0.28rem;
+}
+
+.home-aside-highlights__byline .user-badge__avatar {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+.home-aside-highlights__byline .user-badge__name {
+    font-size: 0.68rem;
+    max-width: 7.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-aside-highlights__time {
+    font-size: 0.65rem;
+    color: color-mix(in srgb, var(--color-text-mid) 88%, var(--color-bg) 12%);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 /* Let clicks go to the overlay; quote/meta stay visible above background only visually (no pointer on text). */
 .home-aside-highlights__item-inner .home-aside-highlights__quote,
 .home-aside-highlights__item-inner .home-aside-highlights__meta {
@@ -690,6 +735,11 @@ aside {
 .home-aside-highlights__item-inner:hover .home-aside-highlights__meta,
 .home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) .home-aside-highlights__meta {
     color: color-mix(in srgb, var(--color-primary) 45%, var(--color-text-mid) 55%);
+}
+
+.home-aside-highlights__item-inner:hover .home-aside-highlights__time,
+.home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) .home-aside-highlights__time {
+    color: color-mix(in srgb, var(--color-primary) 32%, var(--color-text-mid) 68%);
 }
 
 table {
