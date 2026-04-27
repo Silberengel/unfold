@@ -194,6 +194,25 @@ class ArticleRepository extends ServiceEntityRepository
     }
 
     /**
+     * Newest row for a NIP-23/24 `d` value (replaceable long-form can leave multiple `article` rows per slug).
+     */
+    public function findLatestBySlug(string $slug): ?Article
+    {
+        $slug = trim($slug);
+        if ($slug === '') {
+            return null;
+        }
+
+        return $this->createQueryBuilder('a')
+            ->where('a.slug = :slug')
+            ->setParameter('slug', $slug)
+            ->orderBy('a.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Find articles by author's public key
      */
     public function findByPubkey(string $pubkey, int $limit = 25): array

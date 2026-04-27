@@ -149,12 +149,18 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
      */
     private function assertHighlightFragmentsPresent(string $html, array $eventIds): void
     {
+        $this->assertStringContainsString(
+            '<mark',
+            $html,
+            'In-article highlights must include at least one <mark> (see ArticleBodyHighlightInjector).'
+        );
+        $this->assertStringContainsString('user-highlight__marker', $html);
         foreach ($eventIds as $eid) {
             $eid = strtolower($eid);
             $this->assertMatchesRegularExpression(
                 '/\bid="highlight-'.preg_quote($eid, '/').'"/',
                 $html,
-                'Expected in-article fragment id highlight-'.$eid
+                'Each event id must have a #highlight-'.$eid.' anchor (on the <mark> or a zero-width fragment <span>).'
             );
         }
     }

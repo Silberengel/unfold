@@ -14,8 +14,9 @@ use swentel\nostr\Key\Key;
 
 /**
  * Injects kind-9802 highlight marks into the rendered article body by searching the visible text
- * in NIP-84 order: event `content` (highlighted span) first, then the `context` tag when present and
- * non-empty, then `textquoteselector` passage. The first string that matches the body wins.
+ * in NIP-84 order: event `content` (highlighted span) first, then the `context` tag when set, then
+ * the full passage ({@see HighlightEventTags::fullPassageForHighlightDisplay}, same as `content`
+ * when `context` is missing), then `textquoteselector`. The first string that matches the body wins.
  * Matches across inline elements (e.g. em, strong) by concatenating text in document order. Text
  * inside a prior `mark.user-highlight__marker` is still considered so a narrower 9802 can
  * be nested and receive its own fragment id (deep link from the landing aside).
@@ -367,9 +368,10 @@ final class ArticleBodyHighlightInjector
     }
 
     /**
-     * Same priority as the card: event `content` (NIP-84 sub-span) first; if empty, `context` tag; if
-     * still empty, `textquoteselector` passage. Article injection tries each in order until one
-     * matches the rendered body (so a highlight with only `textquoteselector` still inlines a mark).
+     * Same priority as the card: event `content` (NIP-84 sub-span) first, then the `context` tag when
+     * set, then {@see HighlightEventTags::fullPassageForHighlightDisplay} (so missing/empty `context`
+     * is treated as “passage = `content`” before `textquoteselector`). Tries each in order until one
+     * matches the rendered body.
      */
     private function primaryNeedleForGrouping(ArticleHighlight $h): string
     {
@@ -384,11 +386,15 @@ final class ArticleBodyHighlightInjector
     private function injectionNeedleBasesInPriority(ArticleHighlight $h): array
     {
         $c = \trim($h->getContent());
-        $ctx = \trim(HighlightEventTags::contextFromTags($h->getTags()));
-        $tq = \trim(HighlightEventTags::textquoteselectorPassageFromTags($h->getTags()));
+        $tags = $h->getTags();
+        $ctx = \trim(HighlightEventTags::contextFromTags($tags));
+        $fullPassage = \trim(HighlightEventTags::fullPassageForHighlightDisplay($c, $tags));
+        $tq = \trim(HighlightEventTags::textquoteselectorPassageFromTags($tags));
         $out = [];
         $seen = [];
-        foreach ([$c, $ctx, $tq] as $s) {
+        // NIP-84: `context` = full quote; `content` = highlighted span. Missing/empty `context` is
+        // the same as “full passage = `content`” (entirely highlighted) — see fullPassageForHighlightDisplay.
+        foreach ([$c, $ctx, $fullPassage, $tq] as $s) {
             if ($s === '' || isset($seen[$s])) {
                 continue;
             }

@@ -46,6 +46,9 @@ class ArticleHighlightRepository extends ServiceEntityRepository
     }
 
     /**
+     * Returns highlights for this NIP-33 address (kind + pubkey + slug), not only the current
+     * {@see Article} row id — `article` can have multiple DB rows for the same slug (revisions).
+     *
      * @return list<ArticleHighlight>
      */
     public function findByArticle(Article $article): array
@@ -55,13 +58,29 @@ class ArticleHighlightRepository extends ServiceEntityRepository
             return [];
         }
 
+        $pubkey = (string) $article->getPubkey();
+        if ('' === $pubkey) {
+            return [];
+        }
+        $slug = trim((string) $article->getSlug());
+        if ('' === $slug) {
+            return [];
+        }
+
+        $qb = $this->createQueryBuilder('h')
+            ->innerJoin('h.article', 'a')
+            ->where('a.pubkey = :pubkey')
+            ->andWhere('a.slug = :slug')
+            ->setParameter('pubkey', $pubkey)
+            ->setParameter('slug', $slug)
+            ->orderBy('h.eventCreatedAt', 'DESC');
+
+        // Do not filter on `a.kind`: replaceable long-form can leave several `article` rows per slug
+        // with different kind (or NULL vs 30023). Highlights are still tied to the same NIP-33
+        // address; filtering by the *current* row's kind dropped rows synced to an older revision.
+
         /** @var list<ArticleHighlight> $out */
-        $out = $this->createQueryBuilder('h')
-            ->where('h.article = :art')
-            ->setParameter('art', $article)
-            ->orderBy('h.eventCreatedAt', 'DESC')
-            ->getQuery()
-            ->getResult();
+        $out = $qb->getQuery()->getResult();
 
         return $out;
     }

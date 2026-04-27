@@ -28,9 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
 	&& rm -rf /var/lib/apt/lists/*
 
+# Composer: copy from the official image instead of @composer on install-php-extensions, which
+# curl's getcomposer.org and fails when build DNS is broken (e.g. curl: (6) Could not resolve host).
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
 RUN set -eux; \
 	install-php-extensions \
-		@composer \
 		apcu \
 		intl \
 		opcache \

@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Article;
 use App\Repository\ArticleHighlightRepository;
+use App\Repository\ArticleRepository;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Enum\KindsEnum;
 use App\Nostr\Nip22CommentTags;
@@ -346,21 +347,10 @@ class ArticleController  extends AbstractController
 
     private function loadLatestArticleBySlug(EntityManagerInterface $entityManager, string $slug): ?Article
     {
+        /** @var ArticleRepository $repository */
         $repository = $entityManager->getRepository(Article::class);
-        $articles = $repository->findBy(['slug' => $slug]);
-        $revisions = \count($articles);
-        if ($revisions === 0) {
-            return null;
-        }
-        if ($revisions > 1) {
-            usort($articles, function ($a, $b) {
-                return $b->getCreatedAt() <=> $a->getCreatedAt();
-            });
 
-            return end($articles);
-        }
-
-        return $articles[0];
+        return $repository->findLatestBySlug($slug);
     }
 
     private function renderArticle(
