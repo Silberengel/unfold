@@ -46,6 +46,10 @@ services:
             $defaultRelayUrl: '%default_relay%'
             $articleRelayUrls: '%article_relays%'
             $profileRelayUrls: '%profile_relays%'
+    App\Service\NostrAuthorRelayCache:
+        lazy: true
+        arguments:
+            $relayQueryCache: '@cache.app'
     App\Service\NostrClient:
         arguments:
             $projectDir: '%kernel.project_dir%'

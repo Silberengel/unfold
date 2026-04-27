@@ -19,8 +19,6 @@ use swentel\nostr\Relay\RelaySet;
 use swentel\nostr\Request\Request;
 use swentel\nostr\Subscription\Subscription;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Main integration point for swentel/nostr against configured relays: long-form fetch, kind-0 profile
@@ -29,7 +27,11 @@ use Symfony\Contracts\Cache\ItemInterface;
  * `nostr_relay_request_timeout_sec` (see `config/unfold.yaml`). Shared building blocks:
  * {@see NostrRelayRequestFactory} (timeouts), {@see NostrRelayQuery} (REQ + response fan-in),
  * {@see NostrRelayFanoutTransport} (sequential vs parallel multi-relay REQ), {@see NostrRelayListFactory}
- * (config relay lists, merge/dedupe, {@link RelaySet} for profile fetches, Nostr Land + aggr).
+ * (config relay lists, merge/dedupe, {@link RelaySet} for profile fetches, Nostr Land + aggr),
+ * {@see NostrAuthorRelayCache} (cached NIP-65 kind-10002 author relay lists),
+ * {@see NostrWireEventMerge} (NIP-33 / kind-0 merge, #d tags, npub→hex for wire objects),
+ * {@see NostrArticleDiscussionSupport} (article thread REQ filters and tag classifiers),
+ * {@see NostrKind5DeletionFilter} (NIP-09 kind-5 relevance for stored row kinds).
  */
 class NostrClient
 {
@@ -57,12 +59,15 @@ class NostrClient
         private readonly ArticleFactory $articleFactory,
         private readonly TokenStorageInterface $tokenStorage,
         private readonly LoggerInterface $logger,
-        private readonly CacheInterface $relayQueryCache,
         private readonly string $projectDir,
         private readonly NostrRelayRequestFactory $relayRequestFactory,
         private readonly NostrRelayQuery $nostrRelayQuery,
         private readonly NostrRelayFanoutTransport $relayFanout,
         private readonly NostrRelayListFactory $relayListFactory,
+        private readonly NostrAuthorRelayCache $authorRelayCache,
+        private readonly NostrWireEventMerge $wireMerge,
+        private readonly NostrArticleDiscussionSupport $articleDiscussion,
+        private readonly NostrKind5DeletionFilter $kind5DeletionFilter,
     ) {
         $this->defaultRelaySet = $this->relayListFactory->getDefaultArticleRelaySet();
     }
@@ -110,7 +115,7 @@ class NostrClient
         $seen = array_fill_keys($base, true);
         $out = $base;
         foreach ($pubkeys as $pk) {
-            foreach ($this->getAuthorNip65RelaysList($pk) as $wss) {
+            foreach ($this->authorRelayCache->getAuthorNip65RelaysList($pk) as $wss) {
                 if (!\is_string($wss) || $wss === '' || isset($seen[$wss])) {
                     continue;
                 }
@@ -130,181 +135,6 @@ class NostrClient
     public function getNostrLandAggrReaderCacheSuffix(): string
     {
         return $this->relayListFactory->getNostrLandAggrReaderCacheSuffix();
-    }
-
-    /**
-     * Full NIP-65 (kind-10002) wss:// list for a hex pubkey, cached. Used for comment fetches; prefer
-     * {@see getTopReputableRelaysForAuthor} when you only need a few relays.
-     *
-     * @return list<string>
-     */
-    private function getAuthorNip65RelaysList(string $pubkey): array
-    {
-        $cacheKey = 'nostr_kind10002_relays_v1_'.hash('sha256', $pubkey);
-
-        return $this->relayQueryCache->get($cacheKey, function (ItemInterface $item) use ($pubkey): array {
-            $item->expiresAfter(3600);
-            try {
-                $authorRelays = $this->getNpubRelays($pubkey);
-            } catch (\Exception $e) {
-                $this->logger->error('Error getting author NIP-65 relay list', [
-                    'pubkey' => $pubkey,
-                    'error' => $e->getMessage(),
-                ]);
-                $authorRelays = [];
-            }
-            $authorRelays = array_values(array_filter(
-                is_array($authorRelays) ? $authorRelays : [],
-                static function ($relay): bool {
-                    return \is_string($relay)
-                        && str_starts_with($relay, 'wss:')
-                        && !str_contains($relay, 'localhost');
-                }
-            ));
-            if ($authorRelays === []) {
-                return [];
-            }
-            $seen = [];
-            $out = [];
-            foreach ($authorRelays as $u) {
-                if (isset($seen[$u])) {
-                    continue;
-                }
-                $seen[$u] = true;
-                $out[] = $u;
-            }
-
-            return $out;
-        });
-    }
-
-    /**
-     * A short prefix of the author NIP-65 list (or default relay) for queries that do not need every home relay.
-     */
-    private function getTopReputableRelaysForAuthor(string $pubkey, int $limit = 3): array
-    {
-        $all = $this->getAuthorNip65RelaysList($pubkey);
-        if ($all === []) {
-            return [$this->relayListFactory->getDefaultRelayUrl()];
-        }
-        if ($limit < 1) {
-            $limit = 1;
-        }
-
-        return \array_values(\array_slice($all, 0, $limit));
-    }
-
-    /**
-     * NIP kind-range convention: kind 0, 3, and 10_000–19_999 are replaceable by (kind, pubkey) only;
-     * 30_000–39_999 are addressable by (kind, pubkey, d). On equal {@see created_at}, the
-     * lexicographically lowest id is kept.
-     */
-    private static function isReplaceableByKindAndPubkeyNip(int $kind): bool
-    {
-        return $kind === 0
-            || $kind === 3
-            || ($kind >= 10_000 && $kind < 20_000);
-    }
-
-    private static function replaceableKindPubkeyAddressFromWire(mixed $e): ?string
-    {
-        if (!\is_object($e)) {
-            return null;
-        }
-        $k = (int) ($e->kind ?? 0);
-        if (!self::isReplaceableByKindAndPubkeyNip($k)) {
-            return null;
-        }
-        $pk = (string) ($e->pubkey ?? '');
-        if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
-            return null;
-        }
-
-        return (string) $k.':'.strtolower($pk);
-    }
-
-    private static function isValidNostrEventIdString(string $id): bool
-    {
-        return 64 === \strlen($id) && ctype_xdigit($id);
-    }
-
-    /**
-     * Whether $candidate is the NIP-preferred live revision over $incumbent: higher created_at, or
-     * same created_at and lower (lexicographically first) id. Events without a valid 64-hex id
-     * lose to valid ones (avoids an empty id “winning” a tie and hiding real content).
-     */
-    private static function wireEventSupersedes(mixed $candidate, mixed $incumbent): bool
-    {
-        $c = self::magazineEventCreatedAt($candidate);
-        $i = self::magazineEventCreatedAt($incumbent);
-        if ($c !== $i) {
-            return $c > $i;
-        }
-        $idC = self::magazineEventId($candidate);
-        $idI = self::magazineEventId($incumbent);
-        $vC = self::isValidNostrEventIdString($idC);
-        $vI = self::isValidNostrEventIdString($idI);
-        if ($vC && !$vI) {
-            return true;
-        }
-        if (!$vC && $vI) {
-            return false;
-        }
-        if (!$vC && !$vI) {
-            if ($idC === $idI) {
-                return false;
-            }
-
-            return $idC < $idI;
-        }
-        if ($idC === $idI) {
-            return false;
-        }
-
-        return $idC < $idI;
-    }
-
-    /**
-     * NIP-01: kind-0 profile metadata is replaceable; the live document is addressed by `0:pubkey`
-     * (not by event id). Multiple relay copies collapse per {@see wireEventSupersedes}.
-     */
-    private static function kind0Nip01ReplaceableAddress(mixed $ev): ?string
-    {
-        if (!\is_object($ev) || (int) ($ev->kind ?? -1) !== KindsEnum::METADATA->value) {
-            return null;
-        }
-        $pk = (string) ($ev->pubkey ?? '');
-        if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
-            return null;
-        }
-
-        return '0:'.strtolower($pk);
-    }
-
-    private static function kind0ReplaceableIsNewer(mixed $candidate, mixed $incumbent): bool
-    {
-        return self::wireEventSupersedes($candidate, $incumbent);
-    }
-
-    /**
-     * @param list<mixed> $events
-     *
-     * @return array<string, object> Keyed by `0:` + 64 hex (lowercase); one winning kind-0 event per key
-     */
-    private static function mergeKind0EventsByReplaceableAddress(array $events): array
-    {
-        $byAddress = [];
-        foreach ($events as $ev) {
-            $addr = self::kind0Nip01ReplaceableAddress($ev);
-            if ($addr === null) {
-                continue;
-            }
-            if (!isset($byAddress[$addr]) || self::kind0ReplaceableIsNewer($ev, $byAddress[$addr])) {
-                $byAddress[$addr] = $ev;
-            }
-        }
-
-        return $byAddress;
     }
 
     /**
@@ -348,7 +178,7 @@ class NostrClient
                 'relays' => $relaysTriedStr,
                 'ms' => (int) round((microtime(true) - $t0) * 1000),
             ]);
-            foreach (self::mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
+            foreach ($this->wireMerge->mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
                 if (!\is_object($ev) || !isset($ev->content)) {
                     continue;
                 }
@@ -398,7 +228,7 @@ class NostrClient
                 $request->send(),
                 static fn ($ev) => $ev,
             );
-            foreach (self::mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
+            foreach ($this->wireMerge->mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
                 if (!\is_object($ev)) {
                     continue;
                 }
@@ -464,7 +294,7 @@ class NostrClient
                 if (!\is_object($ev) || (int) ($ev->kind ?? 0) !== KindsEnum::DELETION_REQUEST->value) {
                     continue;
                 }
-                if (!self::kind5DeletionRelevantToStoredDbData($ev)) {
+                if (!$this->kind5DeletionFilter->isRelevantToStoredDbData($ev)) {
                     continue;
                 }
                 $id = (string) ($ev->id ?? '');
@@ -480,45 +310,6 @@ class NostrClient
         }
 
         return array_values($byId);
-    }
-
-    /**
-     * Keep only kind-5 events that (claim to) delete kinds we keep in MySQL: profile, relay list, payto,
-     * long-form, magazine index. Omits thread/reply/comment deletions to shrink relay responses.
-     */
-    private static function kind5DeletionRelevantToStoredDbData(object $ev): bool
-    {
-        static $kinds;
-        if ($kinds === null) {
-            $kinds = [
-                KindsEnum::METADATA->value,
-                KindsEnum::RELAY_LIST->value,
-                KindsEnum::PAYMENT_TARGETS->value,
-                KindsEnum::LONGFORM->value,
-                KindsEnum::LONGFORM_DRAFT->value,
-                KindsEnum::PUBLICATION_INDEX->value,
-            ];
-        }
-        foreach ($ev->tags ?? [] as $tag) {
-            if (!\is_array($tag) && !\is_object($tag)) {
-                continue;
-            }
-            $r = \is_object($tag) ? array_values((array) $tag) : $tag;
-            if (!isset($r[0], $r[1])) {
-                continue;
-            }
-            if ((string) $r[0] === 'k' && \in_array((int) $r[1], $kinds, true)) {
-                return true;
-            }
-            if ((string) $r[0] === 'a') {
-                $parts = explode(':', (string) $r[1], 3);
-                if ($parts !== [] && \in_array((int) $parts[0], $kinds, true)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -549,8 +340,8 @@ class NostrClient
         if (empty($events)) {
             throw new \Exception('No metadata for npub '.$npub.' (relays: '.$relaysTriedStr.')');
         }
-        $byAddr = self::mergeKind0EventsByReplaceableAddress($events);
-        $authorHex = self::npubToHexPubkey($npub);
+        $byAddr = $this->wireMerge->mergeKind0EventsByReplaceableAddress($events);
+        $authorHex = $this->wireMerge->npubToHexPubkey($npub);
         if ($authorHex === null) {
             throw new \Exception('Invalid npub for metadata: '.$npub);
         }
@@ -598,7 +389,7 @@ class NostrClient
             return [];
         }
 
-        return self::mergeNip33ParameterizedWireEvents($events);
+        return $this->wireMerge->mergeNip33ParameterizedWireEvents($events);
     }
 
     public function getNpubLongForm($npub): void
@@ -725,7 +516,7 @@ class NostrClient
     public function getLongFormFromNaddr($slug, $relayList, $author, $kind): void
     {
         if (empty($relayList)) {
-            $topAuthorRelays = $this->getTopReputableRelaysForAuthor($author);
+            $topAuthorRelays = $this->authorRelayCache->getTopReputableRelaysForAuthor($author);
             $authorRelaySet = $this->relayListFactory->createRelaySetMergedWithArticleList($topAuthorRelays);
             $relaysTried = $this->plannedRelayUrlsForSet($topAuthorRelays);
         } else {
@@ -753,9 +544,9 @@ class NostrClient
 
             if (!empty($events)) {
                 $kindI = (int) $kind;
-                $authorH = self::authorIdentToHexLower($author);
-                $event = self::isNip33ParameterizedKind($kindI) && $authorH !== null
-                    ? self::pickLatestNip33ParameterizedForQuery($events, $kindI, $authorH, (string) $slug)
+                $authorH = $this->wireMerge->authorIdentToHexLower($author);
+                $event = $this->wireMerge->isNip33ParameterizedKind($kindI) && $authorH !== null
+                    ? $this->wireMerge->pickLatestNip33ParameterizedForQuery($events, $kindI, $authorH, (string) $slug)
                     : null;
                 if ($event === null) {
                     $event = $events[0];
@@ -833,7 +624,7 @@ class NostrClient
         }
 
         // Try author's relays first
-        $authorRelays = empty($relays) ? $this->getTopReputableRelaysForAuthor($pubkey) : $relays;
+        $authorRelays = empty($relays) ? $this->authorRelayCache->getTopReputableRelaysForAuthor($pubkey) : $relays;
         $relaySet = $this->relayListFactory->createRelaySetMergedWithArticleList($authorRelays);
 
         // Create request using the helper method
@@ -893,7 +684,7 @@ class NostrClient
                 $events[] = $wrapper->event;
             }
         }
-        foreach (self::mergeNip33ParameterizedWireEvents($events) as $event) {
+        foreach ($this->wireMerge->mergeNip33ParameterizedWireEvents($events) as $event) {
             $article = $this->articleFactory->createFromLongFormContentEvent($event);
             $this->saveEachArticleToTheDatabase($article);
         }
@@ -916,7 +707,7 @@ class NostrClient
         if (empty($response)) {
             return null;
         }
-        $merged = self::mergeNip33ParameterizedWireEvents($response);
+        $merged = $this->wireMerge->mergeNip33ParameterizedWireEvents($response);
         $k10002 = (int) KindsEnum::RELAY_LIST->value;
         foreach ($merged as $e) {
             if (\is_object($e) && (int) ($e->kind ?? 0) === $k10002) {
@@ -989,7 +780,7 @@ class NostrClient
         $pubkey = $parts[1];
 
         $tRelays = microtime(true);
-        $authorRelays = $this->getAuthorNip65RelaysList($pubkey);
+        $authorRelays = $this->authorRelayCache->getAuthorNip65RelaysList($pubkey);
         $this->logger->info('nostr.article_discussion.author_relays_ready', [
             'elapsed_ms' => (int) round((microtime(true) - $tRelays) * 1000),
             'author_relay_count' => \count($authorRelays),
@@ -1007,7 +798,7 @@ class NostrClient
             ]);
         }
 
-        $filters = $this->createArticleDiscussionFilters($coordinate, $rootEventHexId);
+        $filters = $this->articleDiscussion->createArticleDiscussionFilters($coordinate, $rootEventHexId);
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $requestMessage = new RequestMessage($subscriptionId, $filters);
@@ -1091,13 +882,13 @@ class NostrClient
 
         foreach ($all as $event) {
             $kind = (int) ($event->kind ?? 0);
-            if ($kind === KindsEnum::COMMENTS->value && $this->eventIsNip22ArticleThreadReply($event, $coordinate)) {
+            if ($kind === KindsEnum::COMMENTS->value && $this->articleDiscussion->eventIsNip22ArticleThreadReply($event, $coordinate)) {
                 $thread[] = $event;
                 $threadIds[(string) $event->id] = true;
 
                 continue;
             }
-            if ($kind === KindsEnum::TEXT_NOTE->value && $this->eventIsLegacyThreadReply($event, $coordinate, $rootEventHexId)) {
+            if ($kind === KindsEnum::TEXT_NOTE->value && $this->articleDiscussion->eventIsLegacyThreadReply($event, $coordinate, $rootEventHexId)) {
                 $thread[] = $event;
                 $threadIds[(string) $event->id] = true;
             }
@@ -1109,7 +900,7 @@ class NostrClient
             if ($id === '' || isset($threadIds[$id])) {
                 continue;
             }
-            if ($this->eventIsArticleQuote($event, $coordinate, $rootEventHexId)) {
+            if ($this->articleDiscussion->eventIsArticleQuote($event, $coordinate, $rootEventHexId)) {
                 $quotes[] = $event;
             }
         }
@@ -1151,7 +942,7 @@ class NostrClient
         $pubkey = $parts[1];
 
         $tRelays = microtime(true);
-        $authorRelays = $this->getAuthorNip65RelaysList($pubkey);
+        $authorRelays = $this->authorRelayCache->getAuthorNip65RelaysList($pubkey);
         $this->logger->info('nostr.highlight_relay_list', [
             'elapsed_ms' => (int) round((microtime(true) - $tRelays) * 1000),
             'author_relay_count' => \count($authorRelays),
@@ -1259,161 +1050,6 @@ class NostrClient
         return $out;
     }
 
-    private function eventIsNip22ArticleThreadReply(object $event, string $coordinate): bool
-    {
-        if ((int) ($event->kind ?? 0) !== KindsEnum::COMMENTS->value) {
-            return false;
-        }
-        foreach ($event->tags ?? [] as $tag) {
-            if (!\is_array($tag) || \count($tag) < 2) {
-                continue;
-            }
-            $name = (string) ($tag[0] ?? '');
-            if (($name === 'a' || $name === 'A') && (string) ($tag[1] ?? '') === $coordinate) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function eventIsLegacyThreadReply(object $event, string $coordinate, ?string $rootEventHexId): bool
-    {
-        if ((int) ($event->kind ?? 0) !== KindsEnum::TEXT_NOTE->value) {
-            return false;
-        }
-        foreach ($event->tags ?? [] as $tag) {
-            if (!\is_array($tag) || \count($tag) < 2) {
-                continue;
-            }
-            $name = (string) ($tag[0] ?? '');
-            $val = (string) ($tag[1] ?? '');
-            if (($name === 'a' || $name === 'A') && $val === $coordinate) {
-                return true;
-            }
-            if ($rootEventHexId !== null && $rootEventHexId !== '' && $name === 'e' && $val === $rootEventHexId) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function eventIsArticleQuote(object $event, string $coordinate, ?string $rootEventHexId): bool
-    {
-        $kind = (int) ($event->kind ?? 0);
-        if ($kind === KindsEnum::HIGHLIGHTS->value) {
-            // Highlights are stored in `article_highlight`, not the discussion/quote list.
-            return false;
-        }
-        if ($kind === KindsEnum::COMMENTS->value) {
-            foreach ($event->tags ?? [] as $tag) {
-                if (!\is_array($tag) || \count($tag) < 2) {
-                    continue;
-                }
-                if (($tag[0] ?? '') === 'q') {
-                    $val = (string) ($tag[1] ?? '');
-                    if ($val === $coordinate || ($rootEventHexId !== null && $val === $rootEventHexId)) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-        foreach ($event->tags ?? [] as $tag) {
-            if (!\is_array($tag) || \count($tag) < 2) {
-                continue;
-            }
-            $name = (string) ($tag[0] ?? '');
-            $val = (string) ($tag[1] ?? '');
-            if ($name === 'q') {
-                if ($val === $coordinate || ($rootEventHexId !== null && $val === $rootEventHexId)) {
-                    return true;
-                }
-            }
-        }
-        if ($kind === KindsEnum::GENERIC_REPOST->value) {
-            foreach ($event->tags ?? [] as $tag) {
-                if (!\is_array($tag) || \count($tag) < 2) {
-                    continue;
-                }
-                if (($tag[0] ?? '') === 'a' && (string) ($tag[1] ?? '') === $coordinate) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @return array<int, Filter>
-     */
-    private function createArticleDiscussionFilters(string $coordinate, ?string $rootEventHexId): array
-    {
-        $limThread = 100;
-        $limQuote = 80;
-
-        $filters = [];
-
-        $k1111 = KindsEnum::COMMENTS->value;
-        $f = new Filter();
-        $f->setKinds([$k1111]);
-        $f->setTag('#A', [$coordinate]);
-        $f->setLimit($limThread);
-        $filters[] = $f;
-        $f = new Filter();
-        $f->setKinds([$k1111]);
-        $f->setTag('#a', [$coordinate]);
-        $f->setLimit($limThread);
-        $filters[] = $f;
-
-        $k1 = KindsEnum::TEXT_NOTE->value;
-        $f = new Filter();
-        $f->setKinds([$k1]);
-        $f->setTag('#A', [$coordinate]);
-        $f->setLimit($limThread);
-        $filters[] = $f;
-        $f = new Filter();
-        $f->setKinds([$k1]);
-        $f->setTag('#a', [$coordinate]);
-        $f->setLimit($limThread);
-        $filters[] = $f;
-
-        if ($rootEventHexId !== null && $rootEventHexId !== '') {
-            $f = new Filter();
-            $f->setKinds([$k1]);
-            $f->setTag('#e', [$rootEventHexId]);
-            $f->setLimit($limThread);
-            $filters[] = $f;
-        }
-
-        $qKinds = [
-            KindsEnum::TEXT_NOTE->value,
-            KindsEnum::REPOST->value,
-            KindsEnum::GENERIC_REPOST->value,
-            KindsEnum::COMMENTS->value,
-        ];
-        $qVals = [$coordinate];
-        if ($rootEventHexId !== null && $rootEventHexId !== '') {
-            $qVals[] = $rootEventHexId;
-        }
-        $f = new Filter();
-        $f->setKinds($qKinds);
-        $f->setTag('#q', $qVals);
-        $f->setLimit($limQuote);
-        $filters[] = $f;
-
-        $f = new Filter();
-        $f->setKinds([KindsEnum::GENERIC_REPOST->value]);
-        $f->setTag('#a', [$coordinate]);
-        $f->setLimit(50);
-        $filters[] = $f;
-
-        return $filters;
-    }
-
     /**
      * Get zap events for a specific event
      *
@@ -1433,7 +1069,7 @@ class NostrClient
         $pubkey = $parts[1];
 
         // Get author's relays for better chances of finding zaps
-        $authorRelays = $this->getTopReputableRelaysForAuthor($pubkey);
+        $authorRelays = $this->authorRelayCache->getTopReputableRelaysForAuthor($pubkey);
         $relaySet = $this->relayListFactory->createRelaySetMergedWithArticleList($authorRelays);
 
         // Create request using the helper method
@@ -1457,7 +1093,7 @@ class NostrClient
      */
     public function getLongFormContentForPubkey(string $ident): array
     {
-        $authorRelays = $this->getTopReputableRelaysForAuthor($ident);
+        $authorRelays = $this->authorRelayCache->getTopReputableRelaysForAuthor($ident);
         $base = $this->relayListFactory->getConfiguredArticleRelayUrlList();
         $merged = $authorRelays !== [] ? array_merge($base, $authorRelays) : $base;
         $seen = [];
@@ -1487,7 +1123,7 @@ class NostrClient
             $request->send(),
             static fn (object $event) => $event,
         );
-        foreach (self::mergeNip33ParameterizedWireEvents($events) as $event) {
+        foreach ($this->wireMerge->mergeNip33ParameterizedWireEvents($events) as $event) {
             if (!\is_object($event)) {
                 continue;
             }
@@ -1603,7 +1239,7 @@ class NostrClient
             }
         }
 
-        return self::mergeNip33ParameterizedWireEvents(array_values($articles));
+        return $this->wireMerge->mergeNip33ParameterizedWireEvents(array_values($articles));
     }
 
     /**
@@ -1634,7 +1270,7 @@ class NostrClient
             $relayList = [];
             try {
                 // Get relays where the author publishes
-                $authorRelays = $this->getTopReputableRelaysForAuthor($pubkey);
+                $authorRelays = $this->authorRelayCache->getTopReputableRelaysForAuthor($pubkey);
                 if (!empty($authorRelays)) {
                     $relayList = $authorRelays;
                 }
@@ -1670,7 +1306,7 @@ class NostrClient
                     $request->send(),
                     static fn (object $event) => $event,
                 );
-                $ev = $this->pickEventForNip33OrFirst($events, $kind, (string) $pubkey, (string) $slug);
+                $ev = $this->wireMerge->pickEventForNip33OrFirst($events, $kind, (string) $pubkey, (string) $slug);
                 if ($ev !== null) {
                     $articlesMap[$coordinate] = $ev;
                 }
@@ -1684,7 +1320,7 @@ class NostrClient
                         $request2->send(),
                         static fn (object $event) => $event,
                     );
-                    $ev2 = $this->pickEventForNip33OrFirst($events2, $kind, (string) $pubkey, (string) $slug);
+                    $ev2 = $this->wireMerge->pickEventForNip33OrFirst($events2, $kind, (string) $pubkey, (string) $slug);
                     if ($ev2 !== null) {
                         $articlesMap[$coordinate] = $ev2;
                     }
@@ -1744,7 +1380,7 @@ class NostrClient
         if ($incumbent === null) {
             $this->logger->info('[longform_ingest] saveEachArticle: persist new row (no DB row for author+slug)', [
                 'eventId' => $newId,
-                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
             ]);
             $this->persistNewArticle($article, 'no_db_row_for_nip33_address');
 
@@ -1760,11 +1396,11 @@ class NostrClient
             return;
         }
         $iWire = self::longFormWireStubFromArticle($incumbent);
-        $cTs = self::magazineEventCreatedAt($candidate);
-        $iTs = self::magazineEventCreatedAt($iWire);
-        if (self::wireEventSupersedes($candidate, $iWire)) {
+        $cTs = $this->wireMerge->magazineEventCreatedAt($candidate);
+        $iTs = $this->wireMerge->magazineEventCreatedAt($iWire);
+        if ($this->wireMerge->wireEventSupersedes($candidate, $iWire)) {
             $this->logger->info('[longform_ingest] saveEachArticle: NIP-33 update — candidate wins, flushing DB row', [
-                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
                 'from_event_id' => $incumbent->getEventId(),
                 'to_event_id' => $newId,
                 'db_row_id' => $incumbent->getId(),
@@ -1784,9 +1420,9 @@ class NostrClient
 
             return;
         }
-        if (self::wireEventSupersedes($iWire, $candidate)) {
+        if ($this->wireMerge->wireEventSupersedes($iWire, $candidate)) {
             $this->logger->info('[longform_ingest] saveEachArticle: keep DB — merged relay result is not newer (incumbent wins)', [
-                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
                 'dbEventId' => $incumbent->getEventId(),
                 'seenEventId' => $newId,
                 'db_row_id' => $incumbent->getId(),
@@ -1795,7 +1431,7 @@ class NostrClient
             ]);
         } elseif ((string) $incumbent->getEventId() !== $newId) {
             $this->logger->notice('[longform_ingest] saveEachArticle: inconclusive supersedes (different ids) — check relays / d-tag match', [
-                'address' => $pubkey.':…:'.self::longformIngestShortSlug($slug),
+                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
                 'dbEventId' => $incumbent->getEventId(),
                 'seenEventId' => $newId,
                 'db_row_id' => $incumbent->getId(),
@@ -1811,7 +1447,7 @@ class NostrClient
             $this->logger->info('[longform_ingest] persistNewArticle', [
                 'reason' => $reason,
                 'eventId' => $article->getEventId(),
-                'slug' => self::longformIngestShortSlug((string) ($article->getSlug() ?? '')),
+                'slug' => $this->wireMerge->longformIngestShortSlug((string) ($article->getSlug() ?? '')),
             ]);
             $this->entityManager->persist($article);
             $this->entityManager->flush();
@@ -1822,33 +1458,6 @@ class NostrClient
             ]);
             $this->managerRegistry->resetManager();
         }
-    }
-
-    private static function longformIngestShortSlug(string $slug, int $max = 100): string
-    {
-        $t = trim($slug);
-        if (strlen($t) > $max) {
-            return substr($t, 0, $max - 1).'…';
-        }
-
-        return $t;
-    }
-
-    /**
-     * @return array{kind: int, id: string, created_at: int, d: string, nip33: ?string}
-     */
-    private static function longformIngestEventWireSummary(object $e): array
-    {
-        $d = self::eventDTagValue($e);
-        $nip = self::nip33ParameterizedReplaceableAddress($e);
-
-        return [
-            'kind' => (int) ($e->kind ?? 0),
-            'id' => (string) ($e->id ?? ''),
-            'created_at' => (int) ($e->created_at ?? 0),
-            'd' => $d !== null && $d !== '' ? self::longformIngestShortSlug($d, 80) : '',
-            'nip33' => $nip,
-        ];
     }
 
     private function findLatestLongFormArticleByAuthorAndSlug(string $pubkey, string $slug): ?Article
@@ -1869,7 +1478,7 @@ class NostrClient
     }
 
     /**
-     * Minimal Nostr event shape for {@see self::wireEventSupersedes} when `raw` is not a full wire object.
+     * Minimal Nostr event shape for {@see NostrWireEventMerge::wireEventSupersedes()} when `raw` is not a full wire object.
      */
     private static function longFormWireStubFromArticle(Article $a): object
     {
@@ -1985,9 +1594,9 @@ class NostrClient
 
             $wantD = (string) ($data->identifier ?? '');
             $kindI = (int) ($data->kind ?? KindsEnum::LONGFORM->value);
-            $authorH = self::authorIdentToHexLower($data->pubkey ?? null);
-            if (self::isNip33ParameterizedKind($kindI) && $authorH !== null) {
-                $picked = self::pickLatestNip33ParameterizedForQuery($events, $kindI, $authorH, $wantD);
+            $authorH = $this->wireMerge->authorIdentToHexLower($data->pubkey ?? null);
+            if ($this->wireMerge->isNip33ParameterizedKind($kindI) && $authorH !== null) {
+                $picked = $this->wireMerge->pickLatestNip33ParameterizedForQuery($events, $kindI, $authorH, $wantD);
                 if ($picked !== null) {
                     return $picked;
                 }
@@ -2017,188 +1626,6 @@ class NostrClient
         }
 
         return false;
-    }
-
-    /**
-     * One wire event for a (kind, author, #d) coordinate after merging relay results.
-     *
-     * @param list<mixed> $events
-     */
-    private function pickEventForNip33OrFirst(array $events, int $kind, string $authorIdent, string $dTag): ?object
-    {
-        if ($events === []) {
-            return null;
-        }
-        if (self::isNip33ParameterizedKind($kind)) {
-            $h = self::authorIdentToHexLower($authorIdent);
-            if ($h !== null) {
-                $picked = self::pickLatestNip33ParameterizedForQuery($events, $kind, $h, $dTag);
-                if ($picked !== null && \is_object($picked)) {
-                    return $picked;
-                }
-            }
-            $merged = self::mergeNip33ParameterizedWireEvents($events);
-            $first = $merged[0] ?? null;
-
-            return \is_object($first) ? $first : null;
-        }
-        if (self::isReplaceableByKindAndPubkeyNip($kind)) {
-            $h = self::authorIdentToHexLower($authorIdent);
-            if ($h !== null) {
-                $best = null;
-                foreach ($events as $e) {
-                    if (!\is_object($e) || (int) ($e->kind ?? 0) !== $kind) {
-                        continue;
-                    }
-                    if (strtolower((string) ($e->pubkey ?? '')) !== $h) {
-                        continue;
-                    }
-                    if ($best === null || self::wireEventSupersedes($e, $best)) {
-                        $best = $e;
-                    }
-                }
-                if ($best !== null) {
-                    return $best;
-                }
-            }
-            foreach (self::mergeNip33ParameterizedWireEvents($events) as $e) {
-                if (\is_object($e) && (int) ($e->kind ?? 0) === $kind) {
-                    return $e;
-                }
-            }
-
-            return null;
-        }
-        $e0 = $events[0] ?? null;
-
-        return \is_object($e0) ? $e0 : null;
-    }
-
-    /** NIP-33: kinds 30_000–39_999 (parameterized replaceable) use `kind:pubkey:d` as address. */
-    private const NIP33_PARAMETERIZED_KIND_MIN = 30_000;
-    private const NIP33_PARAMETERIZED_KIND_MAX = 39_999;
-
-    private static function isNip33ParameterizedKind(int $kind): bool
-    {
-        return $kind >= self::NIP33_PARAMETERIZED_KIND_MIN
-            && $kind <= self::NIP33_PARAMETERIZED_KIND_MAX;
-    }
-
-    /**
-     * NIP-33: `kind:pubkey_hex:d` (d from tags; d may include colons). Kinds 30000–39999 only.
-     */
-    private static function nip33ParameterizedReplaceableAddress(mixed $event): ?string
-    {
-        $k = self::magazineEventKind($event);
-        if (!self::isNip33ParameterizedKind($k)) {
-            return null;
-        }
-        $pk = self::magazineEventPubkeyHex($event);
-        if ($pk === '' || 64 !== \strlen($pk) || !ctype_xdigit($pk)) {
-            return null;
-        }
-        $d = self::eventDTagValue($event);
-        if ($d === null || $d === '') {
-            return null;
-        }
-
-        return (string) $k.':'.strtolower($pk).':'.$d;
-    }
-
-    /**
-     * NIP-33: from merged relay results, the event at the replaceable address kind:pubkeyLower:d.
-     * Uses {@see mergeNip33ParameterizedWireEvents} so every relay’s copies collapse to the live
-     * revision the same way everywhere; then we match the requested address only.
-     *
-     * (Older logic reimplemented “merge” by hand and had a fallback that could return a **different**
-     * 30040 (wrong #d) when the expected address key did not line up, which surfaced as “stale”
-     * category indices even when a newer note existed on a relay such as TheForest.)
-     *
-     * @param list<mixed> $events
-     */
-    private static function pickLatestNip33ParameterizedForQuery(
-        array $events,
-        int $expectedKind,
-        string $authorHexLower,
-        string $dTag
-    ): mixed {
-        if (!self::isNip33ParameterizedKind($expectedKind)) {
-            return null;
-        }
-        $wantD = trim($dTag);
-        $expectedAddr = (string) $expectedKind.':'.$authorHexLower.':'.$wantD;
-
-        $merged = self::mergeNip33ParameterizedWireEvents($events);
-        foreach ($merged as $e) {
-            if (!\is_object($e)) {
-                continue;
-            }
-            if (self::magazineEventKind($e) !== $expectedKind) {
-                continue;
-            }
-            if (strtolower(self::magazineEventPubkeyHex($e)) !== $authorHexLower) {
-                continue;
-            }
-            $addr = self::nip33ParameterizedReplaceableAddress($e);
-            if ($addr === $expectedAddr) {
-                return $e;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Merge relay results: 30_000–39_999 by `kind:pubkey:d`; kind 0, 3, 10_000–19_999 by `kind:pubkey`;
-     * others by event id. Uses {@see wireEventSupersedes} for the winning revision in each bucket.
-     *
-     * @param list<object> $events
-     *
-     * @return list<object>
-     */
-    private static function mergeNip33ParameterizedWireEvents(array $events): array
-    {
-        $byNip33Address = [];
-        $byKindPubkey = [];
-        $byId = [];
-        foreach ($events as $e) {
-            if (!\is_object($e)) {
-                continue;
-            }
-            $k = (int) ($e->kind ?? 0);
-            if (self::isNip33ParameterizedKind($k)) {
-                $a = self::nip33ParameterizedReplaceableAddress($e);
-                if ($a === null) {
-                    continue;
-                }
-                if (!isset($byNip33Address[$a]) || self::wireEventSupersedes($e, $byNip33Address[$a])) {
-                    $byNip33Address[$a] = $e;
-                }
-            } elseif (self::isReplaceableByKindAndPubkeyNip($k)) {
-                $a = self::replaceableKindPubkeyAddressFromWire($e);
-                if ($a === null) {
-                    continue;
-                }
-                if (!isset($byKindPubkey[$a]) || self::wireEventSupersedes($e, $byKindPubkey[$a])) {
-                    $byKindPubkey[$a] = $e;
-                }
-            } else {
-                $id = (string) ($e->id ?? '');
-                if ($id === '') {
-                    continue;
-                }
-                if (!isset($byId[$id]) || self::wireEventSupersedes($e, $byId[$id])) {
-                    $byId[$id] = $e;
-                }
-            }
-        }
-
-        return array_values(array_merge($byId, $byKindPubkey, $byNip33Address));
-    }
-
-    private static function authorIdentToHexLower(mixed $ident): ?string
-    {
-        return self::npubToHexPubkey($ident);
     }
 
     /**
@@ -2232,7 +1659,7 @@ class NostrClient
 
     private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet, string $relaysForLog): ?PublicationEventEntity
     {
-        $authorHex = self::npubToHexPubkey($npub);
+        $authorHex = $this->wireMerge->npubToHexPubkey($npub);
         if ($authorHex === null) {
             $this->logger->warning('Magazine index: could not resolve npub to hex pubkey', [
                 'npub' => $npub,
@@ -2259,7 +1686,7 @@ class NostrClient
         if (empty($events)) {
             return null;
         }
-        $raw = self::pickLatestNip33ParameterizedForQuery(
+        $raw = $this->wireMerge->pickLatestNip33ParameterizedForQuery(
             $events,
             KindsEnum::PUBLICATION_INDEX->value,
             $authorHex,
@@ -2276,7 +1703,7 @@ class NostrClient
             return null;
         }
 
-        return self::magazineEventToPublicationEntity($raw);
+        return $this->wireMerge->magazineEventToPublicationEntity($raw);
     }
 
     /**
@@ -2311,7 +1738,7 @@ class NostrClient
                 $request->send(),
                 static fn (object $event) => $event,
             );
-            $ev = $this->pickEventForNip33OrFirst($events, $kind, $pubkey, $slug);
+            $ev = $this->wireMerge->pickEventForNip33OrFirst($events, $kind, $pubkey, $slug);
             if ($ev !== null) {
                 return $ev;
             }
@@ -2333,14 +1760,14 @@ class NostrClient
                 if (strtolower((string) ($ev2->pubkey ?? '')) !== $pubkey) {
                     continue;
                 }
-                $d = self::eventDTagValue($ev2);
+                $d = $this->wireMerge->eventDTagValue($ev2);
                 if ($d === null || trim((string) $d) !== $slug) {
                     continue;
                 }
                 $matched[] = $ev2;
             }
 
-            return $matched === [] ? null : $this->pickEventForNip33OrFirst($matched, $kind, $pubkey, $slug);
+            return $matched === [] ? null : $this->wireMerge->pickEventForNip33OrFirst($matched, $kind, $pubkey, $slug);
         } catch (\Throwable) {
         }
 
@@ -2413,7 +1840,7 @@ class NostrClient
                 'author_hex64_prefix' => substr((string) $g['pubkey'], 0, 12),
                 'd_tag_count' => \count($dTags),
                 'd_tags' => array_map(
-                    fn (string $dt): string => self::longformIngestShortSlug($dt, 72),
+                    fn (string $dt): string => $this->wireMerge->longformIngestShortSlug($dt, 72),
                     $dTags
                 ),
             ]);
@@ -2435,7 +1862,7 @@ class NostrClient
                         continue;
                     }
                     if ($si < 25) {
-                        $rawSample[] = self::longformIngestEventWireSummary($ev);
+                        $rawSample[] = $this->wireMerge->longformIngestEventWireSummary($ev);
                     }
                     ++$si;
                 }
@@ -2470,7 +1897,7 @@ class NostrClient
                         if ($evPubkey !== $expectedPubkey) {
                             continue;
                         }
-                        $evD = self::eventDTagValue($ev);
+                        $evD = $this->wireMerge->eventDTagValue($ev);
                         if ($evD === null || !isset($expectedD[$evD])) {
                             continue;
                         }
@@ -2527,7 +1954,7 @@ class NostrClient
                                 if ($evPubkey !== $expectedPubkeyPf) {
                                     continue;
                                 }
-                                $evD = self::eventDTagValue($ev);
+                                $evD = $this->wireMerge->eventDTagValue($ev);
                                 if ($evD === null || !isset($expectedDPf[$evD])) {
                                     continue;
                                 }
@@ -2545,13 +1972,13 @@ class NostrClient
                         }
                     }
                 }
-                $merged = self::mergeNip33ParameterizedWireEvents($events);
+                $merged = $this->wireMerge->mergeNip33ParameterizedWireEvents($events);
                 $mergedDetail = [];
                 foreach ($merged as $ev) {
                     if (!\is_object($ev)) {
                         continue;
                     }
-                    $mergedDetail[] = self::longformIngestEventWireSummary($ev);
+                    $mergedDetail[] = $this->wireMerge->longformIngestEventWireSummary($ev);
                 }
                 $this->logger->info('[longform_ingest] ingestLongform: after mergeNip33ParameterizedWireEvents', [
                     'merged_count' => \count($merged),
@@ -2568,7 +1995,7 @@ class NostrClient
                     if (!\is_object($event)) {
                         continue;
                     }
-                    $addr = self::nip33ParameterizedReplaceableAddress($event);
+                    $addr = $this->wireMerge->nip33ParameterizedReplaceableAddress($event);
                     if ($addr !== null) {
                         $seenAddresses[$addr] = true;
                     }
@@ -2610,161 +2037,5 @@ class NostrClient
             }
         }
         $this->logger->info('[longform_ingest] ingestLongform: done (all groups)');
-    }
-
-    private static function magazineEventCreatedAt(mixed $event): int
-    {
-        if ($event instanceof PublicationEventEntity) {
-            return $event->getCreatedAt();
-        }
-        if (\is_object($event) && isset($event->created_at)) {
-            return (int) $event->created_at;
-        }
-
-        return 0;
-    }
-
-    private static function magazineEventId(mixed $event): string
-    {
-        if ($event instanceof PublicationEventEntity) {
-            return $event->getId();
-        }
-        if (\is_object($event) && isset($event->id)) {
-            return (string) $event->id;
-        }
-
-        return '';
-    }
-
-    private static function magazineEventKind(mixed $event): int
-    {
-        if ($event instanceof PublicationEventEntity) {
-            return $event->getKind();
-        }
-        if (\is_object($event) && isset($event->kind)) {
-            return (int) $event->kind;
-        }
-
-        return 0;
-    }
-
-    private static function magazineEventPubkeyHex(mixed $event): string
-    {
-        if ($event instanceof PublicationEventEntity) {
-            return (string) $event->getPubkey();
-        }
-        if (\is_object($event) && isset($event->pubkey)) {
-            return (string) $event->pubkey;
-        }
-
-        return '';
-    }
-
-    /**
-     * Nostr wire tag as a name-first sequence (e.g. ["d", "ident"]). Handles both indexed arrays
-     * and object-shaped tag rows from JSON.
-     *
-     * @return list<string>|null
-     */
-    private static function normalizeNostrTagRowToSequence(mixed $row): ?array
-    {
-        if ($row === null) {
-            return null;
-        }
-        if (\is_object($row)) {
-            $row = get_object_vars($row);
-        }
-        if (!\is_array($row) || $row === []) {
-            return null;
-        }
-        $seq = array_values(
-            array_map(
-                static fn (mixed $v): string => (string) $v,
-                $row
-            )
-        );
-        if ($seq === [] || $seq[0] === '') {
-            return null;
-        }
-
-        return $seq;
-    }
-
-    /**
-     * First "d" tag value from raw relay or {@see PublicationEventEntity} tag arrays (trimmed).
-     */
-    private static function eventDTagValue(mixed $event): ?string
-    {
-        $tags = null;
-        if ($event instanceof PublicationEventEntity) {
-            $tags = $event->getTags();
-        } elseif (\is_object($event) && isset($event->tags) && \is_array($event->tags)) {
-            $tags = $event->tags;
-        }
-        if (!\is_array($tags)) {
-            return null;
-        }
-        foreach ($tags as $t) {
-            $seq = self::normalizeNostrTagRowToSequence($t);
-            if ($seq === null || ($seq[0] ?? '') !== 'd' || !isset($seq[1]) || (string) $seq[1] === '') {
-                continue;
-            }
-
-            return trim((string) $seq[1]);
-        }
-
-        return null;
-    }
-
-    private static function npubToHexPubkey(mixed $npub): ?string
-    {
-        $s = trim((string) $npub);
-        if ($s === '') {
-            return null;
-        }
-        if (64 === \strlen($s) && ctype_xdigit($s)) {
-            return strtolower($s);
-        }
-        if (str_starts_with($s, 'npub')) {
-            $hex = (new NostrKeyHelper())->convertToHex($s);
-
-            return $hex !== '' && 64 === \strlen($hex) && ctype_xdigit($hex) ? strtolower($hex) : null;
-        }
-
-        return null;
-    }
-
-    /**
-     * Normalize relay / library event objects to the app's Event entity (not persisted).
-     */
-    private static function magazineEventToPublicationEntity(mixed $raw): ?PublicationEventEntity
-    {
-        if ($raw instanceof PublicationEventEntity) {
-            return $raw;
-        }
-        if (!\is_object($raw)) {
-            return null;
-        }
-
-        try {
-            /** @var array<string, mixed> $data */
-            $data = json_decode(json_encode($raw, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-        if (!\is_array($data)) {
-            return null;
-        }
-        $entity = new PublicationEventEntity();
-        $entity->setId((string) ($data['id'] ?? ''));
-        $entity->setKind((int) ($data['kind'] ?? 0));
-        $entity->setPubkey((string) ($data['pubkey'] ?? ''));
-        $entity->setContent((string) ($data['content'] ?? ''));
-        $entity->setCreatedAt((int) ($data['created_at'] ?? 0));
-        $tags = $data['tags'] ?? [];
-        $entity->setTags(\is_array($tags) ? $tags : []);
-        $entity->setSig((string) ($data['sig'] ?? ''));
-
-        return $entity;
     }
 }
