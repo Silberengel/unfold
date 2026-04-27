@@ -18,6 +18,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         private EventRepository $eventRepository,
         private LoggerInterface $logger,
         private NostrKeyHelper $nostrKeyHelper,
+        private NostrNip65RelayUrls $nip65RelayUrls,
     ) {
     }
 
@@ -111,7 +112,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         }
         $this->replaceByCoreKey($key, Event::STORAGE_RELAY_LIST_10002, $wire);
 
-        return NostrClient::relayWssListFromNip65Object($wire);
+        return $this->nip65RelayUrls->wssListFromKind10002Wire($wire);
     }
 
     /**

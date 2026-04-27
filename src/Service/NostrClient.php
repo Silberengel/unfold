@@ -4,7 +4,6 @@ namespace App\Service;
 
 use App\Entity\Article;
 use App\Entity\Event as PublicationEventEntity;
-use App\Enum\EventStatusEnum;
 use App\Enum\KindsEnum;
 use App\Factory\ArticleFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,7 +30,9 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  * {@see NostrAuthorRelayCache} (cached NIP-65 kind-10002 author relay lists),
  * {@see NostrWireEventMerge} (NIP-33 / kind-0 merge, #d tags, npub→hex for wire objects),
  * {@see NostrArticleDiscussionSupport} (article thread REQ filters and tag classifiers),
- * {@see NostrKind5DeletionFilter} (NIP-09 kind-5 relevance for stored row kinds).
+ * {@see NostrKind5DeletionFilter} (NIP-09 kind-5 relevance for stored row kinds),
+ * {@see NostrNip65RelayUrls} (NIP-65 `r` → wss list from kind-10002 wire),
+ * {@see NostrLongformArticleStore} (DB upsert for long-form / NIP-23 article rows).
  */
 class NostrClient
 {
@@ -68,6 +69,8 @@ class NostrClient
         private readonly NostrWireEventMerge $wireMerge,
         private readonly NostrArticleDiscussionSupport $articleDiscussion,
         private readonly NostrKind5DeletionFilter $kind5DeletionFilter,
+        private readonly NostrNip65RelayUrls $nip65RelayUrls,
+        private readonly NostrLongformArticleStore $longformArticleStore,
     ) {
         $this->defaultRelaySet = $this->relayListFactory->getDefaultArticleRelaySet();
     }
@@ -719,32 +722,6 @@ class NostrClient
     }
 
     /**
-     * NIP-65: `r` values as wss URLs, excluding localhost.
-     *
-     * @return list<string>
-     */
-    public static function relayWssListFromNip65Object(object $wire): array
-    {
-        $relays = [];
-        foreach ($wire->tags ?? [] as $tag) {
-            if (!\is_array($tag) && !\is_object($tag)) {
-                continue;
-            }
-            $r = \is_object($tag) ? array_values((array) $tag) : $tag;
-            if (!isset($r[0], $r[1])) {
-                continue;
-            }
-            if ((string) $r[0] === 'r') {
-                $relays[] = (string) $r[1];
-            }
-        }
-
-        return array_values(array_filter(array_unique($relays), static function (string $relay) {
-            return str_starts_with($relay, 'wss:') && !str_contains($relay, 'localhost');
-        }));
-    }
-
-    /**
      * @return list<string>
      */
     public function getNpubRelays($npub): array
@@ -754,7 +731,7 @@ class NostrClient
             return [];
         }
 
-        return self::relayWssListFromNip65Object($use);
+        return $this->nip65RelayUrls->wssListFromKind10002Wire($use);
     }
 
     /**
@@ -1355,8 +1332,7 @@ class NostrClient
 
             return;
         }
-        $repo = $this->entityManager->getRepository(Article::class);
-        if ($repo->findOneBy(['eventId' => $newId]) !== null) {
+        if ($this->longformArticleStore->isEventIdAlreadyStored($newId)) {
             $this->logger->info('[longform_ingest] saveEachArticle: skip, DB already has this exact event id (no work)', [
                 'eventId' => $newId,
                 'slug' => $article->getSlug(),
@@ -1372,17 +1348,17 @@ class NostrClient
                 'pubkey_empty' => $pubkey === '',
                 'slug' => $slug,
             ]);
-            $this->persistNewArticle($article, 'missing_pubkey_or_slug_on_entity');
+            $this->longformArticleStore->persistNew($article, 'missing_pubkey_or_slug_on_entity');
 
             return;
         }
-        $incumbent = $this->findLatestLongFormArticleByAuthorAndSlug($pubkey, $slug);
+        $incumbent = $this->longformArticleStore->findLatestByAuthorAndSlug($pubkey, $slug);
         if ($incumbent === null) {
             $this->logger->info('[longform_ingest] saveEachArticle: persist new row (no DB row for author+slug)', [
                 'eventId' => $newId,
                 'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
             ]);
-            $this->persistNewArticle($article, 'no_db_row_for_nip33_address');
+            $this->longformArticleStore->persistNew($article, 'no_db_row_for_nip33_address');
 
             return;
         }
@@ -1391,11 +1367,11 @@ class NostrClient
             $this->logger->warning('[longform_ingest] saveEachArticle: new Article has no raw wire; trying insert as new', [
                 'eventId' => $newId,
             ]);
-            $this->persistNewArticle($article, 'no_raw_on_incoming_article');
+            $this->longformArticleStore->persistNew($article, 'no_raw_on_incoming_article');
 
             return;
         }
-        $iWire = self::longFormWireStubFromArticle($incumbent);
+        $iWire = $this->longformArticleStore->longFormWireStubFromArticle($incumbent);
         $cTs = $this->wireMerge->magazineEventCreatedAt($candidate);
         $iTs = $this->wireMerge->magazineEventCreatedAt($iWire);
         if ($this->wireMerge->wireEventSupersedes($candidate, $iWire)) {
@@ -1407,7 +1383,7 @@ class NostrClient
                 'incumbent_created_at' => $iTs,
                 'candidate_created_at' => $cTs,
             ]);
-            $this->applyLongFormArticleOnto($article, $incumbent);
+            $this->longformArticleStore->applySourceOntoTarget($article, $incumbent);
             if ($incumbent->getPubkey() !== $pubkey) {
                 $incumbent->setPubkey($pubkey);
             }
@@ -1439,86 +1415,6 @@ class NostrClient
                 'seenCreatedAt' => $cTs,
             ]);
         }
-    }
-
-    private function persistNewArticle(Article $article, string $reason = 'unspecified'): void
-    {
-        try {
-            $this->logger->info('[longform_ingest] persistNewArticle', [
-                'reason' => $reason,
-                'eventId' => $article->getEventId(),
-                'slug' => $this->wireMerge->longformIngestShortSlug((string) ($article->getSlug() ?? '')),
-            ]);
-            $this->entityManager->persist($article);
-            $this->entityManager->flush();
-        } catch (\Exception $e) {
-            $this->logger->error('[longform_ingest] persistNewArticle failed: '.$e->getMessage(), [
-                'reason' => $reason,
-                'eventId' => $article->getEventId(),
-            ]);
-            $this->managerRegistry->resetManager();
-        }
-    }
-
-    private function findLatestLongFormArticleByAuthorAndSlug(string $pubkey, string $slug): ?Article
-    {
-        $pubkey = strtolower($pubkey);
-        /** @var ?Article $row */
-        $row = $this->entityManager->getRepository(Article::class)->createQueryBuilder('a')
-            ->where('LOWER(a.pubkey) = :pk')
-            ->andWhere('a.slug = :sl')
-            ->setParameter('pk', $pubkey)
-            ->setParameter('sl', $slug)
-            ->orderBy('a.createdAt', 'DESC')
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult();
-
-        return $row;
-    }
-
-    /**
-     * Minimal Nostr event shape for {@see NostrWireEventMerge::wireEventSupersedes()} when `raw` is not a full wire object.
-     */
-    private static function longFormWireStubFromArticle(Article $a): object
-    {
-        $raw = $a->getRaw();
-        if (\is_object($raw) && isset($raw->id) && (isset($raw->created_at) || isset($raw->createdAt))) {
-            return $raw;
-        }
-        $o = new \stdClass();
-        $o->id = (string) ($a->getEventId() ?? '');
-        $ca = $a->getCreatedAt();
-        $o->created_at = $ca !== null ? $ca->getTimestamp() : 0;
-        $o->pubkey = (string) ($a->getPubkey() ?? '');
-        $k = $a->getKind();
-
-        $o->kind = $k !== null ? $k->value : KindsEnum::LONGFORM->value;
-
-        return $o;
-    }
-
-    private function applyLongFormArticleOnto(Article $source, Article $target): void
-    {
-        $target->setEventId((string) $source->getEventId());
-        $target->setContent($source->getContent());
-        $target->setTitle($source->getTitle());
-        $target->setSummary($source->getSummary());
-        $target->setImage($source->getImage());
-        if ($source->getCreatedAt() !== null) {
-            $target->setCreatedAt($source->getCreatedAt());
-        }
-        $target->setSig($source->getSig());
-        if ($source->getPublishedAt() !== null) {
-            $target->setPublishedAt($source->getPublishedAt());
-        }
-        $target->setTopics($source->getTopics());
-        if ($source->getKind() !== null) {
-            $target->setKind($source->getKind());
-        }
-        $es = $source->getEventStatus();
-        $target->setEventStatus($es ?? EventStatusEnum::PUBLISHED);
-        $target->setRaw($source->getRaw());
     }
 
     /**
