@@ -35,13 +35,20 @@ services:
     Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:
         arguments:
             - '%env(DATABASE_URL)%'
-    App\Service\NostrClient:
+    App\Service\NostrRelayRequestFactory:
+        arguments:
+            $relayRequestTimeoutSec: '%nostr_relay_request_timeout_sec%'
+    App\Service\NostrRelayFanoutTransport:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+    App\Service\NostrRelayListFactory:
         arguments:
             $defaultRelayUrl: '%default_relay%'
             $articleRelayUrls: '%article_relays%'
             $profileRelayUrls: '%profile_relays%'
+    App\Service\NostrClient:
+        arguments:
             $projectDir: '%kernel.project_dir%'
-            $relayRequestTimeoutSec: '%nostr_relay_request_timeout_sec%'
     App\Service\ArticleCommentThreadLoader:
         arguments:
             $appCachePool: '@cache.replies'
