@@ -1,6 +1,9 @@
 # Dev: debug → dev.log only; info and above → dev.log + stderr.
 # Prod: debug–notice → prod.log only; warning+ → prod.log + stderr. Deprecations: stderr (JSON) only.
 # Log rotation: Monolog’s rotating_file rolls daily and keeps the last N files (caps growth; not a strict MB cap).
+#
+# Deprecation channel: vendor (e.g. phrity/websocket extending Nyholm @final Request/Response via
+# WebSocket\Http\*) is noisy; exclude from console and main dev.log, route to deprecation.log.
 
 monolog:
     channels:
@@ -19,6 +22,13 @@ when@dev:
                 path: "%kernel.logs_dir%/%kernel.environment%.log"
                 level: debug
                 max_files: 14
+                channels: [ "!deprecation" ]
+            deprecation_file:
+                type: rotating_file
+                path: "%kernel.logs_dir%/deprecation.log"
+                level: debug
+                max_files: 7
+                channels: [deprecation]
             docker:
                 type: stream
                 path: "php://stderr"
@@ -29,7 +39,8 @@ when@dev:
             console:
                 type: console
                 process_psr_3_messages: false
-                channels: ["!event", "!doctrine", "!console"]
+                # CLI (articles:get, prewarm): do not print vendor E_USER_DEPRECATED noise to the terminal.
+                channels: [ "!event", "!doctrine", "!console", "!deprecation" ]
 
 when@test:
     monolog:
@@ -66,7 +77,7 @@ when@prod:
             console:
                 type: console
                 process_psr_3_messages: false
-                channels: ["!event", "!doctrine"]
+                channels: [ "!event", "!doctrine", "!deprecation" ]
             deprecation:
                 type: stream
                 channels: [deprecation]
