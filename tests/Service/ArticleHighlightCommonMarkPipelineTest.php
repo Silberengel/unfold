@@ -7,6 +7,7 @@ namespace App\Tests\Service;
 use App\Entity\ArticleHighlight;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Service\HighlightAuthorMetadataProvider;
+use App\Service\NostrKeyHelper;
 use App\Util\CommonMark\Converter;
 use League\CommonMark\Exception\CommonMarkException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -107,7 +108,7 @@ final class ArticleHighlightCommonMarkPipelineTest extends KernelTestCase
             (object) ['display_name' => 'Test', 'name' => 'Test', 'picture' => ''],
         );
 
-        return new ArticleBodyHighlightInjector($meta);
+        return new ArticleBodyHighlightInjector($meta, new NostrKeyHelper());
     }
 
     private function makeHighlight(

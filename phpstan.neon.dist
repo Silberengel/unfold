@@ -1,0 +1,17 @@
+# Dependency notes (composer why):
+# - phpdocumentor/reflection-docblock: required directly; symfony/* constrain <6
+# - phpstan/phpdoc-parser: direct + reflection-docblock / type-resolver
+includes:
+    - vendor/phpstan/phpstan-symfony/extension.neon
+    - vendor/phpstan/phpstan-doctrine/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+    symfony:
+        containerXmlPath: var/cache/dev/App_KernelDevDebugContainer.xml
+    doctrine:
+        objectManagerLoader: tests/phpstan-doctrine-object-manager.php

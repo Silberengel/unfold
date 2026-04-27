@@ -151,7 +151,7 @@ final class MagazineRefresher
         }
 
         try {
-            $this->featuredAuthorSync->syncNewAuthorsFromMagazineCategories();
+            $this->featuredAuthorSync->reconcileListedAuthorsFromMagazineCategories();
         } catch (\Throwable $e) {
             $this->logger->warning('MagazineRefresher: featured author sync failed', [
                 'message' => $e->getMessage(),

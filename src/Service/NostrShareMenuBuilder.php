@@ -10,7 +10,6 @@ use App\Entity\Event;
 use App\Nostr\Nip19Addressable;
 use App\Nostr\Nip19Codec;
 use App\Repository\ArticleRepository;
-use swentel\nostr\Key\Key;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -34,8 +33,7 @@ final class NostrShareMenuBuilder
         if (64 !== \strlen($pubkeyHex) || !ctype_xdigit($pubkeyHex)) {
             return null;
         }
-        $key = new Key();
-        $npub = $key->convertPublicKeyToBech32($pubkeyHex);
+        $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($pubkeyHex);
         $kind = (int) ($event->kind ?? 0);
         $d = self::dTagFromWireEvent($event);
         $eventIdHex = strtolower((string) ($event->id ?? ''));
@@ -128,6 +126,7 @@ final class NostrShareMenuBuilder
     public function __construct(
         private readonly MagazineIndexStore $magazineIndexStore,
         private readonly ArticleRepository $articleRepository,
+        private readonly NostrKeyHelper $nostrKeyHelper,
         private readonly Nip19Codec $nip19,
         #[Autowire('%npub%')]
         private readonly string $siteNpub,
@@ -138,11 +137,6 @@ final class NostrShareMenuBuilder
         #[Autowire('%jumble_feed_notes_base%')]
         private readonly string $jumbleFeedNotesBase,
     ) {
-    }
-
-    private function nostrKey(): Key
-    {
-        return new Key();
     }
 
     /**
@@ -180,7 +174,7 @@ final class NostrShareMenuBuilder
         if ($article === null) {
             return $this->siteWithRootMenu();
         }
-        if ($this->nostrKey()->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
+        if ($this->nostrKeyHelper->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
             return $this->siteWithRootMenu();
         }
 
@@ -189,7 +183,7 @@ final class NostrShareMenuBuilder
 
     private function fromArticle(Article $article): NostrShareMenuContext
     {
-        $npub = $this->nostrKey()->convertPublicKeyToBech32((string) $article->getPubkey());
+        $npub = $this->nostrKeyHelper->convertPublicKeyToBech32((string) $article->getPubkey());
         $kind = (int) ($article->getKind()?->value ?? 30023);
         $d = (string) ($article->getSlug() ?? '');
         if ($d === '') {
@@ -280,7 +274,7 @@ final class NostrShareMenuBuilder
             $rebuilt = $this->nip19->encodeNevent($eventId, $relays, $authorHex, $kind);
 
             return new NostrShareMenuContext(
-                $this->nostrKey()->convertPublicKeyToBech32($authorHex),
+                $this->nostrKeyHelper->convertPublicKeyToBech32($authorHex),
                 $rebuilt,
                 null,
                 $this->feedJumble($rebuilt),
@@ -320,7 +314,7 @@ final class NostrShareMenuBuilder
         }
         $kind = (int) $e->getKind();
         $d = Nip19Addressable::dTagFromEventEntity($e);
-        $npub = $this->nostrKey()->convertPublicKeyToBech32($pk);
+        $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($pk);
         if (Nip19Addressable::isParameterizedReplaceableKind($kind) && $d !== null) {
             $naddr = Nip19Addressable::naddrBech32($kind, $pk, $d, []);
             $neventForRev = $this->nip19->encodeNevent($id, [], $pk, $kind);

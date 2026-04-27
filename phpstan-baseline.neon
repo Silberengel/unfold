@@ -1,0 +1,709 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Instanceof between App\\Entity\\ArticleHighlight and App\\Entity\\ArticleHighlight will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Command/ArticleHighlightsAuditCommand.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Command/ArticleHighlightsAuditCommand.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Contracts\\Cache\\CacheInterface\:\:getItem\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Command/NostrEventFromYamlDefinitionCommand.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Contracts\\Cache\\CacheInterface\:\:save\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Command/NostrEventFromYamlDefinitionCommand.php
+
+		-
+			message: '#^Call to function is_array\(\) with bool\|int\|string\|null will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Symfony\\Component\\Console\\Helper\\ProgressBar and ''clear'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Call to function method_exists\(\) with Symfony\\Component\\Console\\Helper\\ProgressBar and ''setMinSecondsBetwee…'' will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''categories'' on array\{categories\: int, listed\: int, resolved\: int, missing\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''categories'' on array\{categories\: list\<array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\}\>, totals\: array\{categories\: int, listed\: int, resolved\: int, missing\: int\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''coordinate'' on array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''entries'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''event_id'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''kind0_tags'' on array\{content\: stdClass, kind0_tags\: list\<list\<string\>\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''label'' on array\{label\: string, href\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''listed'' on array\{categories\: int, listed\: int, resolved\: int, missing\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''listed_total'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''missing'' on array\{categories\: int, listed\: int, resolved\: int, missing\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''missing_total'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''reason'' on array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''resolved'' on array\{categories\: int, listed\: int, resolved\: int, missing\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''resolved_total'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''slug'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''status'' on array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''title'' on array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset ''totals'' on array\{categories\: list\<array\{slug\: string, title\: string, event_id\: string, listed_total\: int, resolved_total\: int, missing_total\: int, entries\: list\<array\{coordinate\: string, status\: string, reason\: string, article_title\?\: string\}\>\}\>, totals\: array\{categories\: int, listed\: int, resolved\: int, missing\: int\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<non\-falsy\-string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between \*NEVER\* and 1 will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between array\{\} and array\{\} will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Command/PrewarmCommand.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Component\\Form\\FormInterface\<mixed\>\:\:getClickedButton\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Component\\Security\\Core\\User\\UserInterface\:\:getMetadata\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Call to function is_object\(\) with object will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Call to function is_object\(\) with stdClass will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Offset ''comment_reply…'' on array\{list\: array\<int, object\>, quotes\: array\<int, object\>, commentLinks\: array\<string, array\<int, mixed\>\>, quoteLinks\: array\<string, array\<int, mixed\>\>, processedContent\: array\<string, string\>, comment_reply_context\: array\{can_publish\: bool, coordinate\: string, article_event_id\: string\|null, parent_kind\: int, rows\: array\<int, array\<string, mixed\>\>, fragment_url\: string\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Offset ''list'' on array\{list\: array\<int, object\>, quotes\: array\<int, object\>, commentLinks\: array\<string, array\<int, mixed\>\>, quoteLinks\: array\<string, array\<int, mixed\>\>, processedContent\: array\<string, string\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Controller/ArticleController.php
+
+		-
+			message: '#^Offset ''ok_relays'' on array\{ok\: true, id\: string, relays\: array\<string, mixed\>, ok_relays\: int, total_relays\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/CommentReplyController.php
+
+		-
+			message: '#^Offset ''total_relays'' on array\{ok\: true, id\: string, relays\: array\<string, mixed\>, ok_relays\: int, total_relays\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/CommentReplyController.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: src/Controller/DefaultController.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<int, string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Controller/SeoController.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Controller/SeoController.php
+
+		-
+			message: '#^Offset ''list'' on array\{list\: list\<App\\Entity\\Article\>, category\: array\{title\: string, summary\: string\}, pagination\: array\{page\: int, per_page\: int, total\: int, last_page\: int\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/SeoController.php
+
+		-
+			message: '#^Offset ''summary'' on array\{title\: string, summary\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/SeoController.php
+
+		-
+			message: '#^Offset ''title'' on array\{title\: string, summary\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/SeoController.php
+
+		-
+			message: '#^Call to function is_array\(\) with non\-empty\-array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Form/DataTransformer/CommaSeparatedToArrayTransformer.php
+
+		-
+			message: '#^Call to function is_string\(\) with non\-empty\-string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Form/DataTransformer/CommaSeparatedToArrayTransformer.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Nostr/MagazineEventKeys.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: src/Nostr/Nip19Codec.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Nostr/Nip22CommentTags.php
+
+		-
+			message: '#^Comparison operation "\>\=" between int\<1, max\> and 1 is always true\.$#'
+			identifier: greaterOrEqual.alwaysTrue
+			count: 1
+			path: src/Nostr/Nip22CommentTags.php
+
+		-
+			message: '#^Instanceof between App\\Entity\\ArticleHighlight and App\\Entity\\ArticleHighlight will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: src/Service/ArticleBodyHighlightInjector.php
+
+		-
+			message: '#^Instanceof between DOMElement and DOMElement will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Service/ArticleBodyHighlightInjector.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: src/Service/ArticleBodyHighlightInjector.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between false and DOMElement will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Service/ArticleBodyHighlightInjector.php
+
+		-
+			message: '#^Call to function is_object\(\) with object will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Offset ''partial'' on array\{thread\: array\<int, object\>, quotes\: array\<int, object\>\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Offset ''quotes'' on array\{thread\: array\<int, object\>, quotes\: array\<int, object\>, partial\?\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Offset ''quotes'' on array\{thread\: array\<int, object\>, quotes\: array\<int, object\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Offset ''thread'' on array\{thread\: array\<int, object\>, quotes\: array\<int, object\>, partial\?\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Offset ''thread'' on array\{thread\: array\<int, object\>, quotes\: array\<int, object\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ArticleCommentThreadLoader.php
+
+		-
+			message: '#^Call to function is_object\(\) with stdClass will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: src/Service/CacheService.php
+
+		-
+			message: '#^Negated boolean expression is always false\.$#'
+			identifier: booleanNot.alwaysFalse
+			count: 1
+			path: src/Service/CacheService.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/CacheService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Service/CacheService.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Service/CacheService.php
+
+		-
+			message: '#^Comparison operation "\>\=" between 3 and 2 is always true\.$#'
+			identifier: greaterOrEqual.alwaysTrue
+			count: 1
+			path: src/Service/CommentReplyService.php
+
+		-
+			message: '#^Call to function is_object\(\) with object will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/HighlightSyncService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Service/HighlightSyncService.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Entity\\Event and ''getTags'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Offset ''categories'' on array\{categories\: list\<array\{entries\: list\<array\{coordinate\: string, status\: string, reason\: string\}\>\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Offset ''coordinate'' on array\{coordinate\: string, status\: ''missing'', reason\: ''article_not_in_db''\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Offset ''entries'' on array\{entries\: list\<array\{coordinate\: string, status\: string, reason\: string\}\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Offset ''reason'' on array\{coordinate\: string, status\: ''missing'', reason\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Offset ''status'' on array\{coordinate\: string, status\: string, reason\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/MagazineContentService.php
+
+		-
+			message: '#^Cannot call method __invoke\(\) on callable\.$#'
+			identifier: method.nonObject
+			count: 4
+			path: src/Service/MagazineRefresher.php
+
+		-
+			message: '#^Offset ''label'' on array\{label\: string, href\: string, verified\?\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/Nip05VerificationService.php
+
+		-
+			message: '#^Call to function is_object\(\) with object will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/Nip09DeletionApplier.php
+
+		-
+			message: '#^Call to an undefined method Symfony\\Component\\Security\\Core\\User\\UserInterface\:\:getRelays\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<string, mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Call to function is_array\(\) with list\<string\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Call to function is_object\(\) with object will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 9
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 11
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Call to function method_exists\(\) with swentel\\nostr\\Request\\Request and ''setTimeout'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Method App\\Service\\NostrClient\:\:fetchKind5DeletionEventsForAuthors\(\) has invalid return type App\\Service\\stdClass\.$#'
+			identifier: class.notFound
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Offset ''dTags'' on array\{pubkey\: string, kind\: int\<1, max\>, dTags\: non\-empty\-list\<non\-empty\-string\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Offset ''kind'' on array\{pubkey\: string, kind\: int\<1, max\>, dTags\: non\-empty\-list\<non\-empty\-string\>\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Offset ''pubkey'' on array\{pubkey\: string, kind\: int\<1, max\>, dTags\: non\-empty\-list\<non\-empty\-string\>\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Offset ''pubkey'' on array\{pubkey\: string, kind\: int\<1, max\>, dTags\: non\-empty\-list\<non\-empty\-string\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^PHPDoc tag @return with type swentel\\nostr\\Event\\Event\|null is not subtype of native type stdClass\|null\.$#'
+			identifier: return.phpDocType
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 4
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Result of \|\| is always false\.$#'
+			identifier: booleanOr.alwaysFalse
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-list\<non\-empty\-string\> and array\{\} will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: src/Service/NostrClient.php
+
+		-
+			message: '#^PHPDoc tag @param for parameter \$event with type ArrayObject\<int, mixed\>\|list\<mixed\> is not subtype of native type object\.$#'
+			identifier: parameter.phpDocType
+			count: 1
+			path: src/Service/NostrShareMenuBuilder.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Service/NostrShareMenuBuilder.php
+
+		-
+			message: '#^Offset ''label'' on array\{label\: string, href\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/ProfileIdentityLinksBuilder.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Service/ProfileIdentityLinksBuilder.php
+
+		-
+			message: '#^Call to function is_object\(\) with object will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/ProfilePaymentLinksBuilder.php
+
+		-
+			message: '#^Offset non\-falsy\-string on array\{\} in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Service/ProfilePaymentLinksBuilder.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Service/ProfilePaymentLinksBuilder.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-list\<string\> and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Service/ProfilePaymentLinksBuilder.php
+
+		-
+			message: '#^Call to protected method getEntityManager\(\) of class Doctrine\\ORM\\EntityRepository\<object\>\.$#'
+			identifier: method.protected
+			count: 1
+			path: src/Service/TopicIndexService.php
+
+		-
+			message: '#^Property App\\Twig\\Components\\IndexTabs\:\:\$index is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Twig/Components/IndexTabs.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Entity\\Event and ''getTags'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Twig/Components/Molecules/CategoryLink.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Entity\\Event and ''getTags'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Twig/Components/Organisms/FeaturedList.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Util/NostrEventTags.php
+
+		-
+			message: '#^PHPDoc tag @param references unknown parameter\: \$eventIdsLowerOrMixed$#'
+			identifier: parameter.notFound
+			count: 1
+			path: tests/Service/ArticleBodyHighlightInjectorTest.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: tests/Service/ArticleHighlightCommonMarkPipelineTest.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: tests/Service/ArticleHighlightCommonMarkPipelineTest.php
+
+		-
+			message: '#^Call to function method_exists\(\) with ''Symfony\\\\Component\\\\Dotenv\\\\Dotenv'' and ''bootEnv'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/bootstrap.php

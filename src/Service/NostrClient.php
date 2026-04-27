@@ -15,7 +15,6 @@ use swentel\nostr\Event\Event;
 use swentel\nostr\Filter\Filter;
 use swentel\nostr\Message\EventMessage;
 use swentel\nostr\Message\RequestMessage;
-use swentel\nostr\Key\Key;
 use swentel\nostr\Relay\Relay;
 use swentel\nostr\Relay\RelaySet;
 use swentel\nostr\Request\Request;
@@ -26,6 +25,12 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
+/**
+ * Main integration point for swentel/nostr against configured relays: long-form fetch, kind-0 profile
+ * metadata, article discussion and comment publish relay lists, magazine 30040 / highlight 9802 ingest,
+ * and related REQ flows. Tuned via `default_relay`, `article_relays`, `profile_relays`, and
+ * `nostr_relay_request_timeout_sec` (see `config/unfold.yaml`).
+ */
 class NostrClient
 {
     /** Extra wall time for {@see bin/nostr_relay_request_worker.php} process vs. WebSocket timeout. */
@@ -3328,7 +3333,7 @@ class NostrClient
             return strtolower($s);
         }
         if (str_starts_with($s, 'npub')) {
-            $hex = (new Key())->convertToHex($s);
+            $hex = (new NostrKeyHelper())->convertToHex($s);
 
             return $hex !== '' && 64 === \strlen($hex) && ctype_xdigit($hex) ? strtolower($hex) : null;
         }

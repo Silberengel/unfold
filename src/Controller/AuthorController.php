@@ -9,10 +9,10 @@ use App\Repository\FeaturedAuthorRepository;
 use App\Service\CacheService;
 use App\Service\Nip05VerificationService;
 use App\Service\NostrClient;
+use App\Service\NostrKeyHelper;
 use App\Service\ProfileIdentityLinksBuilder;
 use App\Service\ProfilePaymentLinksBuilder;
 use Exception;
-use swentel\nostr\Key\Key;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,14 +34,14 @@ class AuthorController extends AbstractController
         Nip05VerificationService $nip05Verification,
         ProfilePaymentLinksBuilder $profilePaymentLinks,
         ProfileIdentityLinksBuilder $profileIdentityLinks,
+        NostrKeyHelper $nostrKeyHelper,
     ): Response {
         // Profile pages chain several sequential Nostr REQ runs; match article pages so a slow relay
         // set does not hit PHP’s default 30s max_execution_time during Twig render.
         @set_time_limit(300);
         @ini_set('max_execution_time', '300');
 
-        $keys = new Key();
-        $pubkey = $keys->convertToHex($npub);
+        $pubkey = $nostrKeyHelper->convertToHex($npub);
 
         $bundle = $cacheService->getMetadataBundle($npub);
         $author = $bundle['content'];
@@ -93,10 +93,9 @@ class AuthorController extends AbstractController
      * @throws Exception
      */
     #[Route('/p/{pubkey}', name: 'author-redirect')]
-    public function authorRedirect($pubkey): Response
+    public function authorRedirect($pubkey, NostrKeyHelper $nostrKeyHelper): Response
     {
-        $keys = new Key();
-        $npub = $keys->convertPublicKeyToBech32($pubkey);
+        $npub = $nostrKeyHelper->convertPublicKeyToBech32($pubkey);
 
         return $this->redirectToRoute('author-profile', ['npub' => $npub]);
     }

@@ -7,11 +7,10 @@ namespace App\Service;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use Psr\Log\LoggerInterface;
-use swentel\nostr\Key\Key;
 
 /**
  * Fetches <domain>/.well-known/nostr.json and checks the listed pubkey (NIP-05).
- * Results are stored in the app cache for UI badges and to avoid re-fetching on every request.
+ * Uses {@see file_get_contents} with an explicit HTTP 200 check, timeout, and npub/hex normalization.
  */
 final readonly class Nip05VerificationService
 {
@@ -22,6 +21,7 @@ final readonly class Nip05VerificationService
     public function __construct(
         private CacheItemPoolInterface $appCache,
         private LoggerInterface $logger,
+        private NostrKeyHelper $nostrKeyHelper = new NostrKeyHelper(),
     ) {
     }
 
@@ -110,7 +110,7 @@ final readonly class Nip05VerificationService
             return null;
         }
         $p = explode('@', $s, 2);
-        if (($p[0] ?? '') === '' || ($p[1] ?? '') === '' || str_contains($p[1], ' ')) {
+        if (!isset($p[1]) || $p[0] === '' || $p[1] === '' || str_contains($p[1], ' ')) {
             return null;
         }
 
@@ -120,50 +120,17 @@ final readonly class Nip05VerificationService
     private function checkRemote(string $expectedHex, string $nip05Lower): bool
     {
         $parts = explode('@', $nip05Lower, 2);
-        $local = (string) ($parts[0] ?? '');
-        $domain = (string) ($parts[1] ?? '');
-        if ($local === '' || $domain === '') {
+        if (!isset($parts[1]) || $parts[0] === '' || $parts[1] === '') {
             return false;
         }
-        $url = 'https://'.$domain.'/.well-known/nostr.json?name='.rawurlencode($local);
-        $http_response_header = [];
-        $ctx = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => "User-Agent: Unfold-NIP05-Verify/1.0\r\nAccept: application/json,\r\n",
-                'timeout' => self::FETCH_TIMEOUT_SEC,
-                'ignore_errors' => true,
-            ],
-            'ssl' => [
-                'verify_peer' => true,
-                'verify_peer_name' => true,
-            ],
-        ]);
-        $raw = @file_get_contents($url, false, $ctx);
-        if ($raw === false) {
-            $this->logger->info('nip05.verify_fetch_failed', [
-                'nip05' => $nip05Lower,
-            ]);
+        $local = $parts[0];
+        $domain = $parts[1];
 
+        $data = $this->fetchNostrJson200($domain, $local, $nip05Lower);
+        if ($data === null) {
             return false;
         }
-        $statusLine = (isset($http_response_header) && \is_array($http_response_header))
-            ? (string) ($http_response_header[0] ?? '')
-            : '';
-        if (!preg_match('#\b200\b#', $statusLine)) {
-            $this->logger->info('nip05.verify_not_200', [
-                'nip05' => $nip05Lower,
-                'status' => $statusLine,
-            ]);
-
-            return false;
-        }
-        try {
-            $data = json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return false;
-        }
-        if (!\is_array($data) || !isset($data['names']) || !\is_array($data['names'])) {
+        if (!isset($data['names']) || !\is_array($data['names'])) {
             return false;
         }
         $val = $this->lookupNameInNames($data['names'], $local);
@@ -176,6 +143,53 @@ final readonly class Nip05VerificationService
         }
 
         return hash_equals($expectedHex, $rowHex);
+    }
+
+    /**
+     * @return array<string, mixed>|null Decoded JSON object on HTTP 200; null on failure or non-200.
+     */
+    private function fetchNostrJson200(string $domain, string $nameLocal, string $nip05LowerForLog): ?array
+    {
+        $url = 'https://'.$domain.'/.well-known/nostr.json?name='.rawurlencode($nameLocal);
+        $ctx = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'header' => "User-Agent: Unfold-NIP05-Verify/1.0\r\nAccept: application/json\r\n",
+                'timeout' => self::FETCH_TIMEOUT_SEC,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]);
+        $raw = @file_get_contents($url, false, $ctx);
+        if ($raw === false) {
+            $this->logger->info('nip05.verify_fetch_failed', [
+                'nip05' => $nip05LowerForLog,
+            ]);
+
+            return null;
+        }
+        $statusLine = (string) ($http_response_header[0] ?? '');
+        if (!preg_match('#\b200\b#', $statusLine)) {
+            $this->logger->info('nip05.verify_not_200', [
+                'nip05' => $nip05LowerForLog,
+                'status' => $statusLine,
+            ]);
+
+            return null;
+        }
+        try {
+            $data = json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!\is_array($data)) {
+            return null;
+        }
+
+        return $data;
     }
 
     /**
@@ -204,8 +218,7 @@ final readonly class Nip05VerificationService
         }
         if (str_starts_with($v, 'npub1')) {
             try {
-                $k = new Key();
-                $hex = $k->convertToHex($v);
+                $hex = $this->nostrKeyHelper->convertToHex($v);
                 if (64 === \strlen($hex) && ctype_xdigit($hex)) {
                     return strtolower($hex);
                 }

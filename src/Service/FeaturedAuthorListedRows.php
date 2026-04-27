@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Repository\FeaturedAuthorRepository;
-use swentel\nostr\Key\Key;
 
 /**
  * NIP-05 / listed featured author rows (same shape as {@see \App\Controller\FeaturedAuthorsController}).
@@ -18,6 +17,7 @@ final class FeaturedAuthorListedRows
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
         private readonly CacheService $cacheService,
         private readonly MagazineContentService $magazineContent,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -33,12 +33,11 @@ final class FeaturedAuthorListedRows
             return $fromDb;
         }
 
-        $keys = new Key();
         $authors = [];
         $hexes = $this->magazineContent->getAllDistinctCategoryAuthorPubkeyHexes();
         foreach (\array_slice($hexes, 0, $limit) as $hex) {
             try {
-                $npub = $keys->convertPublicKeyToBech32($hex);
+                $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($hex);
             } catch (\Throwable) {
                 continue;
             }
@@ -53,11 +52,10 @@ final class FeaturedAuthorListedRows
      */
     public function buildListedByLocalPartPage(int $limit, int $offset = 0): array
     {
-        $keys = new Key();
         $authors = [];
         foreach ($this->featuredAuthorRepository->findListedOrderByLocalPartPaginated($limit, $offset) as $fa) {
             try {
-                $npub = $keys->convertPublicKeyToBech32($fa->getPubkeyHex());
+                $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($fa->getPubkeyHex());
             } catch (\Throwable) {
                 continue;
             }

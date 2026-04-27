@@ -2,9 +2,9 @@
 
 namespace App\Security;
 
+use App\Service\NostrKeyHelper;
 use Mdanter\Ecc\Crypto\Signature\SchnorrSignature;
 use swentel\nostr\Event\Event;
-use swentel\nostr\Key\Key;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
@@ -25,6 +25,11 @@ use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPasspor
  */
 class NostrAuthenticator extends AbstractAuthenticator implements InteractiveAuthenticatorInterface
 {
+    public function __construct(
+        private readonly NostrKeyHelper $nostrKeyHelper,
+    ) {
+    }
+
     /**
      * Checks if the request should be handled by this authenticator.
      *
@@ -83,10 +88,8 @@ class NostrAuthenticator extends AbstractAuthenticator implements InteractiveAut
             throw new AuthenticationException('Invalid Authorization header');
         }
 
-        $key = new Key();
-
         return new SelfValidatingPassport(
-            new UserBadge($key->convertPublicKeyToBech32($event->getPublicKey()))
+            new UserBadge($this->nostrKeyHelper->convertPublicKeyToBech32($event->getPublicKey()))
         );
     }
 

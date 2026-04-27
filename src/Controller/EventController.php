@@ -9,9 +9,9 @@ use App\Service\NostrClient;
 use App\Service\NostrLinkParser;
 use App\Service\NostrShareMenuBuilder;
 use App\Service\CacheService;
+use App\Service\NostrKeyHelper;
 use Exception;
 use Psr\Log\LoggerInterface;
-use swentel\nostr\Key\Key;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -32,6 +32,7 @@ class EventController extends AbstractController
         CacheService $cacheService,
         NostrLinkParser $nostrLinkParser,
         NostrShareMenuBuilder $nostrShareMenuBuilder,
+        NostrKeyHelper $nostrKeyHelper,
         LoggerInterface $logger,
     ): Response {
         $logger->info('Accessing event page', ['nevent' => $nevent]);
@@ -107,8 +108,7 @@ class EventController extends AbstractController
             // If author is included in the event, get metadata
             $authorMetadata = null;
             if (isset($event->pubkey)) {
-                $key = new Key();
-                $npub = $key->convertPublicKeyToBech32($event->pubkey);
+                $npub = $nostrKeyHelper->convertPublicKeyToBech32($event->pubkey);
                 $authorMetadata = $cacheService->getMetadata($npub);
             }
 

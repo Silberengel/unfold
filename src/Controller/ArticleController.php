@@ -11,6 +11,7 @@ use App\Nostr\Nip22CommentTags;
 use App\Form\EditorType;
 use App\Service\ArticleCommentThreadLoader;
 use App\Service\NostrClient;
+use App\Service\NostrKeyHelper;
 use App\Service\CacheService;
 use App\Nostr\Nip19Codec;
 use App\Util\CommonMark\Converter;
@@ -19,7 +20,6 @@ use League\CommonMark\Exception\CommonMarkException;
 use Psr\Log\LoggerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
-use swentel\nostr\Key\Key;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -252,7 +252,7 @@ class ArticleController  extends AbstractController
      * @throws \Exception
      */
     #[Route('/article/{naddr}', name: 'article-naddr')]
-    public function naddr(NostrClient $nostrClient, Nip19Codec $nip19, $naddr)
+    public function naddr(NostrClient $nostrClient, Nip19Codec $nip19, NostrKeyHelper $nostrKeyHelper, $naddr)
     {
         $decoded = $nip19->decode($naddr);
 
@@ -273,7 +273,7 @@ class ArticleController  extends AbstractController
 
         $nostrClient->getLongFormFromNaddr($slug, $relays, $author, $kind);
         if ($slug) {
-            $npub = (new Key())->convertPublicKeyToBech32((string) $author);
+            $npub = $nostrKeyHelper->convertPublicKeyToBech32((string) $author);
 
             return $this->redirectToRoute('article', ['npub' => $npub, 'slug' => $slug], Response::HTTP_MOVED_PERMANENTLY);
         }
@@ -300,13 +300,13 @@ class ArticleController  extends AbstractController
         ArticleCommentThreadLoader $commentThreadLoader,
         ArticleHighlightRepository $articleHighlightRepository,
         ArticleBodyHighlightInjector $articleBodyHighlightInjector,
+        NostrKeyHelper $nostrKeyHelper,
     ): Response {
         $article = $this->loadLatestArticleBySlug($entityManager, $slug);
         if ($article === null) {
             throw $this->createNotFoundException('The article could not be found');
         }
-        $key = new Key();
-        if ($key->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
+        if ($nostrKeyHelper->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
             throw $this->createNotFoundException('The article could not be found');
         }
 
@@ -316,7 +316,8 @@ class ArticleController  extends AbstractController
             $converter,
             $commentThreadLoader,
             $articleHighlightRepository,
-            $articleBodyHighlightInjector
+            $articleBodyHighlightInjector,
+            $nostrKeyHelper
         );
     }
 
@@ -332,13 +333,13 @@ class ArticleController  extends AbstractController
     public function articleLegacyRedirect(
         string $slug,
         EntityManagerInterface $entityManager,
+        NostrKeyHelper $nostrKeyHelper,
     ): Response {
         $article = $this->loadLatestArticleBySlug($entityManager, $slug);
         if ($article === null) {
             throw $this->createNotFoundException('The article could not be found');
         }
-        $key = new Key();
-        $npub = $key->convertPublicKeyToBech32((string) $article->getPubkey());
+        $npub = $nostrKeyHelper->convertPublicKeyToBech32((string) $article->getPubkey());
 
         return $this->redirectToRoute('article', ['npub' => $npub, 'slug' => $slug], Response::HTTP_MOVED_PERMANENTLY);
     }
@@ -358,14 +359,14 @@ class ArticleController  extends AbstractController
         ArticleCommentThreadLoader $commentThreadLoader,
         ArticleHighlightRepository $articleHighlightRepository,
         ArticleBodyHighlightInjector $articleBodyHighlightInjector,
+        NostrKeyHelper $nostrKeyHelper,
     ): Response {
         set_time_limit(300); // 5 minutes
         ini_set('max_execution_time', '300');
 
         $html = $converter->convertToHtml($article->getContent());
 
-        $key = new Key();
-        $npub = $key->convertPublicKeyToBech32($article->getPubkey());
+        $npub = $nostrKeyHelper->convertPublicKeyToBech32($article->getPubkey());
         $author = $cacheService->getMetadata($npub);
 
         $kind = $article->getKind()?->value ?? 30023;
@@ -441,6 +442,7 @@ class ArticleController  extends AbstractController
         Request $request,
         NostrClient $nostrClient,
         CacheService $cacheService,
+        NostrKeyHelper $nostrKeyHelper,
     ): Response {
         $data = $request->getContent();
         $descriptor = json_decode($data);
@@ -464,8 +466,7 @@ class ArticleController  extends AbstractController
                     if (!\is_object($hint) || !isset($hint->pubkey)) {
                         $html = '<span class="text-subtle">Profile preview unavailable.</span>';
                     } else {
-                        $key = new Key();
-                        $npub = $key->convertPublicKeyToBech32($hint->pubkey);
+                        $npub = $nostrKeyHelper->convertPublicKeyToBech32($hint->pubkey);
                         $metadata = $cacheService->getMetadata($npub);
                         $metadata->npub = $npub;
                         $metadata->pubkey = $hint->pubkey;
@@ -512,7 +513,7 @@ class ArticleController  extends AbstractController
     #[Route('/article-editor/create', name: 'editor-create')]
     #[Route('/article-editor/edit/{id}', name: 'editor-edit')]
     public function newArticle(Request $request, EntityManagerInterface $entityManager, CacheItemPoolInterface $articlesCache,
-                               WorkflowInterface $articlePublishingWorkflow, Article $article = null): Response
+                               WorkflowInterface $articlePublishingWorkflow, NostrKeyHelper $nostrKeyHelper, Article $article = null): Response
     {
         if (!$article) {
             $article = new Article();
@@ -529,8 +530,7 @@ class ArticleController  extends AbstractController
         // Step 3: Check if the form is submitted and valid
         if ($form->isSubmitted() && $form->isValid()) {
             $user = $this->getUser();
-            $key = new Key();
-            $currentPubkey = $key->convertToHex($user->getUserIdentifier());
+            $currentPubkey = $nostrKeyHelper->convertToHex($user->getUserIdentifier());
 
             if ($article->getPubkey() === null) {
                 $article->setPubkey($currentPubkey);
@@ -574,18 +574,17 @@ class ArticleController  extends AbstractController
      */
     #[Route('/article-preview/{d}', name: 'article-preview')]
     public function preview($d, Converter $converter,
-                            CacheItemPoolInterface $articlesCache): Response
+                            CacheItemPoolInterface $articlesCache, NostrKeyHelper $nostrKeyHelper): Response
     {
         $user = $this->getUser();
-        $key = new Key();
-        $currentPubkey = $key->convertToHex($user->getUserIdentifier());
+        $currentPubkey = $nostrKeyHelper->convertToHex($user->getUserIdentifier());
 
         $cacheKey = 'article_' . $currentPubkey . '_' . $d;
         $cacheItem = $articlesCache->getItem($cacheKey);
         $article = $cacheItem->get();
 
         $content = $converter->convertToHtml($article->getContent());
-        $previewNpub = (new Key())->convertPublicKeyToBech32($currentPubkey);
+        $previewNpub = $nostrKeyHelper->convertPublicKeyToBech32($currentPubkey);
 
         return $this->render('pages/article.html.twig', [
             'article' => $article,

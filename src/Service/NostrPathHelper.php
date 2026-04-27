@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Article;
-use swentel\nostr\Key\Key;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
@@ -15,12 +14,13 @@ final class NostrPathHelper
 {
     public function __construct(
         private readonly UrlGeneratorInterface $router,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
     public function npubFromPubkeyHex(string $pubkeyHex): string
     {
-        return (new Key())->convertPublicKeyToBech32($pubkeyHex);
+        return $this->nostrKeyHelper->convertPublicKeyToBech32($pubkeyHex);
     }
 
     public function articlePath(Article $article): string

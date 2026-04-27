@@ -10,8 +10,6 @@ use DOMDocument;
 use DOMElement;
 use DOMText;
 use DOMXPath;
-use swentel\nostr\Key\Key;
-
 /**
  * Injects kind-9802 highlight marks into the rendered article body by searching the visible text
  * in NIP-84 order: event `content` (highlighted span) first, then the `context` tag when set, then
@@ -36,6 +34,7 @@ final class ArticleBodyHighlightInjector
 
     public function __construct(
         private readonly HighlightAuthorMetadataProvider $highlightAuthorMetadata,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -338,7 +337,6 @@ final class ArticleBodyHighlightInjector
      */
     private function buildHighlightAuthorsJson(array $group): string
     {
-        $key = new Key();
         $byNpub = [];
         foreach ($group as $h) {
             $eidH = $h->getEventId();
@@ -350,7 +348,7 @@ final class ArticleBodyHighlightInjector
                 continue;
             }
             try {
-                $npub = $key->convertPublicKeyToBech32($pk);
+                $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($pk);
             } catch (\Throwable) {
                 continue;
             }

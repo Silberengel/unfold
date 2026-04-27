@@ -14,7 +14,7 @@ class NostrEventRenderer implements NodeRendererInterface
         private readonly Nip19Codec $nip19,
     ) {
     }
-    public function render(Node $node, ChildNodeRendererInterface $childRenderer)
+    public function render(Node $node, ChildNodeRendererInterface $childRenderer): \Stringable|string|null
     {
         if (!($node instanceof NostrSchemeData)) {
             throw new \InvalidArgumentException('Incompatible inline node type: '.get_class($node));
@@ -25,7 +25,7 @@ class NostrEventRenderer implements NodeRendererInterface
             return $this->renderPreviewOrFallback($node, $type);
         }
 
-        return false;
+        return null;
     }
 
     private function renderPreviewOrFallback(NostrSchemeData $node, string $type): HtmlElement

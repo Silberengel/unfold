@@ -9,8 +9,8 @@ use App\Repository\ArticleHighlightRepository;
 use App\Repository\ArticleRepository;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Util\CommonMark\Converter;
+use App\Service\NostrKeyHelper;
 use League\CommonMark\Exception\CommonMarkException;
-use swentel\nostr\Key\Key;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -34,6 +34,7 @@ final class ArticleHighlightsAuditCommand extends Command
         private readonly ArticleHighlightRepository $articleHighlightRepository,
         private readonly Converter $converter,
         private readonly ArticleBodyHighlightInjector $articleBodyHighlightInjector,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
         parent::__construct();
     }
@@ -62,11 +63,10 @@ final class ArticleHighlightsAuditCommand extends Command
             return Command::FAILURE;
         }
 
-        $key = new Key();
-        $expectedNpub = $key->convertPublicKeyToBech32((string) $article->getPubkey());
+        $expectedNpub = $this->nostrKeyHelper->convertPublicKeyToBech32((string) $article->getPubkey());
         $optNpub = $input->getOption('npub');
         if (\is_string($optNpub) && $optNpub !== '') {
-            if ($key->convertToHex($optNpub) !== strtolower((string) $article->getPubkey())) {
+            if ($this->nostrKeyHelper->convertToHex($optNpub) !== strtolower((string) $article->getPubkey())) {
                 $io->error('npub does not match this article’s author (expected: '.$expectedNpub.').');
 
                 return Command::FAILURE;

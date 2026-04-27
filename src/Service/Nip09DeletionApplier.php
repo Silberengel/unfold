@@ -11,7 +11,6 @@ use App\Repository\ArticleRepository;
 use App\Repository\EventRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use swentel\nostr\Key\Key;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
@@ -34,6 +33,7 @@ final class Nip09DeletionApplier
         private readonly EventRepository $eventRepository,
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -342,7 +342,7 @@ final class Nip09DeletionApplier
             $siteHex = '';
             if (str_starts_with($npub, 'npub1')) {
                 try {
-                    $h = (new Key())->convertToHex($npub);
+                    $h = $this->nostrKeyHelper->convertToHex($npub);
                     if (64 === \strlen($h)) {
                         $siteHex = $h;
                     }

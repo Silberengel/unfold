@@ -16,9 +16,9 @@ use App\Service\HighlightSyncService;
 use App\Service\MagazineRefresher;
 use App\Service\Nip09DeletionApplier;
 use App\Service\NostrClient;
+use App\Service\NostrKeyHelper;
 use App\Service\ProfileIdentityLinksBuilder;
 use Psr\Log\LoggerInterface;
-use swentel\nostr\Key\Key;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Helper;
@@ -55,6 +55,7 @@ final class PrewarmCommand extends Command
         private readonly ProfileIdentityLinksBuilder $profileIdentityLinks,
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
         private readonly HighlightSyncService $highlightSyncService,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
         parent::__construct();
     }
@@ -87,7 +88,6 @@ final class PrewarmCommand extends Command
         }
 
         $io = new SymfonyStyle($input, $output);
-        $keys = new Key();
 
         if (!$input->getOption('no-magazine')) {
             $budget = max(1, (int) $input->getOption('magazine-budget'));
@@ -252,7 +252,7 @@ final class PrewarmCommand extends Command
             $npubParam = (string) $this->params->get('npub');
             if (str_starts_with($npubParam, 'npub')) {
                 try {
-                    $sitePk = $keys->convertToHex($npubParam);
+                    $sitePk = $this->nostrKeyHelper->convertToHex($npubParam);
                     if ($sitePk !== '' && 64 === \strlen($sitePk) && !\in_array($sitePk, $deletionPubkeys, true)) {
                         $deletionPubkeys[] = $sitePk;
                     }
@@ -307,7 +307,7 @@ final class PrewarmCommand extends Command
             $npubParam = (string) $this->params->get('npub');
             if (str_starts_with($npubParam, 'npub')) {
                 try {
-                    $sitePk = $keys->convertToHex($npubParam);
+                    $sitePk = $this->nostrKeyHelper->convertToHex($npubParam);
                     if ($sitePk !== '' && !\in_array($sitePk, $pubkeys, true)) {
                         $pubkeys[] = $sitePk;
                     }
@@ -385,7 +385,7 @@ final class PrewarmCommand extends Command
                         continue;
                     }
                     $hex = strtolower($hex);
-                    $npub = $keys->convertPublicKeyToBech32($hex);
+                    $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($hex);
                     $bundle = $this->cacheService->getMetadataBundle($npub);
                     $rows = $this->profileIdentityLinks->buildNip05($bundle['content'], $bundle['kind0_tags'] ?? []);
                     $fa = $this->featuredAuthorRepository->findOneByPubkeyHex($hex);

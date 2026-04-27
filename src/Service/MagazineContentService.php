@@ -29,16 +29,6 @@ final class MagazineContentService
     }
 
     /**
-     * @deprecated use {@see getHomeCategoryAIndexTagsFromStoreOnly} (identical; no blocking relay I/O)
-     *
-     * @return list<array<int, string>>
-     */
-    public function getHomeCategoryIndexTags(): array
-    {
-        return $this->getHomeCategoryAIndexTagsFromStoreOnly();
-    }
-
-    /**
      * Category `a` tags from the persisted root only (no relay). The store is filled by
      * `app:prewarm` / cron ({@see MagazineRefresher::refreshFromRelays}), not from HTTP.
      *

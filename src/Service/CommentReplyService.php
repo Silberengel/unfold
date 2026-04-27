@@ -8,7 +8,6 @@ use App\Entity\User;
 use App\Enum\KindsEnum;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Event\Event as NostrWireEvent;
-use swentel\nostr\Key\Key;
 
 /**
  * Validates NIP-22 kind-1111 comment events from logged-in users and publishes to article relays.
@@ -20,6 +19,7 @@ final readonly class CommentReplyService
     public function __construct(
         private NostrClient $nostrClient,
         private LoggerInterface $logger,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -72,8 +72,7 @@ final readonly class CommentReplyService
             return ['ok' => false, 'error' => 'Event created_at out of range', 'code' => 400];
         }
 
-        $key = new Key();
-        $userHex = $key->convertToHex($user->getNpub() ?? '');
+        $userHex = $this->nostrKeyHelper->convertToHex($user->getNpub() ?? '');
         if ($userHex === '' || !hash_equals($userHex, $wire->getPublicKey())) {
             return ['ok' => false, 'error' => 'Pubkey does not match logged-in user', 'code' => 403];
         }

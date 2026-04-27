@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Nostr;
 
-use swentel\nostr\Key\Key;
+use App\Service\NostrKeyHelper;
 
 /**
  * Stable keys for {@see Event} rows: magazine root/category indices and kind-0 profiles in MySQL.
@@ -52,7 +52,7 @@ final class MagazineEventKeys
             return strtolower($npub);
         }
         try {
-            $h = (new Key())->convertToHex($npub);
+            $h = (new NostrKeyHelper())->convertToHex($npub);
         } catch (\Throwable) {
             $h = '';
         }

@@ -6,7 +6,7 @@ namespace App\Twig;
 
 use App\Enum\KindsEnum;
 use App\Nostr\Nip19Addressable;
-use swentel\nostr\Key\Key;
+use App\Service\NostrKeyHelper;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
@@ -23,6 +23,7 @@ final class MagazineJumbleExtension extends AbstractExtension
         private readonly string $rootMagazineDTag,
         #[Autowire('%jumble_feed_notes_base%')]
         private readonly string $jumbleFeedNotesBase,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -35,9 +36,8 @@ final class MagazineJumbleExtension extends AbstractExtension
 
     public function magazineOnJumbleUrl(): string
     {
-        $key = new Key();
         try {
-            $pubkeyHex = $key->convertToHex($this->siteNpub);
+            $pubkeyHex = $this->nostrKeyHelper->convertToHex($this->siteNpub);
         } catch (\Throwable) {
             return '#';
         }

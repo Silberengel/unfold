@@ -7,6 +7,7 @@ namespace App\Tests\Service;
 use App\Entity\ArticleHighlight;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Service\HighlightAuthorMetadataProvider;
+use App\Service\NostrKeyHelper;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -141,7 +142,7 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
             ]
         );
 
-        return new ArticleBodyHighlightInjector($meta);
+        return new ArticleBodyHighlightInjector($meta, new NostrKeyHelper());
     }
 
     /**

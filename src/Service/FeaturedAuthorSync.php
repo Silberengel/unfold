@@ -8,7 +8,6 @@ use App\Entity\FeaturedAuthor;
 use App\Repository\FeaturedAuthorRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use swentel\nostr\Key\Key;
 
 /**
  * Reconciles {@see FeaturedAuthor} rows with pubkeys found in magazine category `a` tags.
@@ -22,6 +21,7 @@ final class FeaturedAuthorSync
         private readonly CacheService $cacheService,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -43,7 +43,6 @@ final class FeaturedAuthorSync
         foreach ($this->featuredAuthorRepository->findAll() as $row) {
             $existingByPubkey[strtolower($row->getPubkeyHex())] = $row;
         }
-        $keys = new Key();
         $added = 0;
         $relisted = 0;
         $unlisted = 0;
@@ -54,7 +53,7 @@ final class FeaturedAuthorSync
             if ($row === null) {
                 $entity = new FeaturedAuthor();
                 $entity->setPubkeyHex($hex);
-                $base = $this->deriveBaseLocalPart($keys, $hex);
+                $base = $this->deriveBaseLocalPart($hex);
                 $entity->setLocalPart($this->allocateUniqueLocalPart($base));
                 $entity->setIsListed(true);
                 $this->entityManager->persist($entity);
@@ -99,20 +98,10 @@ final class FeaturedAuthorSync
         ];
     }
 
-    /**
-     * @deprecated use {@see reconcileListedAuthorsFromMagazineCategories}
-     */
-    public function syncNewAuthorsFromMagazineCategories(): int
-    {
-        $st = $this->reconcileListedAuthorsFromMagazineCategories();
-
-        return $st['added'];
-    }
-
-    private function deriveBaseLocalPart(Key $keys, string $pubkeyHex): string
+    private function deriveBaseLocalPart(string $pubkeyHex): string
     {
         try {
-            $npub = $keys->convertPublicKeyToBech32($pubkeyHex);
+            $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($pubkeyHex);
         } catch (\Throwable) {
             $npub = null;
         }

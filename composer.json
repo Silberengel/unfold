@@ -94,6 +94,10 @@
         ],
         "post-update-cmd": [
             "@auto-scripts"
+        ],
+        "phpstan": [
+            "@php bin/console cache:warmup --env=dev --no-interaction",
+            "phpstan analyse -c phpstan.neon.dist --memory-limit=512M"
         ]
     },
     "conflict": {
@@ -115,6 +119,9 @@
         }
     },
     "require-dev": {
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-doctrine": "^2.0",
+        "phpstan/phpstan-symfony": "^2.0",
         "phpunit/phpunit": "^9.5",
         "symfony/browser-kit": "7.3.*",
         "symfony/css-selector": "7.3.*",

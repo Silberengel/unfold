@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Security;
 
 use App\Security\NostrAuthenticator;
+use App\Service\NostrKeyHelper;
 use PHPUnit\Framework\TestCase;
 use swentel\nostr\Event\Event;
 use swentel\nostr\Key\Key;
@@ -24,7 +25,7 @@ class NostrAuthenticatorTest extends TestCase
         $token = 'Nostr '.$this->signedAuthEventBase64($nsec);
         $request = Request::create('/login', 'GET', [], [], [], ['HTTP_AUTHORIZATION' => $token]);
 
-        $out = (new NostrAuthenticator())->authenticate($request);
+        $out = (new NostrAuthenticator(new NostrKeyHelper()))->authenticate($request);
 
         $this->assertInstanceOf(SelfValidatingPassport::class, $out);
     }
@@ -35,7 +36,7 @@ class NostrAuthenticatorTest extends TestCase
         $request = Request::create('/login', 'GET', [], [], [], [
             'HTTP_AUTHORIZATION' => 'InvalidHeader',
         ]);
-        (new NostrAuthenticator())->authenticate($request);
+        (new NostrAuthenticator(new NostrKeyHelper()))->authenticate($request);
     }
 
     public function testExpiredEventThrows(): void
@@ -46,7 +47,7 @@ class NostrAuthenticatorTest extends TestCase
         $request = Request::create('/login', 'GET', [], [], [], [
             'HTTP_AUTHORIZATION' => $expiredToken,
         ]);
-        (new NostrAuthenticator())->authenticate($request);
+        (new NostrAuthenticator(new NostrKeyHelper()))->authenticate($request);
     }
 
     private function signedAuthEventBase64(string $nsec): string

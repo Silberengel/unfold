@@ -36,7 +36,6 @@ class IndexTabs
     public function mount(EventEntity $index): void
     {
         $this->index = $index;
-        // TODO extract categories from index and feed into tabs
         foreach ($index->getTags() as $tag) {
             if (array_key_first($tag) === 'a') {
                 $ref = $tag[1];

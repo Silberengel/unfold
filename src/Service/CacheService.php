@@ -9,7 +9,6 @@ use App\Nostr\MagazineEventKeys;
 use App\Repository\EventRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use swentel\nostr\Key\Key;
 
 readonly class CacheService implements HighlightAuthorMetadataProvider
 {
@@ -18,6 +17,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         private EntityManagerInterface $entityManager,
         private EventRepository $eventRepository,
         private LoggerInterface $logger,
+        private NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -152,7 +152,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         }
         if (str_starts_with($npub, 'npub1')) {
             try {
-                $h = (new Key())->convertToHex($npub);
+                $h = $this->nostrKeyHelper->convertToHex($npub);
             } catch (\Throwable) {
                 $h = '';
             }
