@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Nostr;
 
 use App\Entity\Event;
-use nostriphant\NIP19\Bech32;
 
 /**
  * NIP-33 / NIP-19 helpers: naddr for parameterized replaceable events (kind:pubkey:d).
@@ -63,11 +62,6 @@ final class Nip19Addressable
             throw new \InvalidArgumentException('Invalid pubkey hex for naddr.');
         }
 
-        return (string) Bech32::naddr(
-            kind: $kind,
-            pubkey: $pubkeyHex,
-            identifier: $dIdentifier,
-            relays: $relays,
-        );
+        return (new Nip19Codec())->encodeNaddr($kind, $pubkeyHex, $dIdentifier, $relays);
     }
 }

@@ -24,6 +24,8 @@ when@dev:
                 path: "php://stderr"
                 # Min level info: debug stays out of stderr (file only).
                 level: info
+                # User deprecations (vendor) still land in var/log/…; avoid duplicating to Docker stderr.
+                channels: [ "!event", "!deprecation" ]
             console:
                 type: console
                 process_psr_3_messages: false

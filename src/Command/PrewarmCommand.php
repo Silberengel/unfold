@@ -80,6 +80,11 @@ final class PrewarmCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->disableCliExecutionTimeLimit();
+        $socketTo = (int) $this->params->get('nostr_relay_request_timeout_sec');
+        if ($socketTo > 0) {
+            // Align PHP stream layer with Nostr WebSocket timeout (avoids 60s default stalling a relay step).
+            ini_set('default_socket_timeout', (string) $socketTo);
+        }
 
         $io = new SymfonyStyle($input, $output);
         $keys = new Key();
@@ -181,6 +186,10 @@ final class PrewarmCommand extends Command
             $io->note('Skipping magazine (--no-magazine).');
         }
 
+        // MagazineRefresher used to set max_execution_time (~2×budget); re-assert unlimited before
+        // any later Nostr phase (long-form can exceed that old cap and was causing max-time fatals).
+        $this->disableCliExecutionTimeLimit();
+
         $io->section('Long-form in DB (category `a` tags — refresh from Nostr)');
         try {
             $n = $this->magazineContent->ingestLongformForAllMagazineCategories();
@@ -224,7 +233,6 @@ final class PrewarmCommand extends Command
             $io->warning('Featured author reconcile failed: '.$e->getMessage());
         }
 
-        // MagazineRefresher sets max_execution_time (budget + headroom); restore before metadata.
         $this->disableCliExecutionTimeLimit();
 
         if (!$input->getOption('no-deletions')) {

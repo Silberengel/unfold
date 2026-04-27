@@ -69,7 +69,8 @@ class ArticleHighlightRepository extends ServiceEntityRepository
 
         $qb = $this->createQueryBuilder('h')
             ->innerJoin('h.article', 'a')
-            ->where('a.pubkey = :pubkey')
+            // Hex pubkeys are case-insensitive; utf8mb4_bin would otherwise miss rows.
+            ->where('LOWER(a.pubkey) = LOWER(:pubkey)')
             ->andWhere('a.slug = :slug')
             ->setParameter('pubkey', $pubkey)
             ->setParameter('slug', $slug)

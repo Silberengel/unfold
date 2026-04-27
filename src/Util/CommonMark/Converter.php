@@ -2,6 +2,7 @@
 
 namespace App\Util\CommonMark;
 
+use App\Nostr\Nip19Codec;
 use App\Service\CacheService;
 use App\Util\CommonMark\ImagesExtension\RawImageLinkExtension;
 use App\Util\CommonMark\NostrSchemeExtension\NostrSchemeExtension;
@@ -25,9 +26,9 @@ use League\CommonMark\Renderer\HtmlDecorator;
 readonly class Converter
 {
     public function __construct(
-        private CacheService $cacheService
-    )
-    {
+        private CacheService $cacheService,
+        private Nip19Codec $nip19Codec,
+    ) {
     }
 
     /**
@@ -66,7 +67,7 @@ readonly class Converter
         $environment->addExtension(new TableExtension());
         $environment->addExtension(new StrikethroughExtension());
         // create a custom extension, that handles nostr mentions
-        $environment->addExtension(new NostrSchemeExtension($this->cacheService));
+        $environment->addExtension(new NostrSchemeExtension($this->cacheService, $this->nip19Codec));
         $environment->addExtension(new SmartPunctExtension());
         $environment->addExtension(new EmbedExtension());
         $environment->addRenderer(Embed::class, new HtmlDecorator(new EmbedRenderer(), 'div', ['class' => 'embedded-content']));

@@ -73,7 +73,8 @@ final class HighlightSyncService
             }
             $excerpt = HighlightEventTags::excerptForFeed($content, $tags);
             if ($excerpt === '') {
-                $excerpt = \mb_substr(\trim($content), 0, 240);
+                $t = HighlightEventTags::trimNostrText($content);
+                $excerpt = $t !== '' ? \mb_substr($t, 0, 240) : '';
             }
 
             $row = $this->highlightRepository->findOneBy(['eventId' => $eid]);

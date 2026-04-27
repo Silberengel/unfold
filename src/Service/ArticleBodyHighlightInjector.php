@@ -100,27 +100,44 @@ final class ArticleBodyHighlightInjector
             libxml_use_internal_errors($prev);
             libxml_clear_errors();
         }
-        // getElementById is unreliable for HTML loaded without a DTD; use XPath, then a div scan, then a tree walk.
+        $this->root = $this->resolveRootWrapperElement();
+        if (null === $this->root) {
+            // Some libxml/fragment combinations drop the root with HTML_NOIMPLIED; parse a plain wrapper
+            $this->dom = new DOMDocument('1.0', 'UTF-8');
+            $prevInner = libxml_use_internal_errors(true);
+            try {
+                $this->dom->loadHTML(
+                    '<?xml encoding="UTF-8"?>'.'<div id="'.self::ROOT_ID.'">'.$html.'</div>',
+                    \LIBXML_HTML_NODEFDTD
+                );
+                $this->root = $this->resolveRootWrapperElement();
+            } finally {
+                libxml_use_internal_errors($prevInner);
+                libxml_clear_errors();
+            }
+        }
+    }
+
+    private function resolveRootWrapperElement(): ?DOMElement
+    {
         $xp = new DOMXPath($this->dom);
         $nodes = $xp->query('//div[@id="'.self::ROOT_ID.'"]');
         if (false !== $nodes && $nodes->length > 0) {
             $first = $nodes->item(0);
-            $this->root = $first instanceof DOMElement ? $first : null;
-        } else {
-            $this->root = null;
+
+            return $first instanceof DOMElement ? $first : null;
         }
-        if (null === $this->root) {
-            $de = $this->dom->documentElement;
-            if ($de instanceof DOMElement && $de->getAttribute('id') === self::ROOT_ID) {
-                $this->root = $de;
-            }
+        $de = $this->dom->documentElement;
+        if ($de instanceof DOMElement && $de->getAttribute('id') === self::ROOT_ID) {
+            return $de;
         }
-        if (null === $this->root) {
-            $this->root = $this->findFirstDivById(self::ROOT_ID);
+        $d = $this->findFirstDivById(self::ROOT_ID);
+        if (null !== $d) {
+            return $d;
         }
-        if (null === $this->root) {
-            $this->root = $this->findElementByIdFallback(self::ROOT_ID);
-        }
+        $el = $this->findElementByIdFallback(self::ROOT_ID);
+
+        return $el instanceof DOMElement ? $el : null;
     }
 
     private function findFirstDivById(string $id): ?DOMElement
@@ -385,11 +402,14 @@ final class ArticleBodyHighlightInjector
      */
     private function injectionNeedleBasesInPriority(ArticleHighlight $h): array
     {
-        $c = \trim($h->getContent());
+        $rawContent = (string) $h->getContent();
         $tags = $h->getTags();
-        $ctx = \trim(HighlightEventTags::contextFromTags($tags));
-        $fullPassage = \trim(HighlightEventTags::fullPassageForHighlightDisplay($c, $tags));
-        $tq = \trim(HighlightEventTags::textquoteselectorPassageFromTags($tags));
+        $c = HighlightEventTags::trimNostrText($rawContent);
+        $ctx = HighlightEventTags::trimNostrText(HighlightEventTags::contextFromTags($tags));
+        $fullPassage = HighlightEventTags::trimNostrText(
+            HighlightEventTags::fullPassageForHighlightDisplay($rawContent, $tags)
+        );
+        $tq = HighlightEventTags::trimNostrText(HighlightEventTags::textquoteselectorPassageFromTags($tags));
         $out = [];
         $seen = [];
         // NIP-84: `context` = full quote; `content` = highlighted span. Missing/empty `context` is

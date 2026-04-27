@@ -41,6 +41,7 @@ services:
             $articleRelayUrls: '%article_relays%'
             $profileRelayUrls: '%profile_relays%'
             $projectDir: '%kernel.project_dir%'
+            $relayRequestTimeoutSec: '%nostr_relay_request_timeout_sec%'
     App\Service\ArticleCommentThreadLoader:
         arguments:
             $appCachePool: '@cache.replies'

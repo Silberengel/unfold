@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "37decb6d8e5656d920a95981bfb25c0e",
+    "content-hash": "138ac13dfe47c4f697e248fc51668cf4",
     "packages": [
         {
             "name": "bitwasp/bech32",
@@ -200,6 +200,54 @@
                 }
             ],
             "time": "2025-08-20T19:15:30+00:00"
+        },
+        {
+            "name": "cweagans/composer-patches",
+            "version": "1.7.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/cweagans/composer-patches.git",
+                "reference": "e190d4466fe2b103a55467dfa83fc2fecfcaf2db"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/cweagans/composer-patches/zipball/e190d4466fe2b103a55467dfa83fc2fecfcaf2db",
+                "reference": "e190d4466fe2b103a55467dfa83fc2fecfcaf2db",
+                "shasum": ""
+            },
+            "require": {
+                "composer-plugin-api": "^1.0 || ^2.0",
+                "php": ">=5.3.0"
+            },
+            "require-dev": {
+                "composer/composer": "~1.0 || ~2.0",
+                "phpunit/phpunit": "~4.6"
+            },
+            "type": "composer-plugin",
+            "extra": {
+                "class": "cweagans\\Composer\\Patches"
+            },
+            "autoload": {
+                "psr-4": {
+                    "cweagans\\Composer\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Cameron Eagans",
+                    "email": "me@cweagans.net"
+                }
+            ],
+            "description": "Provides a way to patch Composer packages.",
+            "support": {
+                "issues": "https://github.com/cweagans/composer-patches/issues",
+                "source": "https://github.com/cweagans/composer-patches/tree/1.7.3"
+            },
+            "time": "2022-12-20T22:53:13+00:00"
         },
         {
             "name": "dflydev/dot-access-data",
@@ -2596,50 +2644,6 @@
                 "source": "https://github.com/nette/utils/tree/v4.1.3"
             },
             "time": "2026-02-13T03:05:33+00:00"
-        },
-        {
-            "name": "nostriphant/nip-19",
-            "version": "2.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/nostriphant/nip-19.git",
-                "reference": "5b362ab27e428f666f021743dddde9fecfe895c5"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/nostriphant/nip-19/zipball/5b362ab27e428f666f021743dddde9fecfe895c5",
-                "reference": "5b362ab27e428f666f021743dddde9fecfe895c5",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "pestphp/pest": "^2.35"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "nostriphant\\NIP19\\": "src/",
-                    "nostriphant\\NIP19Tests\\": "tests/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Rik Meijer",
-                    "email": "rik@nostriphant.dev"
-                }
-            ],
-            "description": "Nostr NIP-19 bech32-encoded entities in PHP",
-            "support": {
-                "issues": "https://github.com/nostriphant/nip-19/issues",
-                "source": "https://github.com/nostriphant/nip-19/tree/2.0"
-            },
-            "time": "2024-11-26T15:37:43+00:00"
         },
         {
             "name": "nyholm/psr7",

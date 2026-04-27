@@ -12,11 +12,10 @@ use App\Form\EditorType;
 use App\Service\ArticleCommentThreadLoader;
 use App\Service\NostrClient;
 use App\Service\CacheService;
+use App\Nostr\Nip19Codec;
 use App\Util\CommonMark\Converter;
 use Doctrine\ORM\EntityManagerInterface;
 use League\CommonMark\Exception\CommonMarkException;
-use nostriphant\NIP19\Bech32;
-use nostriphant\NIP19\Data\NAddr;
 use Psr\Log\LoggerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
@@ -253,15 +252,14 @@ class ArticleController  extends AbstractController
      * @throws \Exception
      */
     #[Route('/article/{naddr}', name: 'article-naddr')]
-    public function naddr(NostrClient $nostrClient, $naddr)
+    public function naddr(NostrClient $nostrClient, Nip19Codec $nip19, $naddr)
     {
-        $decoded = new Bech32($naddr);
+        $decoded = $nip19->decode($naddr);
 
         if ($decoded->type !== 'naddr') {
             throw new \Exception('Invalid naddr');
         }
 
-        /** @var NAddr $data */
         $data = $decoded->data;
         $slug = $data->identifier;
         $relays = $data->relays;

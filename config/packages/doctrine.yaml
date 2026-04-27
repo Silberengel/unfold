@@ -2,9 +2,9 @@ doctrine:
     dbal:
         url: '%env(resolve:DATABASE_URL)%'
         driver: pdo_mysql
-        # IMPORTANT: You MUST configure your server version,
-        # either here or in the DATABASE_URL env var (see .env file)
-        #server_version: '8.0'
+        # Pin version so DBAL 4 does not treat the server as "MySQL &lt; 8" and emit deprecations
+        # on every request (see AbstractMySQLDriver + serverVersion auto-detection).
+        server_version: '8.0'
         charset: utf8mb4
         default_table_options:
             charset: utf8mb4

@@ -59,8 +59,11 @@ final class MagazineRefresher
         $dTag = (string) $this->params->get('d_tag');
         $preferFromEnv = $this->parseCommaSeparatedSlugs($this->magazinePrewarmPreferSlugs);
 
-        // Allow enough PHP wall time for a slow root fetch plus the full category-phase budget.
-        $this->applyExecutionTimeCap(2 * $budgetSeconds);
+        // Do not cap max_execution_time here. A previous design used 2×budget+30s (capped 210) which
+        // outlived this method and then killed the rest of app:prewarm (long-form / highlights)
+        // while a relay WebSocket was still connecting. Wall time is bounded by $deadline below
+        // (category phase) and by Nostr request timeouts; PHP should stay unlimited in CLI.
+        $this->ensureUnlimitedPhpExecutionTime();
 
         $defaultRelay = (string) $this->params->get('default_relay');
         $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
@@ -250,15 +253,10 @@ final class MagazineRefresher
         $this->appCache->save($item);
     }
 
-    /**
-     * One generous ceiling for PHP so relay/WebSocket I/O in one Nostr call can outlast the soft
-     * $deadline by seconds without a fatal, while the loop still stops *starting* new fetches in time.
-     */
-    private function applyExecutionTimeCap(int $budgetSeconds): void
+    private function ensureUnlimitedPhpExecutionTime(): void
     {
-        $sec = max(30, min(700, $budgetSeconds + 30));
-        @set_time_limit($sec);
-        @ini_set('max_execution_time', (string) $sec);
+        @\set_time_limit(0);
+        @\ini_set('max_execution_time', '0');
     }
 
     /**

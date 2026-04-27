@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Nostr\Nip19Codec;
 use App\Service\NostrClient;
 use App\Service\NostrLinkParser;
 use App\Service\NostrShareMenuBuilder;
 use App\Service\CacheService;
 use Exception;
-use nostriphant\NIP19\Bech32;
-use nostriphant\NIP19\Data;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -28,6 +27,7 @@ class EventController extends AbstractController
     public function index(
         $nevent,
         Request $request,
+        Nip19Codec $nip19,
         NostrClient $nostrClient,
         CacheService $cacheService,
         NostrLinkParser $nostrLinkParser,
@@ -38,11 +38,9 @@ class EventController extends AbstractController
 
         try {
             // Decode nevent - nevent1... is a NIP-19 encoded event identifier
-            $decoded = new Bech32($nevent);
+            $decoded = $nip19->decode($nevent);
             $logger->info('Decoded event', ['decoded' => json_encode($decoded)]);
 
-            // Get the event using the event ID
-            /** @var Data $data */
             $data = $decoded->data;
             $logger->info('Event data', ['data' => json_encode($data)]);
 
@@ -50,12 +48,12 @@ class EventController extends AbstractController
             // Sort which event type this is using $data->type
             switch ($decoded->type) {
                 case 'note':
-                    // Handle note (regular event)
+                    $eventHex = (string) ($data->data ?? '');
                     $relays = $data->relays ?? [];
                     if (!\is_array($relays)) {
                         $relays = [];
                     }
-                    $event = $nostrClient->getEventById($data->identifier, $relays);
+                    $event = $nostrClient->getEventById($eventHex, $relays);
                     break;
 
                 case 'nprofile':

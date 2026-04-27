@@ -61,6 +61,24 @@ final class HighlightEventTags
     }
 
     /**
+     * Trims Nostr/Unicode spacing (U+00A0, U+200B, U+00AD, other {@see \p{Z}}, etc.) from both ends
+     * after standard {@see \trim} — NIP-84 clients often differ from the rendered body on edge spaces.
+     */
+    public static function trimNostrText(string $s): string
+    {
+        $s = \trim($s, " \t\n\r\0\x0B");
+        if ($s === '') {
+            return '';
+        }
+        $edge = '\p{Z}\x{200B}\x{200C}\x{200D}\x{FEFF}';
+        $s = (string) \preg_replace('/^['.$edge.']+/u', '', $s);
+        $s = (string) \preg_replace('/['.$edge.']+$/u', '', $s);
+        $s = \trim($s, " \t\n\r\0\x0B");
+
+        return $s;
+    }
+
+    /**
      * The full passage from the `context` tag (one tag may split across many values in some clients).
      */
     public static function contextFromTags(array $tags): string
@@ -510,15 +528,18 @@ final class HighlightEventTags
      */
     public static function excerptForFeed(string $content, array $tags): string
     {
-        $c = \trim((string) $content);
-        if ($c !== '') {
-            return \mb_substr($c, 0, 400);
+        $raw = (string) $content;
+        if ($raw !== '') {
+            $c = self::trimNostrText($raw);
+            if ($c !== '') {
+                return \mb_substr($c, 0, 400);
+            }
         }
-        $ctx = \trim(self::contextFromTags($tags));
+        $ctx = self::trimNostrText(self::contextFromTags($tags));
         if ($ctx !== '') {
             return \mb_substr($ctx, 0, 400);
         }
-        $tq = \trim(self::excerptFromTextquoteselectorTags($tags));
+        $tq = self::trimNostrText(self::excerptFromTextquoteselectorTags($tags));
 
         return $tq !== '' ? $tq : '';
     }

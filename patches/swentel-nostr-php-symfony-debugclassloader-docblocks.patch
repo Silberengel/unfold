@@ -1,0 +1,22 @@
+--- a/src/EventInterface.php	2026-04-27 18:53:54.019977813 +0200
++++ b/src/EventInterface.php	2026-04-27 18:53:54.021843273 +0200
+@@ -109,7 +109,7 @@
+     /**
+      * Set the event tags with values.
+      *
+-     * @param array $tags[]
++     * @param array $tags
+      *   [
+      *     ["e", "..."],
+      *     ["p", "...", "..."],
+--- a/src/RelaySetInterface.php	2026-04-27 18:53:54.021655232 +0200
++++ b/src/RelaySetInterface.php	2026-04-27 18:53:54.023843373 +0200
+@@ -54,7 +54,7 @@
+     /**
+      * Connect to all relays in this set.
+      *
+-     * @param bool $throwOnErrorx
++     * @param bool $throwOnError
+      *   If true, throw an exception if any relay fails to connect.
+      *   If false, return false if any relay fails to connect.
+      * @return bool

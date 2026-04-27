@@ -10,6 +10,7 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "ext-openssl": "*",
+        "cweagans/composer-patches": "^1.7",
         "doctrine/dbal": "^4.2",
         "doctrine/doctrine-bundle": "^2.13",
         "doctrine/doctrine-migrations-bundle": "^3.3",
@@ -18,7 +19,6 @@
         "laminas/laminas-diactoros": "^3.6",
         "league/commonmark": "^2.7",
         "league/html-to-markdown": "*",
-        "nostriphant/nip-19": "^2.0",
         "phpdocumentor/reflection-docblock": "^5.6",
         "phpstan/phpdoc-parser": "^2.0",
         "runtime/frankenphp-symfony": "^0.2.0",
@@ -58,7 +58,8 @@
             "php-http/discovery": true,
             "symfony/flex": true,
             "symfony/runtime": true,
-            "endroid/installer": true
+            "endroid/installer": true,
+            "cweagans/composer-patches": true
         },
         "sort-packages": true
     },
@@ -106,6 +107,11 @@
         },
         "runtime": {
             "dotenv_overload": false
+        },
+        "patches": {
+            "swentel/nostr-php": {
+                "Fix PHPDoc for Symfony ErrorHandler (setTags, connect)": "patches/swentel-nostr-php-symfony-debugclassloader-docblocks.patch"
+            }
         }
     },
     "require-dev": {

@@ -2,14 +2,18 @@
 
 namespace App\Util\CommonMark\NostrSchemeExtension;
 
+use App\Nostr\Nip19Codec;
 use League\CommonMark\Node\Node;
 use League\CommonMark\Renderer\ChildNodeRendererInterface;
 use League\CommonMark\Renderer\NodeRendererInterface;
 use League\CommonMark\Util\HtmlElement;
-use nostriphant\NIP19\Bech32;
 
 class NostrEventRenderer implements NodeRendererInterface
 {
+    public function __construct(
+        private readonly Nip19Codec $nip19,
+    ) {
+    }
     public function render(Node $node, ChildNodeRendererInterface $childRenderer)
     {
         if (!($node instanceof NostrSchemeData)) {
@@ -28,7 +32,7 @@ class NostrEventRenderer implements NodeRendererInterface
     {
         $bech = $node->getSpecial();
         try {
-            $decoded = new Bech32($bech);
+            $decoded = $this->nip19->decode($bech);
             $payload = json_decode(json_encode($decoded->data), true, 512, JSON_THROW_ON_ERROR);
             $decodedJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         } catch (\Throwable) {

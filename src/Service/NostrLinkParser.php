@@ -2,7 +2,7 @@
 
 namespace App\Service;
 
-use nostriphant\NIP19\Bech32;
+use App\Nostr\Nip19Codec;
 use Psr\Log\LoggerInterface;
 
 readonly class NostrLinkParser
@@ -12,7 +12,8 @@ readonly class NostrLinkParser
     private const URL_PATTERN = '/https?:\/\/[\w\-\.\?\,\'\/\\\+&%@\?\$#_=:\(\)~;]+/i';
 
     public function __construct(
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private Nip19Codec $nip19,
     ) {}
 
     /**
@@ -83,7 +84,7 @@ readonly class NostrLinkParser
                 if (preg_match(self::NOSTR_LINK_PATTERN, $url, $nostrMatch)) {
                     $nostrId = $nostrMatch[1];
                     try {
-                        $decoded = new Bech32($nostrId);
+                        $decoded = $this->nip19->decode($nostrId);
                         $nostrType = $decoded->type;
                         $nostrData = $decoded->data;
                     } catch (\Exception $e) {
@@ -150,7 +151,7 @@ readonly class NostrLinkParser
                 $position = $match[0][1];
                 // This check will be handled in parseLinks by sorting and merging
                 try {
-                    $decoded = new Bech32($identifier);
+                    $decoded = $this->nip19->decode($identifier);
                     $links[] = [
                         'type' => $decoded->type,
                         'identifier' => $identifier,
@@ -179,7 +180,7 @@ readonly class NostrLinkParser
                 $position = $match[0][1];
                 $identifier = ltrim($raw, '@');
                 try {
-                    $decoded = new Bech32($identifier);
+                    $decoded = $this->nip19->decode($identifier);
                     if (!\in_array($decoded->type, ['naddr', 'nevent'], true)) {
                         continue;
                     }

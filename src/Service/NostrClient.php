@@ -10,7 +10,6 @@ use App\Enum\KindsEnum;
 use App\Factory\ArticleFactory;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
-use nostriphant\NIP19\Data;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Event\Event;
 use swentel\nostr\Filter\Filter;
@@ -29,9 +28,6 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 class NostrClient
 {
-    /** Per-relay WebSocket I/O cap (seconds), applied on each relay’s {@see \WebSocket\Client}. */
-    private const RELAY_REQUEST_TIMEOUT_SEC = 15;
-
     /** Extra wall time for {@see bin/nostr_relay_request_worker.php} process vs. WebSocket timeout. */
     private const DISCUSSION_WORKER_GRACE_SEC = 5.0;
     /** Soft wall-time for parallel discussion collection before returning partial results. */
@@ -56,8 +52,9 @@ class NostrClient
     private const MAX_PROFILE_SEQUENTIAL_RELAY_URLS = 3;
 
     /**
-     * {@see sendArticleDiscussionToRelaysSequential} visits relays one after another (~RELAY_REQUEST_TIMEOUT_SEC
-     * each). Keep this low so HTTP /fragment/comments and browsers do not hit 60–90s proxy cuts.
+     * {@see sendArticleDiscussionToRelaysSequential} visits relays one after another
+     * (~{@see NostrClient::$relayRequestTimeoutSec} s each). Keep this low so HTTP /fragment/comments
+     * and browsers do not hit 60–90s proxy cuts.
      */
     private const MAX_SEQUENTIAL_RELAY_URLS = 3;
 
@@ -75,6 +72,7 @@ class NostrClient
     /**
      * @param list<string> $articleRelayUrls extra relays for the default set (default_relay is always first)
      * @param list<string> $profileRelayUrls  kind-0 / profile; merged for metadata (see {@see profileMetadataQueryRelayUrlList()})
+     * @param int          $relayRequestTimeoutSec  Per-relay WebSocket I/O cap (see `nostr_relay_request_timeout_sec` in `config/unfold.yaml`)
      */
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -87,6 +85,7 @@ class NostrClient
         private readonly array $profileRelayUrls,
         private readonly CacheInterface $relayQueryCache,
         private readonly string $projectDir,
+        private readonly int $relayRequestTimeoutSec = 12,
     ) {
         $this->defaultRelaySet = $this->buildArticleRelaySet();
     }
@@ -249,7 +248,7 @@ class NostrClient
         $request = new Request($relaySet, $requestMessage);
         // 1.9.4+: Request::setTimeout() drives getResponseFromRelay(). Older: only WebSocket client on Relay.
         if (method_exists($request, 'setTimeout')) {
-            $request->setTimeout(self::RELAY_REQUEST_TIMEOUT_SEC);
+            $request->setTimeout($this->relayRequestTimeoutSec);
         } else {
             $this->applyRelaySocketTimeoutToSet($relaySet);
         }
@@ -265,7 +264,7 @@ class NostrClient
         foreach ($relaySet->getRelays() as $relay) {
             $client = $relay->getClient();
             if (method_exists($client, 'setTimeout')) {
-                $client->setTimeout(self::RELAY_REQUEST_TIMEOUT_SEC);
+                $client->setTimeout($this->relayRequestTimeoutSec);
             }
         }
     }
@@ -1586,7 +1585,8 @@ class NostrClient
     {
         $worker = $this->projectDir.'/bin/nostr_relay_request_worker.php';
         $phpBinary = (new PhpExecutableFinder())->find() ?: 'php';
-        $timeout = self::RELAY_REQUEST_TIMEOUT_SEC + (int) self::DISCUSSION_WORKER_GRACE_SEC;
+        $timeout = $this->relayRequestTimeoutSec + (int) self::DISCUSSION_WORKER_GRACE_SEC;
+        $workerTimeoutEnv = ['NOSTR_RELAY_REQUEST_TIMEOUT' => (string) $this->relayRequestTimeoutSec];
 
         $rawPayload = serialize($requestMessage);
         $tmp = tempnam(sys_get_temp_dir(), 'nrq_');
@@ -1611,7 +1611,7 @@ class NostrClient
                     null,
                     (float) $timeout
                 );
-                $p->start();
+                $p->start(null, $workerTimeoutEnv);
                 $procs[$wss] = $p;
             }
 
@@ -2530,7 +2530,6 @@ class NostrClient
         // Descriptor is an stdClass with properties: type and decoded
         if (is_object($descriptor) && isset($descriptor->type, $descriptor->decoded)) {
             // construct a request from the descriptor to fetch the event
-            /** @var Data $ata */
             $data = json_decode($descriptor->decoded);
             if (!\is_object($data)) {
                 $this->logger->error('Invalid descriptor decoded JSON', ['descriptor' => $descriptor]);

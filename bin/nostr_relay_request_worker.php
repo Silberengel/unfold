@@ -46,8 +46,12 @@ if (!\is_object($msg) || !($msg instanceof \swentel\nostr\Message\RequestMessage
 $relaySet = new \swentel\nostr\Relay\RelaySet();
 $relaySet->addRelay(new \swentel\nostr\Relay\Relay($relayUrl));
 $request = new \swentel\nostr\Request\Request($relaySet, $msg);
+$relayTimeout = (int) (getenv('NOSTR_RELAY_REQUEST_TIMEOUT') ?: 12);
+if ($relayTimeout < 1) {
+    $relayTimeout = 12;
+}
 if (method_exists($request, 'setTimeout')) {
-    $request->setTimeout(15);
+    $request->setTimeout($relayTimeout);
 }
 
 try {
