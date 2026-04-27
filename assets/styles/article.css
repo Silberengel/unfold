@@ -448,8 +448,23 @@
     -webkit-box-decoration-break: clone;
 }
 
-.article-main mark.user-highlight__marker {
+.article-main mark.user-highlight__marker,
+.article-main .user-highlight__fragment-target {
     scroll-margin-top: calc(var(--site-fixed-header-offset, 140px) + 0.75rem);
+}
+
+/* Invisible #highlight-{eid} anchors (same group as an older mark) — zero visual footprint. */
+.article-main .user-highlight__fragment-target {
+    display: inline;
+    font-size: 0;
+    line-height: 0;
+    width: 0.01em;
+    height: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    vertical-align: baseline;
 }
 
 /* When `content` is not a substring of `context` (rare) */

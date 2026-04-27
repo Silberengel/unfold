@@ -2,8 +2,8 @@
 
 namespace App\Security;
 
-use App\Entity\Event;
 use Mdanter\Ecc\Crypto\Signature\SchnorrSignature;
+use swentel\nostr\Event\Event;
 use swentel\nostr\Key\Key;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,9 +13,6 @@ use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\InteractiveAuthenticatorInterface;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
-use Symfony\Component\Serializer\Encoder\JsonEncoder;
-use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
-use Symfony\Component\Serializer\Serializer;
 
 /**
  * Authenticator for Nostr protocol-based authentication.
@@ -57,15 +54,31 @@ class NostrAuthenticator extends AbstractAuthenticator implements InteractiveAut
         }
 
         $eventStr = base64_decode(substr($authHeader, 6), true);
-        $encoders = [new JsonEncoder()];
-        $normalizers = [new ObjectNormalizer()];
-        $serializer = new Serializer($normalizers, $encoders);
-        /** @var Event $event */
-        $event = $serializer->deserialize($eventStr, Event::class, 'json');
+        if (false === $eventStr) {
+            throw new AuthenticationException('Invalid Authorization header');
+        }
+        try {
+            $data = json_decode($eventStr, false, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new AuthenticationException('Invalid Authorization header');
+        }
+        if (!\is_object($data) || !isset(
+            $data->id, $data->pubkey, $data->created_at, $data->kind, $data->content, $data->sig
+        )) {
+            throw new AuthenticationException('Invalid Authorization header');
+        }
+        if (!isset($data->tags) || !\is_array($data->tags)) {
+            $data->tags = [];
+        }
+        $event = (new Event())->populate($data);
         if (time() > $event->getCreatedAt() + 60) {
             throw new AuthenticationException('Expired');
         }
-        $validity = (new SchnorrSignature())->verify($event->getPubkey(), $event->getSig(), $event->getId());
+        $validity = (new SchnorrSignature())->verify(
+            $event->getPublicKey(),
+            $event->getSignature(),
+            $event->getId()
+        );
         if (!$validity) {
             throw new AuthenticationException('Invalid Authorization header');
         }
@@ -73,7 +86,7 @@ class NostrAuthenticator extends AbstractAuthenticator implements InteractiveAut
         $key = new Key();
 
         return new SelfValidatingPassport(
-            new UserBadge($key->convertPublicKeyToBech32($event->getPubkey()))
+            new UserBadge($key->convertPublicKeyToBech32($event->getPublicKey()))
         );
     }
 

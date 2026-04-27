@@ -118,6 +118,43 @@ export default class extends Controller {
             }
         };
         window.addEventListener('resize', this._onResize);
+
+        this._onHashChange = () => {
+            this._scrollToHashHighlight();
+        };
+        window.addEventListener('hashchange', this._onHashChange);
+        this._scrollToHashHighlight();
+    }
+
+    /**
+     * Browsers are inconsistent about scrolling to #highlight-<event id> (inline marks, alias spans,
+     * late layout). Mirror native intent after paint.
+     */
+    _scrollToHashHighlight() {
+        const hash = window.location.hash;
+        if (!hash?.startsWith('#highlight-')) {
+            return;
+        }
+        const id = decodeURIComponent(hash.slice(1));
+        if (!/^highlight-[a-f0-9]{64}$/i.test(id)) {
+            return;
+        }
+        const run = () => {
+            const node = document.getElementById(id);
+            if (!(node instanceof HTMLElement)) {
+                return;
+            }
+            const next = node.nextElementSibling;
+            const target =
+                node.classList.contains('user-highlight__fragment-target') &&
+                next?.classList?.contains('user-highlight__marker')
+                    ? next
+                    : node;
+            target.scrollIntoView({ block: 'start', inline: 'nearest' });
+        };
+        requestAnimationFrame(() => {
+            requestAnimationFrame(run);
+        });
     }
 
     disconnect() {
@@ -126,6 +163,9 @@ export default class extends Controller {
         this.element.removeEventListener('focusin', this._onFocus);
         this.element.removeEventListener('focusout', this._onBlur);
         window.removeEventListener('resize', this._onResize);
+        if (this._onHashChange) {
+            window.removeEventListener('hashchange', this._onHashChange);
+        }
         this._cancelHide();
         this.tip.remove();
     }

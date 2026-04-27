@@ -132,6 +132,14 @@ final class HighlightEventTags
      * Same character normalization as {@see \App\Service\ArticleBodyHighlightInjector} so
      * `content` can match the `context` tag when Unicode (NBSP, soft hyphen, etc.) differs — NIP-84
      * requires `content` to be a substring of the passage, but clients often diverge on code points.
+     *
+     * Newlines and Unicode line/paragraph separators are removed: Nostr `context` often contains
+     * `\\n` between sentences, while the article DOM’s flattened text has no line breaks at block
+     * boundaries, so they must not break matching.
+     *
+     * Smart punctuation (curly quotes, en/em dash, Unicode ellipsis) is folded to ASCII so the
+     * article HTML from {@see \League\CommonMark\Extension\SmartPunct\SmartPunctExtension} still
+     * matches highlight `content` copied with straight quotes from the source article.
      */
     public static function stringForSearch(string $s): string
     {
@@ -318,6 +326,15 @@ final class HighlightEventTags
 
     private static function searchCharacterNormalized(string $ch): string
     {
+        if ($ch === "\n" || $ch === "\r" || $ch === "\f" || $ch === "\v") {
+            return '';
+        }
+        if ($ch === "\xC2\x85") { // U+0085 (NEL)
+            return '';
+        }
+        if ($ch === "\xE2\x80\xA8" || $ch === "\xE2\x80\xA9") { // U+2028 LINE, U+2029 PARA separator
+            return '';
+        }
         if ($ch === "\xC2\xAD") { // U+00AD soft hyphen
             return '';
         }
@@ -332,6 +349,19 @@ final class HighlightEventTags
             || $ch === "\xE2\x80\xAF" // U+202F narrow no-break
         ) {
             return ' ';
+        }
+        // CommonMark SmartPunct / e-book typography → match Nostr `content` with ASCII punctuation
+        if ($ch === "\xE2\x80\x99" || $ch === "\xE2\x80\x98") { // U+2019, U+2018
+            return "'";
+        }
+        if ($ch === "\xE2\x80\x9C" || $ch === "\xE2\x80\x9D") { // U+201C, U+201D
+            return '"';
+        }
+        if ($ch === "\xE2\x80\x93" || $ch === "\xE2\x80\x94") { // en dash, em dash
+            return '-';
+        }
+        if ($ch === "\xE2\x80\xA6") { // U+2026 HORIZONTAL ELLIPSIS
+            return '...';
         }
 
         return $ch;

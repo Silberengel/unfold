@@ -13,11 +13,17 @@ use DOMXPath;
 use swentel\nostr\Key\Key;
 
 /**
- * Injects kind-9802 highlight ranges into the rendered article body by finding each event’s
- * `content` in the visible text (the `context` tag is ignored; the article is the full context).
- * Matches across inline elements (e.g. em, strong) by concatenating text in document order.
- * If a literal match fails, compares a normalized form (NBSP→space, strip U+00AD / ZW, etc.),
- * then maps the match back to the original HTML text (for e‑book style soft hyphens in 9802 content).
+ * Injects kind-9802 highlight marks into the rendered article body by searching the visible text
+ * in NIP-84 order: event `content` (highlighted span) first, then the `context` tag when present and
+ * non-empty, then `textquoteselector` passage. The first string that matches the body wins.
+ * Matches across inline elements (e.g. em, strong) by concatenating text in document order. Text
+ * inside a prior `mark.user-highlight__marker` is still considered so a narrower 9802 can
+ * be nested and receive its own fragment id (deep link from the landing aside).
+ * If a literal match fails, compares a normalized form (NBSP→space, strip U+00AD / ZW, line breaks,
+ * etc.) via {@see HighlightEventTags::stringForSearch}, then maps the match back to the original
+ * HTML text (for e‑book style soft hyphens in 9802 content). CommonMark footnote callouts
+ * (League CommonMark `sup#fnref…`) are ignored for matching so “realm 1 always” in the DOM does not
+ * block a NIP-84 passage that says “realm always”.
  */
 final class ArticleBodyHighlightInjector
 {
@@ -28,7 +34,7 @@ final class ArticleBodyHighlightInjector
     private ?DOMElement $root = null;
 
     public function __construct(
-        private readonly CacheService $cacheService,
+        private readonly HighlightAuthorMetadataProvider $highlightAuthorMetadata,
     ) {
     }
 
@@ -186,17 +192,89 @@ final class ArticleBodyHighlightInjector
             return [];
         }
         $authorJson = $this->buildHighlightAuthorsJson($group);
-        $resolved = $this->resolveInjectionNeedle($first);
-        foreach ($this->needleSearchVariants($resolved) as $needle) {
-            if ($needle === '') {
-                continue;
-            }
-            if ($this->tryWrapInDocument($root, $needle, $eid, $authorJson)) {
-                return $outEids;
+        $bases = $this->injectionNeedleBasesInPriority($first);
+        if ($bases === []) {
+            return [];
+        }
+        foreach ($bases as $base) {
+            foreach ($this->needleSearchVariants($base) as $needle) {
+                if ($needle === '') {
+                    continue;
+                }
+                if ($this->tryWrapInDocument($root, $needle, $eid, $authorJson)) {
+                    $this->addFragmentIdAliasesForHighlightGroup($eid, $outEids);
+
+                    return $outEids;
+                }
             }
         }
 
         return [];
+    }
+
+    /**
+     * One <mark> per passage group, with id highlight-{oldest eid}. The landing aside links each
+     * 9802 by that row's event id, so we add zero-footprint #highlight-{id} spans for every other
+     * event in the same group (same place in the text as the mark).
+     *
+     * @param list<string> $outEids lowercase 64-hex, includes $canonicalEid; first is the oldest
+     */
+    private function addFragmentIdAliasesForHighlightGroup(string $canonicalEid, array $outEids): void
+    {
+        if (\count($outEids) < 2) {
+            return;
+        }
+        $mark = $this->getHighlightMarkElementById('highlight-'.$canonicalEid);
+        if (null === $mark) {
+            return;
+        }
+        $parent = $mark->parentNode;
+        if (null === $parent) {
+            return;
+        }
+        foreach ($outEids as $other) {
+            if ($other === $canonicalEid) {
+                continue;
+            }
+            if (64 !== \strlen($other) || !ctype_xdigit($other)) {
+                continue;
+            }
+            if ($this->getHighlightMarkElementById('highlight-'.$other) !== null) {
+                continue;
+            }
+            $span = $this->dom->createElement('span');
+            if (false === $span) {
+                continue;
+            }
+            $span->setAttribute('id', 'highlight-'.$other);
+            $span->setAttribute('class', 'user-highlight__fragment-target');
+            $span->setAttribute('aria-hidden', 'true');
+            $span->appendChild($this->dom->createTextNode("\u{200B}"));
+            $parent->insertBefore($span, $mark);
+        }
+    }
+
+    private function getHighlightMarkElementById(string $id): ?DOMElement
+    {
+        if (null === $this->root || $id === '') {
+            return null;
+        }
+        $el = $this->dom->getElementById($id);
+        if ($el instanceof DOMElement) {
+            return $el;
+        }
+        if (! \preg_match('/^highlight-[a-f0-9]{64}$/D', $id)) {
+            return null;
+        }
+        $xp = new DOMXPath($this->dom);
+        $q = '//*[@id="'.(string) $id.'"]';
+        $nodes = $xp->query($q, $this->root);
+        if (false === $nodes || 0 === $nodes->length) {
+            return null;
+        }
+        $n = $nodes->item(0);
+
+        return $n instanceof DOMElement ? $n : null;
     }
 
     /**
@@ -208,13 +286,13 @@ final class ArticleBodyHighlightInjector
     {
         $buckets = [];
         foreach ($sorted as $h) {
-            $resolved = $this->resolveInjectionNeedle($h);
-            if ($resolved === '') {
+            $primary = $this->primaryNeedleForGrouping($h);
+            if ($primary === '') {
                 continue;
             }
-            $key = HighlightEventTags::stringForSearch(\trim($resolved));
+            $key = HighlightEventTags::stringForSearch($primary);
             if ($key === '') {
-                $key = 'x'.\md5($resolved);
+                $key = 'x'.\md5($primary);
             }
             if (!isset($buckets[$key])) {
                 $buckets[$key] = [];
@@ -264,7 +342,7 @@ final class ArticleBodyHighlightInjector
             $name = '';
             $pic = '';
             try {
-                $meta = $this->cacheService->getMetadata($npub);
+                $meta = $this->highlightAuthorMetadata->getMetadata($npub);
                 if (isset($meta->display_name) && \is_string($meta->display_name) && $meta->display_name !== '') {
                     $name = $meta->display_name;
                 } elseif (isset($meta->name) && \is_string($meta->name) && $meta->name !== '') {
@@ -288,14 +366,37 @@ final class ArticleBodyHighlightInjector
         return \json_encode(\array_values($byNpub), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
     }
 
-    private function resolveInjectionNeedle(ArticleHighlight $h): string
+    /**
+     * Same priority as the card: event `content` (NIP-84 sub-span) first; if empty, `context` tag; if
+     * still empty, `textquoteselector` passage. Article injection tries each in order until one
+     * matches the rendered body (so a highlight with only `textquoteselector` still inlines a mark).
+     */
+    private function primaryNeedleForGrouping(ArticleHighlight $h): string
+    {
+        $b = $this->injectionNeedleBasesInPriority($h);
+
+        return $b[0] ?? '';
+    }
+
+    /**
+     * @return list<string> unique non-empty strings, highest priority first
+     */
+    private function injectionNeedleBasesInPriority(ArticleHighlight $h): array
     {
         $c = \trim($h->getContent());
-        if ($c !== '') {
-            return $c;
+        $ctx = \trim(HighlightEventTags::contextFromTags($h->getTags()));
+        $tq = \trim(HighlightEventTags::textquoteselectorPassageFromTags($h->getTags()));
+        $out = [];
+        $seen = [];
+        foreach ([$c, $ctx, $tq] as $s) {
+            if ($s === '' || isset($seen[$s])) {
+                continue;
+            }
+            $seen[$s] = true;
+            $out[] = $s;
         }
 
-        return \trim(HighlightEventTags::contextFromTags($h->getTags()));
+        return $out;
     }
 
     /**
@@ -312,6 +413,14 @@ final class ArticleBodyHighlightInjector
             $base,
             $this->replaceTypographicQuotes($base),
         ];
+        $noLineBreaks = (string) \preg_replace('/\R/u', '', $base);
+        if ($noLineBreaks !== $base && $noLineBreaks !== '') {
+            $candidates[] = $noLineBreaks;
+        }
+        $nEnd = (string) \preg_replace('/[.!?…,;:]+$/u', '', $base);
+        if ($nEnd !== $base && $nEnd !== '') {
+            $candidates[] = $nEnd;
+        }
         if (\class_exists(\Normalizer::class)) {
             $c = \Normalizer::normalize($base, \Normalizer::FORM_C);
             if (\is_string($c) && $c !== '' && $c !== $base) {
@@ -460,13 +569,47 @@ final class ArticleBodyHighlightInjector
     private function shouldNotDescendInto(DOMElement $c): bool
     {
         $n = $c->nodeName;
-
-        return 'script' === $n
+        if ('script' === $n
             || 'style' === $n
             || 'pre' === $n
             || 'textarea' === $n
-            || 'code' === $n
-            || 'mark' === $n;
+            || 'code' === $n) {
+            return true;
+        }
+        if ('div' === $n && $this->isFootnotesOrEndnotesElement($c)) {
+            // End-of-article footnote list (League CommonMark): must not mix into the body search string
+            // or after main content, which would desync “flat text” from NIP-84 passages.
+            return true;
+        }
+        if ('sup' === $n && $this->isFootnoteCalloutElement($c)) {
+            // Inline [^ref] callouts: skip the superscript so "realm" + "1" + " always" does not
+            // break matching "realm always" from kind-9802 `content` (cards use raw Nostr, not the DOM).
+            return true;
+        }
+        if ('mark' === $n) {
+            $cl = (string) $c->getAttribute('class');
+
+            return ! \str_contains($cl, 'user-highlight__marker');
+        }
+
+        return false;
+    }
+
+    private function isFootnoteCalloutElement(DOMElement $c): bool
+    {
+        $id = (string) $c->getAttribute('id');
+
+        return $id !== '' && \str_starts_with($id, 'fnref');
+    }
+
+    private function isFootnotesOrEndnotesElement(DOMElement $c): bool
+    {
+        if (\str_contains((string) $c->getAttribute('class'), 'footnotes')
+            || $c->getAttribute('role') === 'doc-endnotes') {
+            return true;
+        }
+
+        return false;
     }
 
     private function isSafeTextContext(DOMText $textNode): bool
@@ -484,11 +627,12 @@ final class ArticleBodyHighlightInjector
             if ('code' === $n) {
                 return false;
             }
-            if ('mark' === $n) {
-                $cl = (string) $p->getAttribute('class');
-                if (\str_contains($cl, 'user-highlight__marker')) {
-                    return false;
-                }
+            if (('div' === $n && $this->isFootnotesOrEndnotesElement($p))
+                || ('sup' === $n && $this->isFootnoteCalloutElement($p))) {
+                return false;
+            }
+            if ('a' === $n && \str_contains((string) $p->getAttribute('class'), 'footnote-ref')) {
+                return false;
             }
             $p = $p->parentNode;
         }

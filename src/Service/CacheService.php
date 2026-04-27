@@ -11,7 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use swentel\nostr\Key\Key;
 
-readonly class CacheService
+readonly class CacheService implements HighlightAuthorMetadataProvider
 {
     public function __construct(
         private NostrClient $nostrClient,

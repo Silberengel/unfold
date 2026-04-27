@@ -12,6 +12,9 @@ parameters:
     env(TRUSTED_PROXIES): '127.0.0.0/8,::1'
 
 services:
+    App\Service\HighlightAuthorMetadataProvider:
+        alias: App\Service\CacheService
+
     # default configuration for services in *this* file
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
@@ -62,3 +65,9 @@ services:
     App\Service\Nip05VerificationService:
         arguments:
             $appCache: '@cache.app'
+
+when@test:
+    services:
+        Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:
+            class: Symfony\Component\HttpFoundation\Session\Storage\Handler\NativeFileSessionHandler
+            arguments: ['%kernel.project_dir%/var/sessions_test']
