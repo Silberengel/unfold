@@ -67,10 +67,14 @@ export default class extends Controller {
             return;
         }
         this.setHint('Preparing event…');
+        const tags = [...this._tags];
+        if (!tags.some((t) => Array.isArray(t) && t[0] === 'client')) {
+            tags.push(['client', 'Decent Newsroom']);
+        }
         const unsigned = {
             kind: 1111,
             created_at: Math.floor(Date.now() / 1000),
-            tags: this._tags,
+            tags,
             // Keep user-authored content clean; reply context is encoded in NIP-22 tags.
             content: text,
         };
