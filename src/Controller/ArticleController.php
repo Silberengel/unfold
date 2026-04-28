@@ -7,6 +7,7 @@ use App\Repository\ArticleHighlightRepository;
 use App\Repository\ArticleRepository;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Enum\KindsEnum;
+use App\Nostr\Nip10Kind1ArticleReplyTags;
 use App\Nostr\Nip22CommentTags;
 use App\Form\EditorType;
 use App\Service\ArticleCommentThreadLoader;
@@ -174,7 +175,7 @@ class ArticleController  extends AbstractController
                     continue;
                 }
                 $k = (int) ($row->kind ?? 0);
-                if ($k !== KindsEnum::COMMENTS->value) {
+                if ($k !== KindsEnum::COMMENTS->value && $k !== KindsEnum::TEXT_NOTE->value) {
                     continue;
                 }
                 $cid = strtolower(trim((string) ($row->id ?? '')));
@@ -198,7 +199,17 @@ class ArticleController  extends AbstractController
                     $snippet = 'Comment';
                 }
                 try {
-                    $expectedTags = Nip22CommentTags::forReplyToComment($cid, $cpk, $k, $rawTags);
+                    if ($k === KindsEnum::COMMENTS->value) {
+                        $expectedTags = Nip22CommentTags::forReplyToComment($cid, $cpk, $k, $rawTags);
+                    } else {
+                        $expectedTags = Nip10Kind1ArticleReplyTags::forReplyToKind1(
+                            $cid,
+                            $cpk,
+                            $rawTags,
+                            $coordinate,
+                            $articleEventId
+                        );
+                    }
                 } catch (\Throwable) {
                     continue;
                 }

@@ -17,7 +17,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class CommentReplyController extends AbstractController
 {
     /**
-     * Accepts a NIP-07–signed kind-1111 event (JSON) and publishes it to configured article relays.
+     * Accepts a NIP-07–signed kind-1111 (NIP-22) or kind-1 (NIP-10) article-thread event (JSON) and publishes it to configured relays.
      *
      * @see \App\Service\CommentReplyService
      */

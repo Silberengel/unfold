@@ -1,7 +1,7 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * NIP-22 kind-1111 reply: optional collapsed panel (Reply button), sign with NIP-07, POST, refresh thread.
+ * Article-thread reply: NIP-22 kind 1111 (default) or legacy kind 1 when the parent is kind 1. Sign with NIP-07, POST, refresh thread.
  */
 export default class extends Controller {
     static targets = ['hint', 'panel', 'toggleBtn'];
@@ -63,7 +63,7 @@ export default class extends Controller {
             return;
         }
         if (this._tags.length === 0) {
-            this.setHint('Missing NIP-22 tag template.');
+            this.setHint('Missing tag template for this reply.');
             return;
         }
         this.setHint('Preparing event…');
@@ -71,11 +71,13 @@ export default class extends Controller {
         if (!tags.some((t) => Array.isArray(t) && t[0] === 'client')) {
             tags.push(['client', 'Decent Newsroom']);
         }
+        const parentKindNum = parseInt(String(this.parentKindValue), 10);
+        const eventKind = parentKindNum === 1 ? 1 : 1111;
         const unsigned = {
-            kind: 1111,
+            kind: eventKind,
             created_at: Math.floor(Date.now() / 1000),
             tags,
-            // Keep user-authored content clean; reply context is encoded in NIP-22 tags.
+            // Reply context is encoded in tags (NIP-22 or NIP-10).
             content: text,
         };
         let signed;

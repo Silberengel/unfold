@@ -47,7 +47,7 @@
                     </div>
                 </div>
             {% endif %}
-            {% if ctx and ctx.can_publish|default(false) and item.kind|default(0) == 1111 %}
+            {% if ctx and ctx.can_publish|default(false) and (item.kind|default(0) == 1111 or item.kind|default(0) == 1) %}
                 {% for row in ctx.rows|default([]) %}
                     {% if row.mode|default('') == 'comment' and row.parentId|default('') == cid %}
                         <div
@@ -89,7 +89,7 @@
                                             rows="3"
                                             required
                                             minlength="1"
-                                            placeholder="NIP-22 comment; parent quote line is added on publish…"
+                                            placeholder="Plain-text reply (kind 1111 or 1); tags are built for you…"
                                         ></textarea>
                                     </div>
                                     <div class="comment-reply__actions">

@@ -10,7 +10,7 @@ use Psr\Log\LoggerInterface;
 use swentel\nostr\Event\Event as NostrWireEvent;
 
 /**
- * Validates NIP-22 kind-1111 comment events from logged-in users and publishes to article relays.
+ * Validates NIP-22 kind-1111 and legacy kind-1 article-thread replies from logged-in users and publishes to article relays.
  */
 final readonly class CommentReplyService
 {
@@ -63,8 +63,9 @@ final readonly class CommentReplyService
             return ['ok' => false, 'error' => 'Invalid or unverifiable event', 'code' => 400];
         }
 
-        if ($wire->getKind() !== KindsEnum::COMMENTS->value) {
-            return ['ok' => false, 'error' => 'Event must be kind 1111', 'code' => 400];
+        $expectedKind = $this->expectedReplyEventKindForParent($parentKind);
+        if ($wire->getKind() !== $expectedKind) {
+            return ['ok' => false, 'error' => 'Event kind does not match parent context (expected '.$expectedKind.')', 'code' => 400];
         }
 
         $now = time();
@@ -77,8 +78,8 @@ final readonly class CommentReplyService
             return ['ok' => false, 'error' => 'Pubkey does not match logged-in user', 'code' => 403];
         }
 
-        if (!$this->tagsReferenceCoordinate($wire->getTags(), $expectedCoordinate)) {
-            return ['ok' => false, 'error' => 'Tags must include a/A for this article', 'code' => 400];
+        if (!$this->tagsReferenceCoordinate($wire->getTags(), $expectedCoordinate, $wire->getKind())) {
+            return ['ok' => false, 'error' => 'Tags must reference this article (a/A for NIP-22, or e for NIP-10 kind 1)', 'code' => 400];
         }
 
         if (!$this->tagsReferenceParent($wire->getTags(), $expectedCoordinate, $parentKind, $parentId)) {
@@ -93,9 +94,9 @@ final readonly class CommentReplyService
         $articleAuthor = \count($coordBits) >= 2 ? strtolower((string) $coordBits[1]) : '';
         $articleAuthorOk = 64 === \strlen($articleAuthor) && ctype_xdigit($articleAuthor);
 
-        if ((int) $parentKind === KindsEnum::COMMENTS->value) {
+        if (\in_array((int) $parentKind, [KindsEnum::COMMENTS->value, KindsEnum::TEXT_NOTE->value], true)) {
             if (!$clientParentOk) {
-                return ['ok' => false, 'error' => 'parent_author_pubkey (64 hex) is required when replying to a comment', 'code' => 400];
+                return ['ok' => false, 'error' => 'parent_author_pubkey (64 hex) is required when replying to a note', 'code' => 400];
             }
             $parentAuthorHex = $rawParentAuthor;
         } else {
@@ -137,10 +138,21 @@ final readonly class CommentReplyService
         ];
     }
 
+    private function expectedReplyEventKindForParent(int $parentKind): int
+    {
+        if ($parentKind === KindsEnum::TEXT_NOTE->value) {
+            return KindsEnum::TEXT_NOTE->value;
+        }
+
+        return KindsEnum::COMMENTS->value;
+    }
+
     /**
+     * NIP-22 (kind 1111) uses a/A; NIP-10 kind 1 uses e/p only (no address tag) — accept at least one valid e.
+     *
      * @param array<int, mixed> $tags
      */
-    private function tagsReferenceCoordinate(array $tags, string $coordinate): bool
+    private function tagsReferenceCoordinate(array $tags, string $coordinate, int $eventKind): bool
     {
         foreach ($tags as $row) {
             if (!\is_array($row) || ($row[0] ?? null) === null) {
@@ -151,6 +163,33 @@ final readonly class CommentReplyService
                 if (($row[1] ?? '') === $coordinate) {
                     return true;
                 }
+            }
+        }
+        if ($eventKind === KindsEnum::TEXT_NOTE->value) {
+            return $this->hasValidEThreadRef($tags);
+        }
+
+        return false;
+    }
+
+    /**
+     * NIP-10: kind-1 thread replies use e tags (not a).
+     *
+     * @param array<int, mixed> $tags
+     */
+    private function hasValidEThreadRef(array $tags): bool
+    {
+        foreach ($tags as $row) {
+            if (!\is_array($row) || ($row[0] ?? null) === null) {
+                continue;
+            }
+            $n = strtolower((string) $row[0]);
+            if ($n !== 'e') {
+                continue;
+            }
+            $id = isset($row[1]) && \is_string($row[1]) ? strtolower(trim($row[1])) : '';
+            if (64 === \strlen($id) && ctype_xdigit($id)) {
+                return true;
             }
         }
 
@@ -185,7 +224,21 @@ final readonly class CommentReplyService
                     continue;
                 }
                 $n = (string) $row[0];
-                if (($n === 'e' || $n === 'E') && \is_string($row[1] ?? null) && hash_equals($parentIdHex, (string) $row[1])) {
+                if (($n === 'e' || $n === 'E') && \is_string($row[1] ?? null) && hash_equals($parentIdHex, strtolower((string) $row[1]))) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        if ($parentKind === KindsEnum::TEXT_NOTE->value) {
+            $want = strtolower($parentIdHex);
+            foreach ($tags as $row) {
+                if (!\is_array($row) || ($row[0] ?? null) === null) {
+                    continue;
+                }
+                $n = (string) $row[0];
+                if (($n === 'e' || $n === 'E') && \is_string($row[1] ?? null) && hash_equals($want, strtolower((string) $row[1]))) {
                     return true;
                 }
             }
@@ -193,6 +246,6 @@ final readonly class CommentReplyService
             return false;
         }
 
-        return true;
+        return false;
     }
 }
