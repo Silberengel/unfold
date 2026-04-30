@@ -152,6 +152,8 @@ final class MagazineRefresher
             }
         }
 
+        $this->fetchNestedPublicationIndicesUntilDeadline($npub, $deadline, $slugs);
+
         try {
             $this->featuredAuthorSync->reconcileListedAuthorsFromMagazineCategories();
         } catch (\Throwable $e) {
@@ -237,6 +239,63 @@ final class MagazineRefresher
         }
 
         return $slugs;
+    }
+
+    /**
+     * Fetches kind-30040 indices listed inside category indices (sub-sections), until the category
+     * phase deadline. Uses the same relay budget as the primary category loop.
+     *
+     * @param list<string> $rootCategorySlugs Slugs already refreshed in the main loop
+     */
+    private function fetchNestedPublicationIndicesUntilDeadline(string $npub, float $deadline, array $rootCategorySlugs): void
+    {
+        $seen = [];
+        foreach ($rootCategorySlugs as $s) {
+            $seen[trim((string) $s)] = true;
+        }
+        $queue = [];
+        foreach ($rootCategorySlugs as $s) {
+            $cat = $this->store->getCategory(trim((string) $s));
+            if ($cat === null) {
+                continue;
+            }
+            foreach (NostrEventTags::publicationIndexNestedDSlugs($cat->getTags()) as $child) {
+                if (!isset($seen[$child])) {
+                    $seen[$child] = true;
+                    $queue[] = $child;
+                }
+            }
+        }
+        $defaultRelay = (string) $this->params->get('default_relay');
+        $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
+        while ($queue !== [] && microtime(true) < $deadline) {
+            $slug = array_shift($queue);
+            if (!\is_string($slug) || trim($slug) === '') {
+                continue;
+            }
+            try {
+                $cat = $this->nostrClient->getMagazineIndex($npub, $slug);
+                if ($cat !== null) {
+                    $this->store->putCategory($slug, $cat);
+                    foreach (NostrEventTags::publicationIndexNestedDSlugs($cat->getTags()) as $grandchild) {
+                        if (!isset($seen[$grandchild])) {
+                            $seen[$grandchild] = true;
+                            $queue[] = $grandchild;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                $this->logger->error(sprintf(
+                    'MagazineRefresher: nested category fetch failed (relays from %s): %s',
+                    $relayLabel,
+                    $e->getMessage()
+                ), [
+                    'slug' => $slug,
+                    'message' => $e->getMessage(),
+                    'relay' => $defaultRelay,
+                ]);
+            }
+        }
     }
 
     /**

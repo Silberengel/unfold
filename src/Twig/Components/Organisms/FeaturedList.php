@@ -4,6 +4,7 @@ namespace App\Twig\Components\Organisms;
 
 use App\Dto\FeaturedArticleCard;
 use App\Repository\ArticleRepository;
+use App\Service\MagazineContentService;
 use App\Service\MagazineIndexStore;
 use Psr\Cache\InvalidArgumentException;
 use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
@@ -19,6 +20,7 @@ final class FeaturedList
 
     public function __construct(
         private readonly MagazineIndexStore $store,
+        private readonly MagazineContentService $magazineContent,
         private readonly ArticleRepository $articleRepository,
     ) {
     }
@@ -40,28 +42,23 @@ final class FeaturedList
 
         $slug = $parts[2];
 
+        $this->magazineContent->warmCategoryIndexIfMissing($slug);
         $catIndex = $this->store->getCategory($slug);
         if (!\is_object($catIndex) || !\method_exists($catIndex, 'getTags')) {
             return;
         }
 
-        $slugs = [];
         foreach ($catIndex->getTags() as $tag) {
             if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
                 $this->title = (string) $tag[1];
-            }
-            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
-                $segs = explode(':', (string) $tag[1], 3);
-                $slugs[] = trim((string) end($segs));
-                if (\count($slugs) >= 5) {
-                    break;
-                }
             }
         }
 
         if ($this->title === '') {
             $this->title = $slug;
         }
+
+        $slugs = $this->magazineContent->getArticleSlugsFromCategoryIndexCoordinate($this->category, 24);
 
         if ($slugs === []) {
             return;

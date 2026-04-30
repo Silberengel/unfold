@@ -93,15 +93,16 @@ final class MagazineContentService
     }
 
     /**
-     * Category path slugs from the persisted root index (third segment of each category `a` tag).
+     * Category path slugs from the persisted magazine indices: root `a` tags plus any nested kind
+     * 30040 indices reachable from those categories (BFS over stored events only).
      *
      * @return list<string>
      */
     public function getCategorySlugsFromStore(): array
     {
-        $tags = $this->getHomeCategoryAIndexTagsFromStoreOnly();
-        $out = [];
-        foreach ($tags as $row) {
+        $queue = [];
+        $enqueued = [];
+        foreach ($this->getHomeCategoryAIndexTagsFromStoreOnly() as $row) {
             $coord = $row[1] ?? '';
             if (!\is_string($coord) || $coord === '') {
                 continue;
@@ -111,12 +112,61 @@ final class MagazineContentService
                 continue;
             }
             $slug = trim((string) $parts[2]);
-            if ($slug !== '') {
-                $out[] = $slug;
+            if ($slug === '' || isset($enqueued[$slug])) {
+                continue;
+            }
+            $enqueued[$slug] = true;
+            $queue[] = $slug;
+        }
+
+        $out = [];
+        while ($queue !== []) {
+            $slug = array_shift($queue);
+            if (!\is_string($slug) || $slug === '') {
+                continue;
+            }
+            $out[] = $slug;
+            $catIndex = $this->store->getCategory($slug);
+            if ($catIndex === null) {
+                continue;
+            }
+            foreach (NostrEventTags::publicationIndexNestedDSlugs($catIndex->getTags()) as $child) {
+                if (!isset($enqueued[$child])) {
+                    $enqueued[$child] = true;
+                    $queue[] = $child;
+                }
             }
         }
 
-        return array_values(array_unique($out));
+        return $out;
+    }
+
+    /**
+     * Nested kind-30040 section slugs from a parent category index, in `a` tag order, for header nav.
+     *
+     * @return list<array{slug: string, title: string}>
+     */
+    public function getSubcategoryNavItemsForParentSlug(string $parentSlug): array
+    {
+        $parentSlug = trim($parentSlug);
+        if ($parentSlug === '') {
+            return [];
+        }
+        $this->warmCategoryIndexIfMissing($parentSlug);
+        $cat = $this->store->getCategory($parentSlug);
+        if ($cat === null) {
+            return [];
+        }
+        $items = [];
+        foreach (NostrEventTags::publicationIndexNestedDSlugs($cat->getTags()) as $childSlug) {
+            $this->warmCategoryIndexIfMissing($childSlug);
+            $items[] = [
+                'slug' => $childSlug,
+                'title' => $this->getCategoryDisplayTitle($childSlug),
+            ];
+        }
+
+        return $items;
     }
 
     /**
@@ -502,6 +552,10 @@ final class MagazineContentService
             $coordinate = (string) $seq[1];
             $parts = explode(':', $coordinate, 3);
             if (\count($parts) < 3 || trim((string) $parts[2]) === '') {
+                continue;
+            }
+            $kind = (int) ($parts[0] ?? 0);
+            if (!\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
                 continue;
             }
             $out[] = $coordinate;
@@ -895,7 +949,19 @@ final class MagazineContentService
     }
 
     /**
-     * @return list<string> `#d` slugs from kind-30023 `a` tags in category index order (trimmed, non-empty)
+     * Article `#d` slugs for a category "a" coordinate (kind:pubkey:#d), in index order, including
+     * long-form listed under nested kind-30040 indices (those indices are warmed on demand).
+     *
+     * @return list<string>
+     */
+    public function getArticleSlugsFromCategoryIndexCoordinate(string $categoryCoord, int $maxSlugs = 40): array
+    {
+        return $this->slugsFromCategoryCoord($categoryCoord, max(1, $maxSlugs));
+    }
+
+    /**
+     * @return list<string> Article `#d` slugs from kind 30023/30024 `a` tags in index order; follows nested
+     *                       kind-30040 section indices up to {@see $maxDepth} when the store has them.
      */
     private function slugsFromCategoryCoord(string $categoryCoord, int $maxA): array
     {
@@ -906,27 +972,60 @@ final class MagazineContentService
         if (\count($parts) < 3) {
             return [];
         }
-        $slug = $parts[2];
-        $catIndex = $this->store->getCategory($slug);
+        $slug = trim((string) $parts[2]);
+
+        return $this->articleSlugsFromCategoryIndexSlug($slug, $maxA, 0, 4);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function articleSlugsFromCategoryIndexSlug(string $categorySlug, int $maxA, int $depth, int $maxDepth): array
+    {
+        if ($maxA < 1 || $depth > $maxDepth || $categorySlug === '') {
+            return [];
+        }
+        $this->warmCategoryIndexIfMissing($categorySlug);
+        $catIndex = $this->store->getCategory($categorySlug);
         if ($catIndex === null) {
             return [];
         }
         $slugs = [];
         foreach ($catIndex->getTags() as $tag) {
-            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
-                $segs = explode(':', (string) $tag[1], 3);
-                $slugs[] = \trim((string) end($segs));
+            if (($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
+                continue;
+            }
+            $coord = (string) $tag[1];
+            $segs = explode(':', $coord, 3);
+            if (\count($segs) < 3) {
+                continue;
+            }
+            $kind = (int) ($segs[0] ?? 0);
+            $identifier = trim((string) $segs[2]);
+            if ($identifier === '') {
+                continue;
+            }
+            if (\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+                $slugs[] = $identifier;
                 if (\count($slugs) >= $maxA) {
-                    break;
+                    return $slugs;
+                }
+            } elseif ($kind === KindsEnum::PUBLICATION_INDEX->value && $depth < $maxDepth) {
+                foreach ($this->articleSlugsFromCategoryIndexSlug($identifier, $maxA - \count($slugs), $depth + 1, $maxDepth) as $nested) {
+                    $slugs[] = $nested;
+                    if (\count($slugs) >= $maxA) {
+                        return $slugs;
+                    }
                 }
             }
         }
 
-        return \array_values(\array_filter($slugs, static fn (string $s): bool => $s !== ''));
+        return $slugs;
     }
 
     /**
-     * Same resolution as {@see \App\Twig\Components\Organisms\FeaturedList} index tags; at most two cards per category for the home wall.
+     * Same article resolution as {@see \App\Twig\Components\Organisms\FeaturedList} (nested 30040 + long-form);
+     * at most two cards per root category for the home picture wall.
      *
      * @return null|array{title: string, cards: list<FeaturedArticleCard>}
      */
@@ -936,7 +1035,8 @@ final class MagazineContentService
         if (\count($parts) < 3) {
             return null;
         }
-        $slug = $parts[2];
+        $slug = trim((string) $parts[2]);
+        $this->warmCategoryIndexIfMissing($slug);
         $catIndex = $this->store->getCategory($slug);
         if ($catIndex === null) {
             return null;
@@ -975,6 +1075,18 @@ final class MagazineContentService
             if ($articleSlug !== '' && isset($slugMap[$articleSlug])) {
                 $orderedList[] = $slugMap[$articleSlug];
             }
+        }
+        if ($orderedList !== [] && NostrEventTags::publicationIndexNestedDSlugs($catIndex->getTags()) !== []) {
+            \usort($orderedList, function (FeaturedArticleCard $a, FeaturedArticleCard $b): int {
+                if ($this->featuredCardIsNewer($a, $b)) {
+                    return -1;
+                }
+                if ($this->featuredCardIsNewer($b, $a)) {
+                    return 1;
+                }
+
+                return 0;
+            });
         }
         $cards = \array_slice($orderedList, 0, 2);
 

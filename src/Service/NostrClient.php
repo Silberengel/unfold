@@ -1609,8 +1609,8 @@ class NostrClient
      * so callers can use {@see PublicationEventEntity::getTags()} (relay payloads are otherwise stdClass).
      *
      * The magazine root uses the site d_tag from config. Each category uses the full child d
-     * (third segment of the root "a" address). A category 30040 lists 30023 article "a" tags, not
-     * further nested 30040 indices.
+     * (third segment of the root "a" address). A category 30040 lists 30023/30024 article "a" tags
+     * and may also list nested kind-30040 section indices.
      *
      * Tries article relays first; if no 30040 is found, retries on config `profile_relays` not
      * already listed in `article_relays` (see prewarm / category discovery).

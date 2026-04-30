@@ -1,6 +1,46 @@
 {% set nav_active = app.request.attributes.get('_route') == 'magazine-category' and app.request.attributes.get('slug') == slug %}
+{% set sub_active = false %}
+{% for sc in subcategories %}
+    {% if app.request.attributes.get('_route') == 'magazine-category' and app.request.attributes.get('slug') == sc.slug %}
+        {% set sub_active = true %}
+    {% endif %}
+{% endfor %}
+{% set branch_active = nav_active or sub_active %}
+{% if subcategories is empty %}
 <a
-    class="header__cat-link{{ nav_active ? ' header__cat-link--active' : '' }}"
+    class="header__cat-link{{ branch_active ? ' header__cat-link--active' : '' }}"
     href="{{ path('magazine-category', { slug: slug }) }}"
-    {% if nav_active %}aria-current="page"{% endif %}
+    {% if branch_active %}aria-current="page"{% endif %}
 >{{ title }}</a>
+{% else %}
+{% set sub_menu_id = 'mag-nav-sub-' ~ slug|replace({':': '-'}) %}
+<div class="header__nav-dropdown">
+    <a
+        class="header__cat-link header__cat-link--dropdown{{ branch_active ? ' header__cat-link--active' : '' }}"
+        href="{{ path('magazine-category', { slug: slug }) }}"
+        {% if nav_active %}aria-current="page"{% endif %}
+        aria-haspopup="menu"
+        aria-controls="{{ sub_menu_id }}"
+    >
+        <span class="header__nav-dropdown__label">{{ title }}</span>
+        <span class="header__nav-dropdown__chevron" aria-hidden="true"></span>
+    </a>
+    <div class="header__nav-dropdown__panel" id="{{ sub_menu_id }}">
+        <div class="header__nav-dropdown__surface">
+            <ul class="header__nav-dropdown__list" role="menu" aria-label="{{ title }}">
+                {% for sc in subcategories %}
+                    {% set sub_nav_active = app.request.attributes.get('_route') == 'magazine-category' and app.request.attributes.get('slug') == sc.slug %}
+                    <li class="header__nav-dropdown__row" role="none">
+                        <a
+                            role="menuitem"
+                            class="header__nav-dropdown__item{{ sub_nav_active ? ' header__nav-dropdown__item--active' : '' }}"
+                            href="{{ path('magazine-category', { slug: sc.slug }) }}"
+                            {% if sub_nav_active %}aria-current="page"{% endif %}
+                        >{{ sc.title }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}

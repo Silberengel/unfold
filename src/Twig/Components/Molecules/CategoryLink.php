@@ -13,6 +13,9 @@ final class CategoryLink
 
     public string $slug = '';
 
+    /** @var list<array{slug: string, title: string}> */
+    public array $subcategories = [];
+
     public function __construct(
         private readonly MagazineIndexStore $store,
         private readonly MagazineContentService $magazineContent,
@@ -45,5 +48,7 @@ final class CategoryLink
         if ($first !== null) {
             $this->title = (string) $titleTags[$first][1];
         }
+
+        $this->subcategories = $this->magazineContent->getSubcategoryNavItemsForParentSlug($this->slug);
     }
 }
