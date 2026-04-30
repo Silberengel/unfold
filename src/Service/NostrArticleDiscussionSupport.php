@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Enum\KindsEnum;
+use App\Nostr\Nip19Codec;
 use swentel\nostr\Filter\Filter;
 
 /**
@@ -13,6 +14,10 @@ use swentel\nostr\Filter\Filter;
  */
 final class NostrArticleDiscussionSupport
 {
+    public function __construct(
+        private readonly Nip19Codec $nip19Codec,
+    ) {
+    }
     /**
      * @return array<int, Filter>
      */
@@ -103,6 +108,10 @@ final class NostrArticleDiscussionSupport
         if ((int) ($event->kind ?? 0) !== KindsEnum::TEXT_NOTE->value) {
             return false;
         }
+        // Kind 1 “quotes” often lack `q`; clients embed nostr:naddr… in content instead. Those are not thread replies.
+        if ($this->isKind1NaddrBodyQuote($event, $coordinate)) {
+            return false;
+        }
         foreach ($event->tags ?? [] as $tag) {
             if (!\is_array($tag) || \count($tag) < 2) {
                 continue;
@@ -161,6 +170,72 @@ final class NostrArticleDiscussionSupport
                 if (($tag[0] ?? '') === 'a' && (string) ($tag[1] ?? '') === $coordinate) {
                     return true;
                 }
+            }
+        }
+        if ($kind === KindsEnum::TEXT_NOTE->value && $this->isKind1NaddrBodyQuote($event, $coordinate)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Kind-1 note that cites this article via nostr:naddr… in .content (no `q` tag) — not a threaded reply.
+     * Requires no {@code e} tags; if {@code e} tags are present, NIP-10 treats it as a thread reply.
+     */
+    private function isKind1NaddrBodyQuote(object $event, string $coordinate): bool
+    {
+        if ($this->kind1HasThreadETag($event)) {
+            return false;
+        }
+        $content = (string) ($event->content ?? '');
+
+        return $this->contentNaddrReferencesCoordinate($content, $coordinate);
+    }
+
+    private function kind1HasThreadETag(object $event): bool
+    {
+        foreach ($event->tags ?? [] as $tag) {
+            if (!\is_array($tag) || \count($tag) < 2) {
+                continue;
+            }
+            if (strtolower((string) ($tag[0] ?? '')) !== 'e') {
+                continue;
+            }
+            $id = strtolower(trim((string) ($tag[1] ?? '')));
+            if (64 === \strlen($id) && ctype_xdigit($id)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function contentNaddrReferencesCoordinate(string $content, string $coordinate): bool
+    {
+        if ($content === '' || !preg_match_all('/(?:nostr:)?(naddr1[a-z0-9]+)/i', $content, $matches)) {
+            return false;
+        }
+        $want = strtolower($coordinate);
+        foreach ($matches[1] as $bech) {
+            try {
+                $decoded = $this->nip19Codec->decode((string) $bech);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($decoded->type !== 'naddr' || !isset($decoded->data)) {
+                continue;
+            }
+            $d = $decoded->data;
+            $kind = (int) ($d->kind ?? 0);
+            $pk = strtolower((string) ($d->pubkey ?? ''));
+            $identifier = (string) ($d->identifier ?? '');
+            if ($pk === '' || $identifier === '' || (64 !== \strlen($pk) || !ctype_xdigit($pk))) {
+                continue;
+            }
+            $built = $kind.':'.$pk.':'.$identifier;
+            if ($built === $want) {
+                return true;
             }
         }
 

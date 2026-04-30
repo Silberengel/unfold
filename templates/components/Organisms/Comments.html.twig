@@ -10,11 +10,11 @@
             <div class="metadata comment-card__head">
                 <p>
                     {% if item.kind is defined and item.kind == 1 %}
-                        <span class="ui-badge ui-badge--neutral" title="Legacy text-note reply (pre–NIP-22)">kind 1</span>
+                        <span class="ui-badge ui-badge--neutral" title="Text-note reply (thread)">reply</span>
                     {% elseif item.kind is defined and item.kind == 1111 %}
-                        <span class="ui-badge ui-badge--secondary" title="NIP-22 comment">1111</span>
+                        <span class="ui-badge ui-badge--secondary" title="Scoped comment">comment</span>
                     {% elseif is_nip18_repost %}
-                        <span class="ui-badge ui-badge--neutral" title="NIP-18 repost (body omitted)">repost</span>
+                        <span class="ui-badge ui-badge--neutral" title="Shared from elsewhere">repost</span>
                     {% endif %}
                     {% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}
                 </p>
@@ -29,13 +29,11 @@
                     <twig:Atoms:Content content="{{ item.unfold_reply_blurb }}" />
                 </div>
             {% endif %}
+            {% if not is_nip18_repost %}
             <div class="card-body">
-                {% if is_nip18_repost %}
-                    <p class="text-subtle">Repost</p>
-                {% else %}
-                    <twig:Atoms:Content content="{{ item.unfold_body|default(item.content|default('')) }}" />
-                {% endif %}
+                <twig:Atoms:Content content="{{ item.unfold_body|default(item.content|default('')) }}" />
             </div>
+            {% endif %}
             {% if not is_nip18_repost and cid != '' and commentLinks[cid] is defined and commentLinks[cid]|length > 0 %}
                 <div class="card-footer nostr-previews mt-3">
                     <div class="preview-container">
@@ -89,7 +87,7 @@
                                             rows="3"
                                             required
                                             minlength="1"
-                                            placeholder="Plain-text reply (kind 1111 or 1); tags are built for you…"
+                                            placeholder="Plain-text reply; tags are set automatically…"
                                         ></textarea>
                                     </div>
                                     <div class="comment-reply__actions">
@@ -115,13 +113,21 @@
             {% set cpk = item.pubkey|default('') %}
             {% set cts = item.created_at|default(null) %}
             {% set q_repost = item.kind is defined and (item.kind == 6 or item.kind == 16) %}
+            {% set quote_has_q_tag = false %}
+            {% for t in item.tags|default([]) %}
+                {% if t[0] is defined and t[0]|lower == 'q' %}
+                    {% set quote_has_q_tag = true %}
+                {% endif %}
+            {% endfor %}
             <div class="card comment comment--quote">
                 <div class="metadata comment-card__head">
                     <p>
                         {% if q_repost %}
-                            <span class="ui-badge ui-badge--neutral" title="NIP-18 repost (body omitted)">repost (kind {{ item.kind }})</span>
+                            <span class="ui-badge ui-badge--neutral" title="Shared from elsewhere">repost</span>
+                        {% elseif quote_has_q_tag %}
+                            <span class="ui-badge ui-badge--neutral" title="Cites this with a quote tag">quote</span>
                         {% else %}
-                            <span class="ui-badge ui-badge--neutral">kind {{ item.kind|default('?') }}</span>
+                            <span class="ui-badge ui-badge--neutral" title="Cites or links this article">reference</span>
                         {% endif %}
                         {% if cpk != '' %}<twig:Molecules:UserFromNpub ident="{{ cpk }}" />{% else %}<span class="text-subtle">Unknown</span>{% endif %}
                     </p>
@@ -133,13 +139,11 @@
                         {% if _qv_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _qv_share, event_menu: true } only %}{% endif %}
                     </div>
                 </div>
+                {% if not q_repost %}
                 <div class="card-body">
-                    {% if q_repost %}
-                        <p class="text-subtle">Repost</p>
-                    {% else %}
-                        <twig:Atoms:Content content="{{ item.content|default('') }}" />
-                    {% endif %}
+                    <twig:Atoms:Content content="{{ item.content|default('') }}" />
                 </div>
+                {% endif %}
                 {% if not q_repost and cid != '' and quoteLinks[cid] is defined and quoteLinks[cid]|length > 0 %}
                     <div class="card-footer nostr-previews mt-3">
                         <div class="preview-container">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Service;
 
 use App\Enum\KindsEnum;
+use App\Nostr\Nip19Codec;
 use App\Service\NostrArticleDiscussionSupport;
 use PHPUnit\Framework\TestCase;
 
@@ -12,9 +13,12 @@ final class NostrArticleDiscussionSupportTest extends TestCase
 {
     private NostrArticleDiscussionSupport $s;
 
+    private Nip19Codec $nip19;
+
     protected function setUp(): void
     {
-        $this->s = new NostrArticleDiscussionSupport();
+        $this->nip19 = new Nip19Codec();
+        $this->s = new NostrArticleDiscussionSupport($this->nip19);
     }
 
     public function testCreateArticleDiscussionFilterCountWithoutRoot(): void
@@ -81,5 +85,39 @@ final class NostrArticleDiscussionSupportTest extends TestCase
             'tags' => [['q', $coord]],
         ];
         $this->assertFalse($this->s->eventIsArticleQuote($e, $coord, null));
+    }
+
+    public function testKind1WithNaddrInContentIsQuoteNotThread(): void
+    {
+        $pk = str_repeat('a', 64);
+        $coord = '30023:'.$pk.':my-article';
+        $naddr = $this->nip19->encodeNaddr(30023, $pk, 'my-article');
+        $e = (object) [
+            'kind' => KindsEnum::TEXT_NOTE->value,
+            'content' => "Check this\n\nnostr:".$naddr."\n",
+            'tags' => [
+                ['a', $coord, '', 'mention'],
+            ],
+        ];
+        $this->assertTrue($this->s->eventIsArticleQuote($e, $coord, null));
+        $this->assertFalse($this->s->eventIsLegacyThreadReply($e, $coord, null));
+    }
+
+    public function testKind1WithNaddrInContentButWithEtagStaysInThread(): void
+    {
+        $pk = str_repeat('a', 64);
+        $coord = '30023:'.$pk.':my-article';
+        $root = str_repeat('b', 64);
+        $naddr = $this->nip19->encodeNaddr(30023, $pk, 'my-article');
+        $e = (object) [
+            'kind' => KindsEnum::TEXT_NOTE->value,
+            'content' => "Reply\n\nnostr:".$naddr,
+            'tags' => [
+                ['a', $coord],
+                ['e', $root, '', 'reply', $pk],
+            ],
+        ];
+        $this->assertFalse($this->s->eventIsArticleQuote($e, $coord, null));
+        $this->assertTrue($this->s->eventIsLegacyThreadReply($e, $coord, $root));
     }
 }

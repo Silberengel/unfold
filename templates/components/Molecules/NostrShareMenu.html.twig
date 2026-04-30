@@ -2,7 +2,11 @@
     {% set share = nostr_share_menu() %}
 {% endif %}
 {% if share is not null %}
-    <details class="nostr-share-menu{{ event_menu|default(false) ? ' nostr-share-menu--event' : '' }}">
+    <details
+        class="nostr-share-menu{{ event_menu|default(false) ? ' nostr-share-menu--event' : '' }}"
+        data-controller="nostr-share-menu"
+        data-action="click->nostr-share-menu#closeAfterMenuAction"
+    >
         <summary class="nostr-share-menu__trigger btn btn-secondary btn-sm" title="Nostr options" aria-label="Nostr options">
             {% if event_menu|default(false) %}
                 <span class="nostr-share-menu__glyph" aria-hidden="true">⋯</span>

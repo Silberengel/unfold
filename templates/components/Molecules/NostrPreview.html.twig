@@ -17,7 +17,18 @@
         {% if preview.data is not null %}
             <div class="nostr-preview-details mt-2">
                 {% if preview.data.kind is defined %}
-                    <span class="ui-badge ui-badge--neutral">Kind: {{ preview.data.kind }}</span>
+                    {% set _pk = preview.data.kind %}
+                    <span class="ui-badge ui-badge--neutral">
+                        {%- if _pk == 0 -%}Profile
+                        {%- elseif _pk == 1 -%}Note
+                        {%- elseif _pk == 6 or _pk == 16 -%}Repost
+                        {%- elseif _pk == 7 -%}Reaction
+                        {%- elseif _pk == 1111 -%}Comment
+                        {%- elseif _pk == 9802 -%}Highlight
+                        {%- elseif _pk == 30023 or _pk == 30024 -%}Article
+                        {%- else -%}Event
+                        {%- endif -%}
+                    </span>
                 {% endif %}
             </div>
         {% endif %}
