@@ -10,7 +10,6 @@ use App\Entity\Event;
 use App\Enum\EventStatusEnum;
 use App\Enum\KindsEnum;
 use App\Repository\ArticleRepository;
-use App\Util\CurationSet30004Home;
 use App\Util\NostrEventTags;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -649,51 +648,6 @@ final class MagazineContentService
         }
     }
 
-    /**
-     * One relay-backed pass per HTTP request to pull 30004-listed **30023** coordinates into {@see Article}
-     * (see {@see NostrClient::persistCuration30004ReferencedItems}).
-     */
-    private function maybeHydrateCuration30004ReferencedOncePerRequest(Event $stored): void
-    {
-        $r = $this->requestStack->getCurrentRequest();
-        if ($r === null) {
-            return;
-        }
-        if ($r->attributes->get('_curation_30004_refs_hydrated')) {
-            return;
-        }
-        $r->attributes->set('_curation_30004_refs_hydrated', true);
-        try {
-            $this->nostrClient->persistCuration30004ReferencedItems($stored);
-        } catch (\Throwable) {
-        }
-    }
-
-    private function ensureCuration30004FromRelays(string $npub, string $dTag): void
-    {
-        $r = $this->requestStack->getCurrentRequest();
-        if ($r !== null && $r->attributes->get('_curation_30004_ensured')) {
-            return;
-        }
-        try {
-            $e = $this->nostrClient->getCurationSet30004($npub, $dTag);
-            if ($e !== null) {
-                $this->store->putCuration30004($npub, $dTag, $e);
-                try {
-                    $this->nostrClient->persistCuration30004ReferencedItems($e);
-                } catch (\Throwable) {
-                }
-                if ($r !== null) {
-                    $r->attributes->set('_curation_30004_refs_hydrated', true);
-                }
-            }
-        } catch (\Throwable) {
-        }
-        if ($r !== null) {
-            $r->attributes->set('_curation_30004_ensured', true);
-        }
-    }
-
     private function ensureCategory30040FromRelays(string $slug): void
     {
         if (trim($slug) === '') {
@@ -755,75 +709,102 @@ final class MagazineContentService
     }
 
     /**
-     * Home strip from NIP-51 kind 30004 (curation set): `d_tag_curation_set` on `npub`, ordered `a` tags for
-     * kind **30023** only (other kinds and `e` tags are ignored). Tiles resolve from the local `article` table.
+     * Home headline strip: kind **30040** magazine root (`npub` + `d_tag`), walking `a` tags **top to bottom**.
+     * Only kind **30023** / **30024** addresses become tiles; nested **30040** category `a` tags are skipped.
+     * Section heading comes from the root index `title` tag when present.
      *
      * @return array{heading: string, tiles: list<array{article: FeaturedArticleCard, body_html: string}>}
      */
-    public function buildHomeCurationWallData(): array
+    public function buildHomeMagazineRootHeadlineStripData(): array
     {
-        $d = trim((string) $this->params->get('d_tag_curation_set'));
-        if ($d === '' || strcasecmp($d, 'd-tag-goes-here') === 0) {
-            return ['heading' => '', 'tiles' => []];
-        }
         $npub = (string) $this->params->get('npub');
-        $stored = $this->store->getCuration30004($npub, $d);
-        if ($stored === null) {
-            $this->ensureCuration30004FromRelays($npub, $d);
-            $stored = $this->store->getCuration30004($npub, $d);
+        $dTag = (string) $this->params->get('d_tag');
+        $mag = $this->store->getRoot($npub, $dTag);
+        if ($mag === null) {
+            $this->ensureRoot30040FromRelays($npub, $dTag);
+            $mag = $this->store->getRoot($npub, $dTag);
         }
-        if ($stored === null) {
+        if ($mag === null) {
             return ['heading' => '', 'tiles' => []];
         }
-        $this->maybeHydrateCuration30004ReferencedOncePerRequest($stored);
-        /** @var list<array<int, mixed>> $tagRows */
-        $tagRows = $stored->getTags();
-        $parsed = CurationSet30004Home::parseTitleAndOrderedRefs($tagRows);
-        if ($parsed['items'] === []) {
-            return ['heading' => '', 'tiles' => []];
+
+        $heading = '';
+        $orderedCoords = [];
+        $seenAddr = [];
+        foreach ($mag->getTags() as $tagRow) {
+            $seq = NostrEventTags::rowToStringList($tagRow);
+            if ($seq === null) {
+                continue;
+            }
+            $name = strtolower((string) ($seq[0] ?? ''));
+            if ($name === 'title' && isset($seq[1]) && trim((string) $seq[1]) !== '') {
+                $heading = trim((string) $seq[1]);
+            }
+            if ($name !== 'a' || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $coord = trim((string) $seq[1]);
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $kind = (int) ($parts[0] ?? 0);
+            if (!\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+                continue;
+            }
+            $pk = strtolower(trim((string) $parts[1]));
+            $slug = trim((string) $parts[2]);
+            if (64 !== \strlen($pk) || !ctype_xdigit($pk) || $slug === '') {
+                continue;
+            }
+            $dedupe = $pk."\0".$slug;
+            if (isset($seenAddr[$dedupe])) {
+                continue;
+            }
+            $seenAddr[$dedupe] = true;
+            $orderedCoords[] = $kind.':'.$pk.':'.$slug;
         }
+
+        if ($orderedCoords === []) {
+            return ['heading' => $heading, 'tiles' => []];
+        }
+
         $pairsArg = [];
-        foreach ($parsed['items'] as $it) {
-            $pairsArg[] = ['pubkey' => $it['pk'], 'slug' => $it['slug']];
+        foreach ($orderedCoords as $coord) {
+            $parts = explode(':', $coord, 3);
+            $pairsArg[] = ['pubkey' => strtolower((string) $parts[1]), 'slug' => trim((string) $parts[2])];
         }
         $indexed = $this->articleRepository->findByAuthorAndSlugIndexed($pairsArg);
-        $missingPairs = [];
-        foreach ($pairsArg as $pair) {
+        $missingCoords = [];
+        foreach ($pairsArg as $i => $pair) {
             $k = strtolower((string) $pair['pubkey'])."\0".trim((string) $pair['slug']);
             if (!isset($indexed[$k])) {
-                $missingPairs[] = $pair;
+                $missingCoords[] = $orderedCoords[$i];
             }
         }
-        if ($missingPairs !== []) {
+        if ($missingCoords !== []) {
             try {
-                $this->nostrClient->ingestLongformForCategoryCoordinates(array_values(array_unique(array_map(
-                    static fn (array $p): string => (string) KindsEnum::LONGFORM->value.':'.strtolower((string) $p['pubkey']).':'.trim((string) $p['slug']),
-                    $missingPairs
-                ))));
+                $this->nostrClient->ingestLongformForCategoryCoordinates(array_values(array_unique($missingCoords)));
             } catch (\Throwable) {
             }
             $indexed = $this->articleRepository->findByAuthorAndSlugIndexed($pairsArg);
         }
-        $heading = trim($parsed['title']);
+
         $tiles = [];
-        $seenArticle = [];
-        foreach ($parsed['items'] as $it) {
-            $key = $it['pk']."\0".$it['slug'];
-            if (isset($seenArticle[$key])) {
-                continue;
-            }
-            $article = $indexed[$key] ?? null;
+        foreach ($pairsArg as $pair) {
+            $k = strtolower((string) $pair['pubkey'])."\0".trim((string) $pair['slug']);
+            $article = $indexed[$k] ?? null;
             if ($article === null) {
                 continue;
             }
-            $seenArticle[$key] = true;
             $tiles[] = [
                 'article' => FeaturedArticleCard::fromArticle($article),
                 'body_html' => $this->articleBodyHtmlRenderer->renderForArticle($article),
             ];
         }
+
         if ($tiles === []) {
-            return ['heading' => '', 'tiles' => []];
+            return ['heading' => $heading, 'tiles' => []];
         }
 
         return ['heading' => $heading, 'tiles' => $tiles];

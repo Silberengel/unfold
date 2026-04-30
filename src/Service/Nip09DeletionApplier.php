@@ -16,7 +16,7 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 /**
  * Applies NIP-09 (kind 5) deletion requests to:
  * - MySQL: long-form articles ({@see KindsEnum::LONGFORM} 30023, {@see KindsEnum::LONGFORM_DRAFT} 30024)
- * - MySQL {@see Event} rows: kind 30040 magazine indices (root + category), kind 30004 home curation set,
+ * - MySQL {@see Event} rows: kind 30040 magazine indices (root + category), legacy kind 30004 curation rows,
  *   kind 0 profile, 10002 relay list, 10133 payto
  *
  * Handled for `e` tags (with `k` when present) and for NIP-33 `a` tags.

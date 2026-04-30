@@ -7,7 +7,8 @@ namespace App\Nostr;
 use App\Service\NostrKeyHelper;
 
 /**
- * Stable keys for {@see Event} rows: magazine root/category indices, kind 30004 curation set, and kind-0 profiles in MySQL.
+ * Stable keys for {@see Event} rows: magazine root/category indices, kind-0 profiles, and legacy kind-30004
+ * curation keys still used by {@see \App\Service\Nip09DeletionApplier} to clean old MySQL rows.
  */
 final class MagazineEventKeys
 {

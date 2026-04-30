@@ -1,4 +1,4 @@
-/* Shared “reading pane” surface: full article pages and home NIP-51 30004 headline bodies. */
+/* Shared “reading pane” surface: full article pages and home magazine headline strip bodies. */
 :root {
     --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 70%, #ffffff 30%);
     --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 35%, var(--color-text) 65%);

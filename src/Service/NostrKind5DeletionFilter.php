@@ -8,7 +8,7 @@ use App\Enum\KindsEnum;
 
 /**
  * NIP-09 kind-5: keep deletion events that may affect MySQL-backed rows (profile, relay list, payto,
- * long-form, magazine 30040, home curation 30004). Skips thread/reply deletions to reduce relay payload.
+ * long-form, magazine 30040, legacy kind 30004). Skips thread/reply deletions to reduce relay payload.
  */
 final class NostrKind5DeletionFilter
 {

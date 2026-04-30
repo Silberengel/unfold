@@ -64,7 +64,7 @@ final class PrewarmCommand extends Command
     {
         $this
             ->addOption('no-magazine', null, InputOption::VALUE_NONE, 'Skip magazine 30040 index fetch')
-            ->addOption('no-deletions', null, InputOption::VALUE_NONE, 'Skip NIP-09 kind 5 deletion sync (articles + event rows: magazine, curation 30004, cached curation notes, profiles, etc.)')
+            ->addOption('no-deletions', null, InputOption::VALUE_NONE, 'Skip NIP-09 kind 5 deletion sync (articles + magazine 30040 rows, profiles, relay lists, etc.)')
             ->addOption('deletion-since', null, InputOption::VALUE_REQUIRED, 'strtotime() window start for kind 5 fetch', '-2 month')
             ->addOption('no-metadata', null, InputOption::VALUE_NONE, 'Skip batched kind-0 profile prewarm (MySQL event table)')
             ->addOption('no-comments', null, InputOption::VALUE_NONE, 'Skip comment thread cache')
@@ -236,7 +236,7 @@ final class PrewarmCommand extends Command
         $this->disableCliExecutionTimeLimit();
 
         if (!$input->getOption('no-deletions')) {
-            $io->section('NIP-09 deletions (kind 5 → 30023/30024 / 30040 / 30004)');
+            $io->section('NIP-09 deletions (kind 5 → 30023/30024 / 30040 / legacy 30004 rows)');
             $sinceStr = (string) $input->getOption('deletion-since');
             $since = strtotime($sinceStr);
             if ($since === false) {
@@ -284,7 +284,7 @@ final class PrewarmCommand extends Command
                 try {
                     $st = $this->nip09DeletionApplier->apply($kind5);
                     $io->writeln(sprintf(
-                        'Kind 5 events: <info>%d</info> (deduped). NIP-23 long-form in DB (30023/30024) removed: <info>%d</info>. Magazine index in cache (30040) removed: root <info>%d</info>, category <info>%d</info>. Home curation (30004) rows removed: <info>%d</info>.',
+                        'Kind 5 events: <info>%d</info> (deduped). NIP-23 long-form in DB (30023/30024) removed: <info>%d</info>. Magazine index in cache (30040) removed: root <info>%d</info>, category <info>%d</info>. Legacy home curation (30004) rows removed: <info>%d</info>.',
                         \count($kind5),
                         $st['articles_removed'],
                         $st['magazine_roots'],

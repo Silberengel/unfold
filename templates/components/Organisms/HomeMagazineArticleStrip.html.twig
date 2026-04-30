@@ -1,19 +1,18 @@
 {#
-  NIP-51 30004 home strip: section title from list `title` tag; each item reads like a static landing
-  section — illustration (max 400px, natural aspect), headline, then full article body (Markdown +
-  highlights as on /p/…/d/…). Body is not wrapped in a single <a> (markdown may contain links).
+  Home: magazine root kind 30040 — long-form `a` tags in index order (top to bottom). Section title from
+  root `title` tag. Same layout as before: illustration, headline, full article body (Markdown + highlights).
 #}
 {% if tiles is not empty %}
     <section
         class="home-curation-landmark"
         {% if section_title|default('') != '' %}
-            aria-labelledby="home-curation-landmark-heading"
+            aria-labelledby="home-magazine-strip-heading"
         {% else %}
-            aria-label="{{ (website_name ~ ' — curated articles')|e('html_attr') }}"
+            aria-label="{{ (website_name ~ ' — featured articles')|e('html_attr') }}"
         {% endif %}
     >
         {% if section_title|default('') != '' %}
-            <h2 id="home-curation-landmark-heading" class="home-curation-landmark__title">{{ section_title|e }}</h2>
+            <h2 id="home-magazine-strip-heading" class="home-curation-landmark__title">{{ section_title|e }}</h2>
         {% endif %}
         <div class="home-curation-landmark__articles">
             {% for tile in tiles %}

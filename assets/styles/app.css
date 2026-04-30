@@ -162,7 +162,7 @@ svg.icon {
     }
 }
 
-/* Home: NIP-51 30004 “headlines” — editorial section title + full-width article stack (not masonry). */
+/* Home: magazine root index headline strip — section title + full-width article stack (not masonry). */
 .home-curation-landmark {
     width: 100%;
     min-width: 0;
