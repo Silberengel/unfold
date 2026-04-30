@@ -8,18 +8,10 @@
 {% endblock %}
 
 {% block ogtags %}
-    {# Upstream main only outputs og:image when article.image is set — unfurlers often show a blank card. Always set an absolute image + JSON-LD. #}
-    {% set _img = article.image|default('')|trim %}
-    {% if _img == '' %}
-        {% set _og_image = absolute_url(asset('og-image.jpg')) %}
-        {% set _og_default_dims = true %}
-    {% elseif _img starts with '//' %}
-        {% set _og_image = 'https:' ~ _img %}
-        {% set _og_default_dims = false %}
-    {% else %}
-        {% set _og_image = absolute_url(_img) %}
-        {% set _og_default_dims = false %}
-    {% endif %}
+    {# Same resolution as card heroes (article image → kind-0 picture → site OG JPEG); absolute URL for unfurlers. #}
+    {% set _og = article_og_image(article.image, article.pubkey) %}
+    {% set _og_image = _og.href %}
+    {% set _og_default_dims = _og.use_default_dimensions %}
     {% set _desc = article.summary|default('')|striptags|u.truncate(159, '…') %}
     {% set _canonical = url('article', { npub: npub|default(npub_from_hex(article.pubkey)), slug: article.slug }) %}
     {% set _author_name = '' %}

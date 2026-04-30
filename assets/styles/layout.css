@@ -748,17 +748,18 @@ aside {
 
 .home-aside-highlights__meta {
     display: block;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-style: normal;
+    font-weight: 500;
     font-family: var(--font-family), system-ui, sans-serif;
-    color: color-mix(in srgb, var(--color-text-mid) 80%, var(--color-bg) 20%);
+    color: var(--color-primary);
     letter-spacing: 0.02em;
     transition: color 0.18s ease;
 }
 
 .home-aside-highlights__item-inner:hover .home-aside-highlights__meta,
 .home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) .home-aside-highlights__meta {
-    color: color-mix(in srgb, var(--color-primary) 45%, var(--color-text-mid) 55%);
+    color: color-mix(in srgb, var(--color-secondary) 55%, var(--color-primary));
 }
 
 table {
