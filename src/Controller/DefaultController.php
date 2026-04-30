@@ -28,7 +28,6 @@ class DefaultController extends AbstractController
         $magazineStrip = $this->magazineContent->buildHomeMagazineRootHeadlineStripData();
 
         return $this->render('home.html.twig', [
-            'home_magazine_strip_heading' => $magazineStrip['heading'],
             'home_magazine_strip_tiles' => $magazineStrip['tiles'],
             'home_featured_tiles' => $this->magazineContent->buildHomeMixedFeaturedWallTiles($categoryATags),
             'home_sidebar_category_recent' => $this->magazineContent->buildHomeSidebarCategorizedRecent($categoryATags),

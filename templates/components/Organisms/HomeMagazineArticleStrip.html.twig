@@ -1,19 +1,12 @@
 {#
-  Home: magazine root kind 30040 — long-form `a` tags in index order (top to bottom). Section title from
-  root `title` tag. Same layout as before: illustration, headline, full article body (Markdown + highlights).
+  Home: magazine root kind 30040 — long-form `a` tags in index order. No strip-level heading; each
+  article uses its own title (h3). Same layout: illustration, headline, full body.
 #}
 {% if tiles is not empty %}
     <section
         class="home-curation-landmark"
-        {% if section_title|default('') != '' %}
-            aria-labelledby="home-magazine-strip-heading"
-        {% else %}
-            aria-label="{{ (website_name ~ ' — featured articles')|e('html_attr') }}"
-        {% endif %}
+        aria-label="{{ (website_name ~ ' — featured articles')|e('html_attr') }}"
     >
-        {% if section_title|default('') != '' %}
-            <h2 id="home-magazine-strip-heading" class="home-curation-landmark__title">{{ section_title|e }}</h2>
-        {% endif %}
         <div class="home-curation-landmark__articles">
             {% for tile in tiles %}
                 {% set item = tile.article %}

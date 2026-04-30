@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Event;
+use App\Enum\KindsEnum;
 use App\Util\NostrEventTags;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
@@ -200,6 +201,9 @@ final class MagazineRefresher
             }
             $parts = explode(':', (string) $seq[1], 3);
             if (\count($parts) < 3) {
+                continue;
+            }
+            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
                 continue;
             }
             $s = trim((string) $parts[2]);

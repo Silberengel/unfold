@@ -43,7 +43,6 @@
         {% if home_magazine_strip_tiles|default([]) is not empty %}
             {% include 'components/Organisms/HomeMagazineArticleStrip.html.twig' with {
                 tiles: home_magazine_strip_tiles,
-                section_title: home_magazine_strip_heading|default(''),
             } only %}
         {% endif %}
         {% include 'components/Organisms/FeaturedWall.html.twig' with { tiles: home_featured_tiles|default([]) } only %}

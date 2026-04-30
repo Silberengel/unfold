@@ -31,8 +31,9 @@ final class MagazineContentService
     }
 
     /**
-     * Category `a` tags from the persisted root only (no relay). The store is filled by
-     * `app:prewarm` / cron ({@see MagazineRefresher::refreshFromRelays}), not from HTTP.
+     * Kind **30040** child-index `a` tags from the persisted magazine root only (no relay). Long-form
+     * `a` tags on the same root event are excluded so they are not shown as header categories.
+     * The store is filled by `app:prewarm` / cron ({@see MagazineRefresher::refreshFromRelays}), not from HTTP.
      *
      * @return list<array<int, string>>
      */
@@ -85,7 +86,15 @@ final class MagazineContentService
             if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
                 continue;
             }
-            $cats[] = ['a', (string) $seq[1]];
+            $coord = (string) $seq[1];
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
+                continue;
+            }
+            $cats[] = ['a', $coord];
         }
 
         return $cats;
@@ -711,9 +720,9 @@ final class MagazineContentService
     /**
      * Home headline strip: kind **30040** magazine root (`npub` + `d_tag`), walking `a` tags **top to bottom**.
      * Only kind **30023** / **30024** addresses become tiles; nested **30040** category `a` tags are skipped.
-     * Section heading comes from the root index `title` tag when present.
+     * No strip-level heading — each article’s own title in the template is enough.
      *
-     * @return array{heading: string, tiles: list<array{article: FeaturedArticleCard, body_html: string}>}
+     * @return array{tiles: list<array{article: FeaturedArticleCard, body_html: string}>}
      */
     public function buildHomeMagazineRootHeadlineStripData(): array
     {
@@ -725,10 +734,9 @@ final class MagazineContentService
             $mag = $this->store->getRoot($npub, $dTag);
         }
         if ($mag === null) {
-            return ['heading' => '', 'tiles' => []];
+            return ['tiles' => []];
         }
 
-        $heading = '';
         $orderedCoords = [];
         $seenAddr = [];
         foreach ($mag->getTags() as $tagRow) {
@@ -737,9 +745,6 @@ final class MagazineContentService
                 continue;
             }
             $name = strtolower((string) ($seq[0] ?? ''));
-            if ($name === 'title' && isset($seq[1]) && trim((string) $seq[1]) !== '') {
-                $heading = trim((string) $seq[1]);
-            }
             if ($name !== 'a' || !isset($seq[1]) || (string) $seq[1] === '') {
                 continue;
             }
@@ -766,7 +771,7 @@ final class MagazineContentService
         }
 
         if ($orderedCoords === []) {
-            return ['heading' => $heading, 'tiles' => []];
+            return ['tiles' => []];
         }
 
         $pairsArg = [];
@@ -804,10 +809,10 @@ final class MagazineContentService
         }
 
         if ($tiles === []) {
-            return ['heading' => $heading, 'tiles' => []];
+            return ['tiles' => []];
         }
 
-        return ['heading' => $heading, 'tiles' => $tiles];
+        return ['tiles' => $tiles];
     }
 
     /**
