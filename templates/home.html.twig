@@ -7,7 +7,10 @@
 {% endblock %}
 
 {% block ogtags %}
-    {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+    {% set _pubkey_hex = pubkey_hex_from_npub(publisher_npub|default('')) %}
+    {% set _og = article_og_image(null, _pubkey_hex) %}
+    {% set _og_image = _og.href %}
+    {% set _og_default_dims = _og.use_default_dimensions %}
     <link rel="canonical" href="{{ url('home') }}">
     <link rel="alternate" type="application/atom+xml" title="{{ website_name|e('html_attr') }} — all articles" href="{{ url('feed_magazine') }}">
     <meta property="og:type" content="website">
@@ -15,6 +18,13 @@
     <meta property="og:title" content="{{ website_name|e('html_attr') }}">
     <meta property="og:description" content="{{ website_description|e('html_attr') }}">
     <meta property="og:image" content="{{ _og_image|e('html_attr') }}">
+    {% if _og_image starts with 'https://' %}
+        <meta property="og:image:secure_url" content="{{ _og_image|e('html_attr') }}">
+    {% endif %}
+    {% if _og_default_dims %}
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+    {% endif %}
     <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ website_name|e('html_attr') }}">

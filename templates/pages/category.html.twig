@@ -11,7 +11,10 @@
 {% block ogtags %}
     {% set _title = category.title|default('') %}
     {% set _summary = category.summary|default('')|striptags|u.truncate(159, '…') %}
-    {% set _og_image = absolute_url(asset('og-image.jpg')) %}
+    {% set _pubkey_hex = pubkey_hex_from_npub(publisher_npub|default('')) %}
+    {% set _og = article_og_image(null, _pubkey_hex) %}
+    {% set _og_image = _og.href %}
+    {% set _og_default_dims = _og.use_default_dimensions %}
     {% set _is_articles_route = app.request.attributes.get('_route') == 'articles' %}
     {% set _is_category_route = app.request.attributes.get('_route') == 'magazine-category' %}
     {% set _articles_page = app.request.query.getInt('page', 1) %}
@@ -30,6 +33,13 @@
     <meta property="og:url" content="{{ _canonical_url }}">
     <meta property="og:description" content="{{ (_summary != '' ? _summary : _title)|e('html_attr') }}">
     <meta property="og:image" content="{{ _og_image|e('html_attr') }}">
+    {% if _og_image starts with 'https://' %}
+        <meta property="og:image:secure_url" content="{{ _og_image|e('html_attr') }}">
+    {% endif %}
+    {% if _og_default_dims %}
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+    {% endif %}
     <meta property="og:site_name" content="{{ website_name|e('html_attr') }}">
     <link rel="canonical" href="{{ _canonical_url }}">
     <meta name="twitter:card" content="summary_large_image">
