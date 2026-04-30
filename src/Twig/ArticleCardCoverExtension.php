@@ -43,33 +43,49 @@ final class ArticleCardCoverExtension extends AbstractExtension
         return [
             new TwigFunction('article_card_cover', $this->articleCardCover(...)),
             new TwigFunction('article_og_image', $this->articleOgImage(...)),
+            new TwigFunction('site_og_image', $this->siteOgImage(...)),
         ];
     }
 
     /**
-     * Absolute URL + whether to emit og:image:width/height (1200×630) for the site default OG JPEG only.
+     * Branded site Open Graph image (home, category lists, base layout default): not tied to any article or author.
      *
      * @return array{href: string, use_default_dimensions: bool}
      */
-    public function articleOgImage(?string $articleImage, ?string $pubkeyHex): array
+    public function siteOgImage(): array
     {
-        $cover = $this->articleCardCover($articleImage, $pubkeyHex);
-        $defaultCover = $this->defaultSiteImageUrl();
         $useDefaultDimensions = false;
-        $chosen = $cover;
-        if ($chosen === $defaultCover) {
-            try {
-                $chosen = $this->packages->getUrl(self::OG_FALLBACK_PACKAGE_IMAGE);
-                $useDefaultDimensions = true;
-            } catch (Throwable) {
-                $useDefaultDimensions = false;
-            }
+        try {
+            $chosen = $this->packages->getUrl(self::OG_FALLBACK_PACKAGE_IMAGE);
+            $useDefaultDimensions = true;
+        } catch (Throwable) {
+            $chosen = $this->defaultSiteImageUrl();
         }
 
         return [
             'href' => $this->absolutizeForOpenGraph($chosen),
             'use_default_dimensions' => $useDefaultDimensions,
         ];
+    }
+
+    /**
+     * Absolute URL + whether to emit og:image:width/height (1200×630) for the site default OG JPEG only.
+     *
+     * Unlike {@see articleCardCover}, this never uses the author’s Nostr profile picture: crawlers and
+     * in-app link previews should get the article hero or the branded {@see OG_FALLBACK_PACKAGE_IMAGE}.
+     *
+     * @return array{href: string, use_default_dimensions: bool}
+     */
+    public function articleOgImage(?string $articleImage, ?string $_pubkeyHex): array
+    {
+        if ($articleImage !== null && trim($articleImage) !== '') {
+            return [
+                'href' => $this->absolutizeForOpenGraph(trim($articleImage)),
+                'use_default_dimensions' => false,
+            ];
+        }
+
+        return $this->siteOgImage();
     }
 
     /**

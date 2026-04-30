@@ -7,8 +7,7 @@
 {% endblock %}
 
 {% block ogtags %}
-    {% set _pubkey_hex = pubkey_hex_from_npub(publisher_npub|default('')) %}
-    {% set _og = article_og_image(null, _pubkey_hex) %}
+    {% set _og = site_og_image() %}
     {% set _og_image = _og.href %}
     {% set _og_default_dims = _og.use_default_dimensions %}
     <link rel="canonical" href="{{ url('home') }}">

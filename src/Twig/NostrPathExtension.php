@@ -38,7 +38,7 @@ final class NostrPathExtension extends AbstractExtension
     }
 
     /**
-     * Lowercase 64-hex pubkey for {@see ArticleCardCoverExtension::articleOgImage} / card cover helpers.
+     * Lowercase 64-hex pubkey for {@see ArticleCardCoverExtension::articleCardCover} and article URLs.
      */
     public function pubkeyHexFromNpub(string $npub): string
     {
