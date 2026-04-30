@@ -332,6 +332,7 @@ final class ArticleBodyHighlightInjector
 
     /**
      * NIP-84: same highlighted passage → one mark, dedupe authors by npub, profile from cache.
+     * JSON objects: e (event id hex), n (npub), a (display name), p (picture URL), t (created_at unix, optional).
      *
      * @param list<ArticleHighlight> $group
      */
@@ -371,12 +372,17 @@ final class ArticleBodyHighlightInjector
                 }
             } catch (\Throwable) {
             }
-            $byNpub[$npub] = [
+            $created = $h->getEventCreatedAt();
+            $row = [
                 'e' => \strtolower($eidH),
                 'n' => $npub,
                 'a' => $name,
                 'p' => $pic,
             ];
+            if ($created > 0) {
+                $row['t'] = $created;
+            }
+            $byNpub[$npub] = $row;
         }
 
         return \json_encode(\array_values($byNpub), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);

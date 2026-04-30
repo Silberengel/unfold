@@ -18,7 +18,7 @@ final class TopTopicsExtension extends AbstractExtension
     public function getFunctions(): array
     {
         return [
-            new TwigFunction('top_topic_labels', function (int $limit = 25): array {
+            new TwigFunction('top_topic_labels', function (int $limit = 10): array {
                 return $this->topicIndexService->getTopTopicLabels($limit);
             }),
         ];

@@ -20,6 +20,18 @@ function shortNpub(n) {
     return `${n.slice(0, 12)}…${n.slice(-6)}`;
 }
 
+/** @param {Date} d */
+function formatHighlightDateUtc(d) {
+    try {
+        return new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'medium',
+            timeZone: 'UTC',
+        }).format(d);
+    } catch {
+        return d.toISOString().slice(0, 10);
+    }
+}
+
 /**
  * In-article highlight marks: hover/focus to show a tooltip of user-badges for everyone
  * who highlighted the same passage (data-hl JSON from {@see \App\Service\ArticleBodyHighlightInjector}).
@@ -205,7 +217,7 @@ export default class extends Controller {
             this._doHide();
             return;
         }
-        /** @type {Array<{e?: string, n: string, a?: string, p?: string}>} */
+        /** @type {Array<{e?: string, n: string, a?: string, p?: string, t?: number}>} */
         let rows;
         try {
             rows = JSON.parse(raw);
@@ -253,6 +265,12 @@ export default class extends Controller {
             }
             const nm = el('span', 'user-badge__name', a);
             nm.appendChild(document.createTextNode(label));
+            if (typeof row.t === 'number' && row.t > 0) {
+                const timeEl = el('time', 'user-highlight__tip-date', li);
+                const d = new Date(row.t * 1000);
+                timeEl.setAttribute('datetime', d.toISOString());
+                timeEl.textContent = formatHighlightDateUtc(d);
+            }
         }
 
         requestAnimationFrame(() => {

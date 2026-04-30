@@ -776,7 +776,7 @@ final class MagazineContentService
     }
 
     /**
-     * Interleaves up to four articles per home category in round-robin order (one “wall” mixing all topics).
+     * Interleaves up to two articles per home category in round-robin order (one “wall” mixing all topics).
      * Duplicate slugs across categories are skipped so each article appears at most once.
      *
      * @param list<array<int, string>> $categoryATags
@@ -835,7 +835,98 @@ final class MagazineContentService
     }
 
     /**
-     * Same resolution as {@see \App\Twig\Components\Organisms\FeaturedList} (4 cards per category).
+     * Distinct articles referenced by any home magazine category index (`a` tags), newest by display date
+     * (published or created). For the left nav list below topic badges.
+     *
+     * @param list<array<int, string>> $categoryATags
+     *
+     * @return list<FeaturedArticleCard>
+     */
+    public function buildHomeSidebarCategorizedRecent(array $categoryATags, int $limit = 24): array
+    {
+        if ($limit < 1) {
+            return [];
+        }
+        $slugSet = [];
+        foreach ($categoryATags as $row) {
+            $coord = \trim((string) ($row[1] ?? ''));
+            if ($coord === '') {
+                continue;
+            }
+            foreach ($this->slugsFromCategoryCoord($coord, 200) as $s) {
+                if ($s !== '') {
+                    $slugSet[$s] = true;
+                }
+            }
+        }
+        $unionSlugs = \array_keys($slugSet);
+        if ($unionSlugs === []) {
+            return [];
+        }
+        $articles = $this->articleRepository->findFeaturedCardsBySlugs($unionSlugs);
+        $slugMap = [];
+        foreach ($articles as $article) {
+            $articleSlug = \trim((string) $article->getSlug());
+            if ($articleSlug === '') {
+                continue;
+            }
+            if (!isset($slugMap[$articleSlug]) || $this->featuredCardIsNewer($article, $slugMap[$articleSlug])) {
+                $slugMap[$articleSlug] = $article;
+            }
+        }
+        $list = \array_values($slugMap);
+        \usort($list, static function (FeaturedArticleCard $a, FeaturedArticleCard $b): int {
+            $da = $a->getDisplayAt();
+            $db = $b->getDisplayAt();
+            if ($da === $db) {
+                return 0;
+            }
+            if ($da === null) {
+                return 1;
+            }
+            if ($db === null) {
+                return -1;
+            }
+
+            return $db <=> $da;
+        });
+
+        return \array_slice($list, 0, $limit);
+    }
+
+    /**
+     * @return list<string> `#d` slugs from kind-30023 `a` tags in category index order (trimmed, non-empty)
+     */
+    private function slugsFromCategoryCoord(string $categoryCoord, int $maxA): array
+    {
+        if ($maxA < 1) {
+            return [];
+        }
+        $parts = explode(':', $categoryCoord, 3);
+        if (\count($parts) < 3) {
+            return [];
+        }
+        $slug = $parts[2];
+        $catIndex = $this->store->getCategory($slug);
+        if ($catIndex === null) {
+            return [];
+        }
+        $slugs = [];
+        foreach ($catIndex->getTags() as $tag) {
+            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
+                $segs = explode(':', (string) $tag[1], 3);
+                $slugs[] = \trim((string) end($segs));
+                if (\count($slugs) >= $maxA) {
+                    break;
+                }
+            }
+        }
+
+        return \array_values(\array_filter($slugs, static fn (string $s): bool => $s !== ''));
+    }
+
+    /**
+     * Same resolution as {@see \App\Twig\Components\Organisms\FeaturedList} index tags; at most two cards per category for the home wall.
      *
      * @return null|array{title: string, cards: list<FeaturedArticleCard>}
      */
@@ -852,23 +943,16 @@ final class MagazineContentService
         }
 
         $title = '';
-        $slugs = [];
         foreach ($catIndex->getTags() as $tag) {
             if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
                 $title = (string) $tag[1];
-            }
-            if (($tag[0] ?? null) === 'a' && isset($tag[1])) {
-                $segs = explode(':', (string) $tag[1], 3);
-                $slugs[] = \trim((string) end($segs));
-                if (\count($slugs) >= 5) {
-                    break;
-                }
             }
         }
 
         if ($title === '') {
             $title = $slug;
         }
+        $slugs = $this->slugsFromCategoryCoord($categoryCoord, 40);
         if ($slugs === []) {
             return null;
         }
@@ -892,7 +976,7 @@ final class MagazineContentService
                 $orderedList[] = $slugMap[$articleSlug];
             }
         }
-        $cards = \array_slice($orderedList, 0, 4);
+        $cards = \array_slice($orderedList, 0, 2);
 
         return ['title' => $title, 'cards' => $cards];
     }

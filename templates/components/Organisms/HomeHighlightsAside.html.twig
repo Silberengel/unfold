@@ -17,20 +17,6 @@
                                 >
                                     <span class="visually-hidden">{{ 'sidebar.highlight_view'|trans({ '%title%': art.title|default('') }) }}</span>
                                 </a>
-                                {% if h.authorPubkey|default('')|length == 64 %}
-                                    <div class="home-aside-highlights__byline">
-                                        <span class="home-aside-highlights__who">
-                                            <twig:Molecules:UserFromNpub ident="{{ h.authorPubkey }}" />
-                                        </span>
-                                        {% if h.eventCreatedAt|default(0) > 0 %}
-                                            <time class="home-aside-highlights__time" datetime="{{ h.eventCreatedAt|date('c', 'UTC') }}">{{ h.eventCreatedAt|date('M j, Y', 'UTC') }}</time>
-                                        {% endif %}
-                                    </div>
-                                {% elseif h.eventCreatedAt|default(0) > 0 %}
-                                    <div class="home-aside-highlights__byline">
-                                        <time class="home-aside-highlights__time" datetime="{{ h.eventCreatedAt|date('c', 'UTC') }}">{{ h.eventCreatedAt|date('M j, Y', 'UTC') }}</time>
-                                    </div>
-                                {% endif %}
                                 {% set _html = h.bodyHtml|default('')|trim %}
                                 {% if _html != '' %}
                                     <div class="home-aside-highlights__quote home-aside-highlights__quote--html user-highlight__body">{{ _html|raw }}</div>

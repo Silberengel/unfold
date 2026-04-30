@@ -1,38 +1,35 @@
 {#
-  Single masonry wall: mixed categories (round-robin), same tile styling as the former per-section list.
+  Home wall: two picture blocks per row (responsive → one column), title + category on image overlay.
 #}
 {% if tiles is not empty %}
     <div
-        class="featured-list featured-list--wall{{ wall_extra_class|default('') != '' ? ' ' ~ wall_extra_class : '' }}"
+        class="featured-list featured-list--wall featured-list--picture-grid{{ wall_extra_class|default('') != '' ? ' ' ~ wall_extra_class : '' }}"
         role="region"
         aria-label="{{ (region_aria_label|default(website_name ~ ' — featured articles'))|e('html_attr') }}"
     >
         {% for tile in tiles %}
             {% set _hue = (tile.categoryTitle|default('x')|length * 47) % 360 %}
             {% set item = tile.article %}
-            <article class="featured-tile" style="--tile-hue: {{ _hue }};">
+            {% set article_href = (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) %}
+            <article class="featured-tile featured-tile--picture-block" style="--tile-hue: {{ _hue }};">
                 <a
-                    class="featured-tile__link"
-                    href="{{ (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) }}"
+                    class="featured-tile__link featured-tile__link--picture"
+                    href="{{ article_href }}"
+                    aria-label="{{ (item.title ~ ' — ' ~ tile.categoryTitle)|e('html_attr') }}"
                 >
-                    <div class="featured-tile__head">
-                        <span class="featured-tile__cat">{{ tile.categoryTitle }}</span>
-                    </div>
-                    <div class="featured-tile__media featured-tile__media--ar{{ loop.index0 % 4 }}">
+                    <div class="featured-tile__picture">
                         <img
+                            class="featured-tile__picture-img"
                             src="{{ article_card_cover(item.image, item.pubkey) }}"
-                            alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
-                            width="1200"
-                            height="675"
+                            alt=""
                             loading="lazy"
                             decoding="async"
                         >
-                    </div>
-                    <div class="card-body">
-                        <h2 class="card-title">{{ item.title }}</h2>
-                        <p class="lede truncate">
-                            {{ item.summary }}
-                        </p>
+                        <div class="featured-tile__picture-scrim" aria-hidden="true"></div>
+                        <div class="featured-tile__picture-overlay">
+                            <span class="featured-tile__picture-cat">{{ tile.categoryTitle|e }}</span>
+                            <h2 class="featured-tile__picture-title">{{ item.title|e }}</h2>
+                        </div>
                     </div>
                 </a>
             </article>

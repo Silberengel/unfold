@@ -1,3 +1,27 @@
+/* Shared “reading pane” surface: full article pages and home NIP-51 30004 headline bodies. */
+:root {
+    --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 70%, #ffffff 30%);
+    --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 35%, var(--color-text) 65%);
+}
+
+.article-page-root > .card,
+.article-page-root > .card-body {
+    background-color: var(--article-reading-pane-bg);
+}
+
+.article-page-root > .card {
+    margin-bottom: 0;
+    padding: 0.75rem max(1rem, env(safe-area-inset-left, 0px)) 0;
+    box-sizing: border-box;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-border) 55%, var(--article-reading-pane-bg) 45%);
+}
+
+.article-page-root > .card-body {
+    padding: 1rem max(1rem, env(safe-area-inset-left, 0px)) 2rem max(1rem, env(safe-area-inset-right, 0px));
+    margin-bottom: 0;
+    box-sizing: border-box;
+}
+
 .article-main {
     margin-top: 30px;
 }
@@ -23,6 +47,21 @@
     color: var(--color-text-mid);
     font-size: 1.4rem;
     line-height: 1.75;
+}
+
+.article-page-root .article-main p,
+.article-page-root .article-main ul,
+.article-page-root .article-main ol,
+.article-page-root .article-main li,
+.article-page-root .article-main blockquote,
+.article-page-root .article-main table,
+.home-curation-landmark .article-main p,
+.home-curation-landmark .article-main ul,
+.home-curation-landmark .article-main ol,
+.home-curation-landmark .article-main li,
+.home-curation-landmark .article-main blockquote,
+.home-curation-landmark .article-main table {
+    color: var(--article-reading-prose-color);
 }
 
 .article-main table {
@@ -70,6 +109,10 @@
     color: var(--color-text-mid);
     margin: 0 0 1.25rem;
     max-width: none;
+}
+
+.article-page-root > .card-body > .lede {
+    color: var(--article-reading-prose-color);
 }
 
 /* Sibling .category-body would paint over the ⋯ popover; lift the title card above the list. */
@@ -121,6 +164,28 @@
     font-style: italic;
     color: var(--color-text-mid);
     padding-left: 30px;
+}
+
+.article-page-root .article-main blockquote p,
+.home-curation-landmark .article-main blockquote p {
+    color: var(--article-reading-prose-color);
+}
+
+/* Home curated headline stack: one reading pane behind cover + headline + body (not only .__body). */
+.home-curation-landmark .curation-article-display__pane {
+    background-color: var(--article-reading-pane-bg);
+    padding: 1rem 1.15rem 1.5rem;
+    box-sizing: border-box;
+    border-radius: 0.35rem;
+}
+
+.home-curation-landmark .curation-article-display__body {
+    padding: 0;
+    background: transparent;
+}
+
+.home-curation-landmark .curation-article-display__media {
+    background: transparent;
 }
 
 .table-of-contents {
@@ -433,11 +498,11 @@
     font-family: var(--main-body-font), serif;
 }
 
-/* In-flow + aside: same NIP-84 mark treatment; scroll-margin in article for #highlight-… links */
-.article-main mark.user-highlight__marker,
-.home-aside-highlights__quote--html mark.user-highlight__marker {
+/* In-flow: NIP-84 mark treatment on article pages only (scroll-margin for #highlight-… links below). */
+.article-main mark.user-highlight__marker {
     margin: 0;
     padding: 0.08em 0.1em 0.12em;
+    border: none;
     border-radius: 0.12em;
     font: inherit;
     line-height: inherit;
@@ -448,9 +513,24 @@
     -webkit-box-decoration-break: clone;
 }
 
+/* Home highlights feed: same <mark> markup, no highlight fill — reads as body copy. */
+.home-aside-highlights__quote--html mark.user-highlight__marker {
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    font: inherit;
+    line-height: inherit;
+    color: inherit;
+    background: transparent;
+    box-shadow: none;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
 .article-main mark.user-highlight__marker,
 .article-main .user-highlight__fragment-target {
-    scroll-margin-top: calc(var(--site-fixed-header-offset, 140px) + 0.75rem);
+    scroll-margin-top: calc(var(--site-fixed-header-offset, 112px) + 0.75rem);
 }
 
 /* Invisible #highlight-{eid} anchors (same group as an older mark) — zero visual footprint. */
@@ -482,7 +562,7 @@
     padding: 0.5rem 0.65rem 0.6rem;
     border-radius: 0.35rem;
     background: var(--color-bg, #fff);
-    border: 1px solid color-mix(in srgb, var(--color-text-mid) 18%, var(--color-bg) 82%);
+    border: none;
     box-shadow: 0 0.15rem 0.75rem color-mix(in srgb, #000 12%, transparent);
     font-size: 0.88rem;
     line-height: 1.35;
@@ -514,6 +594,21 @@
 
 .user-highlight__tip-item {
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.user-highlight__tip-date {
+    margin: 0 0 0 1.85rem;
+    font-size: 0.68rem;
+    font-weight: 400;
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-mid, #6b6b6b);
+    line-height: 1.25;
 }
 
 .user-highlight__tip-popover .user-badge--in-tip {

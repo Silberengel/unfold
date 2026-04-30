@@ -35,6 +35,13 @@ h1.brand {
     line-height: 1.05;
 }
 
+/* Site chrome only (Header.html.twig): keep the wordmark readable but less dominant than body + nav. */
+#site-header h1.brand {
+    font-size: clamp(1.45rem, 2.6vw, 2.55rem);
+    line-height: 1.06;
+    gap: 0.32em;
+}
+
 
 
 h1.brand a,
@@ -144,6 +151,15 @@ svg.icon {
     display: flex;
     flex-direction: column;
     gap: 3.5rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+    .home-body.home-body--wall {
+        gap: 2.5rem;
+    }
 }
 
 /* Home: NIP-51 30004 “headlines” — editorial section title + full-width article stack (not masonry). */
@@ -280,6 +296,29 @@ svg.icon {
     }
 }
 
+/* Home only: fixed 2-column picture grid (not masonry columns). */
+.featured-list.featured-list--wall.featured-list--picture-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    column-count: unset;
+    column-gap: unset;
+    column-fill: unset;
+    gap: 1rem 1.1rem;
+}
+
+@media (min-width: 640px) {
+    .featured-list.featured-list--wall.featured-list--picture-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1100px) {
+    .featured-list.featured-list--wall.featured-list--picture-grid {
+        column-count: unset;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .featured-tile {
     --tile-hue: 140;
     break-inside: avoid;
@@ -327,22 +366,195 @@ svg.icon {
     border-radius: 0.35rem;
 }
 
+/* Home picture blocks: sharp frame, full-bleed image, bottom text overlay */
+.featured-list--picture-grid .featured-tile--picture-block {
+    break-inside: unset;
+    margin: 0;
+    border-radius: 2px;
+    border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-bg) 100%, transparent),
+        0 1px 0 color-mix(in srgb, var(--color-text) 8%, transparent);
+    overflow: hidden;
+    background: var(--color-bg);
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+.featured-list--picture-grid .featured-tile--picture-block:has(.featured-tile__link--picture:hover),
+.featured-list--picture-grid .featured-tile--picture-block:has(.featured-tile__link--picture:focus-visible) {
+    border-color: color-mix(in srgb, hsl(var(--tile-hue) 42% 42%) 55%, var(--color-border) 45%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, hsl(var(--tile-hue) 38% 48%) 22%, transparent),
+        0 12px 32px color-mix(in srgb, var(--color-text) 12%, transparent);
+    transform: translateY(-1px);
+}
+
+.featured-list--picture-grid .featured-tile__link--picture {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+
+.featured-list--picture-grid .featured-tile__link--picture:hover,
+.featured-list--picture-grid .featured-tile__link--picture:focus-visible {
+    text-decoration: none;
+}
+
+.featured-list--picture-grid .featured-tile__link--picture:focus-visible {
+    outline: none;
+}
+
+.featured-list--picture-grid .featured-tile__picture {
+    position: relative;
+    aspect-ratio: 5 / 4;
+    overflow: hidden;
+    background: var(--color-bg-light);
+}
+
+.featured-list--picture-grid .featured-tile__picture-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    transform: scale(1.02);
+    transition: transform 0.35s ease;
+}
+
+.featured-list--picture-grid .featured-tile--picture-block:has(.featured-tile__link--picture:hover) .featured-tile__picture-img,
+.featured-list--picture-grid .featured-tile--picture-block:has(.featured-tile__link--picture:focus-visible) .featured-tile__picture-img {
+    transform: scale(1.06);
+}
+
+.featured-list--picture-grid .featured-tile__picture-img[src*="favicon-96x96"] {
+    object-fit: contain;
+    padding: 2rem;
+    box-sizing: border-box;
+    transform: none;
+}
+
+.featured-list--picture-grid .featured-tile__picture-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        to top,
+        color-mix(in srgb, #0a0a0a 88%, transparent) 0%,
+        color-mix(in srgb, #0a0a0a 35%, transparent) 42%,
+        transparent 68%
+    );
+}
+
+.featured-list--picture-grid .featured-tile__picture-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0.65rem 0.85rem 0.75rem;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    min-width: 0;
+}
+
+.featured-list--picture-grid .featured-tile__picture-cat {
+    align-self: flex-start;
+    display: inline-block;
+    font-family: var(--font-family), system-ui, sans-serif;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    padding: 0.32em 0.65em 0.28em;
+    border-radius: 0.28rem;
+    color: color-mix(in srgb, #fafafa 92%, hsl(var(--tile-hue) 70% 88%) 8%);
+    background: color-mix(in srgb, hsl(var(--tile-hue) 32% 12%) 72%, #000 28%);
+    border: 1px solid color-mix(in srgb, #fff 18%, hsl(var(--tile-hue) 45% 40%) 82%);
+    text-shadow: 0 1px 2px color-mix(in srgb, #000 65%, transparent);
+    box-shadow: 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
+    transition:
+        color 0.22s ease,
+        background-color 0.22s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease,
+        text-shadow 0.22s ease,
+        transform 0.22s ease;
+}
+
+.featured-list--picture-grid .featured-tile--picture-block:has(.featured-tile__link:hover) .featured-tile__picture-cat,
+.featured-list--picture-grid .featured-tile--picture-block:has(.featured-tile__link:focus-visible) .featured-tile__picture-cat {
+    color: #fff;
+    background: color-mix(in srgb, hsl(var(--tile-hue) 48% 52%) 78%, #fff 22%);
+    border-color: color-mix(in srgb, #fff 55%, hsl(var(--tile-hue) 55% 70%) 45%);
+    text-shadow:
+        0 0 14px color-mix(in srgb, hsl(var(--tile-hue) 72% 70%) 70%, transparent),
+        0 1px 3px color-mix(in srgb, #000 45%, transparent);
+    box-shadow:
+        0 0 22px color-mix(in srgb, hsl(var(--tile-hue) 62% 58%) 55%, transparent),
+        0 1px 0 color-mix(in srgb, #fff 35%, transparent);
+    transform: translateY(-1px);
+}
+
+.featured-list--picture-grid .featured-tile__picture-title {
+    font-family: var(--heading-font), ui-serif, serif;
+    font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+    font-weight: 700;
+    line-height: 1.2;
+    color: #fafafa;
+    margin: 0;
+    letter-spacing: -0.02em;
+    text-shadow: 0 1px 3px color-mix(in srgb, #000 70%, transparent);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+}
+
 .featured-tile__head {
-    padding: 0.4rem 0.75rem 0.45rem;
+    padding: 0.48rem 0.85rem 0.52rem;
     background: color-mix(in srgb, hsl(var(--tile-hue) 34% 46%) 14%, var(--color-bg) 86%);
     border-bottom: 1px solid color-mix(in srgb, hsl(var(--tile-hue) 32% 38%) 24%, var(--color-border) 76%);
+    transition:
+        background-color 0.22s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease;
 }
 
 .featured-tile__cat {
     display: block;
     font-family: var(--font-family), sans-serif;
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     /* Blend hue toward body mid-gray so every tile hue stays ≥4.5:1 on dark head strip */
     color: color-mix(in srgb, hsl(var(--tile-hue) 26% 50%) 38%, var(--color-text-mid) 62%);
     line-height: 1.35;
+    transition:
+        color 0.22s ease,
+        text-shadow 0.22s ease,
+        transform 0.22s ease;
+}
+
+.featured-tile:has(.featured-tile__link:hover) .featured-tile__head,
+.featured-tile:has(.featured-tile__link:focus-visible) .featured-tile__head {
+    background: color-mix(in srgb, hsl(var(--tile-hue) 42% 44%) 28%, var(--color-bg) 72%);
+    border-bottom-color: color-mix(in srgb, hsl(var(--tile-hue) 48% 46%) 40%, var(--color-border) 60%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, hsl(var(--tile-hue) 55% 55%) 22%, transparent);
+}
+
+.featured-tile:has(.featured-tile__link:hover) .featured-tile__cat,
+.featured-tile:has(.featured-tile__link:focus-visible) .featured-tile__cat {
+    color: color-mix(in srgb, hsl(var(--tile-hue) 22% 22%) 55%, var(--color-primary) 45%);
+    text-shadow: 0 0 12px color-mix(in srgb, hsl(var(--tile-hue) 58% 62%) 35%, transparent);
 }
 
 .featured-tile__media {
@@ -586,8 +798,8 @@ svg.icon {
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
-    gap: 0.4rem 0.6rem;
-    padding: 0.35rem 0.5rem 0.5rem;
+    gap: 0.45rem 0.65rem;
+    padding: 0.45rem 0.65rem 0.55rem;
     margin: 0;
 }
 
@@ -595,23 +807,23 @@ svg.icon {
     list-style: none;
 }
 
-/* Top category row: current section + clear hover affordance (passive “clean” list → scannable) */
+/* Top category row: primary navigation — weight + contrast above the brand wordmark. */
 .header__cat-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    padding: 0.4rem 0.75rem;
+    padding: 0.42rem 0.85rem;
     font-family: var(--font-family), sans-serif;
-    font-size: 0.82rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     text-decoration: none;
-    color: var(--color-text-mid);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 5px;
+    color: color-mix(in srgb, var(--color-primary) 78%, var(--color-text-mid) 22%);
+    background: color-mix(in srgb, var(--color-primary) 5%, var(--color-bg) 95%);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 14%, var(--color-border) 86%);
+    border-radius: 6px;
     transition:
         color 0.16s ease,
         background-color 0.16s ease,
@@ -622,7 +834,8 @@ svg.icon {
 .header__cat-link:hover {
     text-decoration: none;
     color: var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg) 92%);
+    background: color-mix(in srgb, var(--color-primary) 11%, var(--color-bg) 89%);
+    border-color: color-mix(in srgb, var(--color-primary) 28%, var(--color-border) 72%);
     box-shadow: 0 2px 0 0 var(--color-secondary);
 }
 
@@ -634,8 +847,9 @@ svg.icon {
 
 .header__cat-link--active {
     color: var(--color-primary);
-    font-weight: 700;
-    background: color-mix(in srgb, var(--color-primary) 14%, var(--color-bg) 86%);
+    font-weight: 800;
+    background: color-mix(in srgb, var(--color-primary) 16%, var(--color-bg) 84%);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border) 65%);
     box-shadow: inset 0 -2px 0 0 var(--color-primary);
 }
 
@@ -672,10 +886,10 @@ svg.icon {
 
 @media (max-width: 1024px) {
     .header__logo .brand {
-        font-size: clamp(1rem, 4.2vw, 1.45rem);
-        gap: 0.35rem;
+        font-size: clamp(0.95rem, 3.9vw, 1.32rem);
+        gap: 0.3rem;
         /* Tight line-height + overflow:hidden on .brand__title clip ascenders; keep room for type. */
-        line-height: 1.35;
+        line-height: 1.3;
         justify-content: flex-start;
         text-align: left;
     }
@@ -686,14 +900,14 @@ svg.icon {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        line-height: 1.35;
+        line-height: 1.3;
         /* Padding inside the clipping box so Lobster/serif caps aren’t sheared at the top */
-        padding: 0.2em 0 0.12em;
+        padding: 0.12em 0 0.08em;
     }
 
-    .header__logo-circle {
-        width: 44px;
-        height: 44px;
+    #site-header .header__logo-circle {
+        width: 40px;
+        height: 40px;
     }
 
     .hamburger {
@@ -719,6 +933,11 @@ svg.icon {
     overflow: hidden;
     box-shadow: 0 0 0 1px var(--color-border);
     vertical-align: middle;
+}
+
+#site-header .header__logo-circle {
+    width: 48px;
+    height: 48px;
 }
 
 .header__logo-circle > img {
@@ -1316,12 +1535,12 @@ a:focus-visible {
 
 @media (max-width: 600px) {
     .header__logo .brand {
-        font-size: clamp(0.95rem, 4.8vw, 1.25rem);
+        font-size: clamp(0.88rem, 4.4vw, 1.12rem);
     }
 
-    .header__logo-circle {
-        width: 40px;
-        height: 40px;
+    #site-header .header__logo-circle {
+        width: 36px;
+        height: 36px;
     }
 }
 

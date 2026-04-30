@@ -20,25 +20,27 @@
                 {% set item = tile.article %}
                 {% set article_href = (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) %}
                 <article class="curation-article-display">
-                    <div class="curation-article-display__media">
-                        <a href="{{ article_href }}" tabindex="-1" aria-hidden="true">
-                            <img
-                                src="{{ article_card_cover(item.image, item.pubkey) }}"
-                                alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
-                                loading="{{ loop.first ? 'eager' : 'lazy' }}"
-                                decoding="async"
+                    <div class="curation-article-display__pane">
+                        <div class="curation-article-display__media">
+                            <a href="{{ article_href }}" tabindex="-1" aria-hidden="true">
+                                <img
+                                    src="{{ article_card_cover(item.image, item.pubkey) }}"
+                                    alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
+                                    loading="{{ loop.first ? 'eager' : 'lazy' }}"
+                                    decoding="async"
+                                >
+                            </a>
+                        </div>
+                        <div class="curation-article-display__body">
+                            <h3 class="curation-article-display__headline">
+                                <a class="curation-article-display__title-link" href="{{ article_href }}">{{ item.title|e }}</a>
+                            </h3>
+                            <div
+                                class="article-main curation-article-display__main"
+                                data-controller="user-highlight-tooltip"
                             >
-                        </a>
-                    </div>
-                    <div class="curation-article-display__body">
-                        <h3 class="curation-article-display__headline">
-                            <a class="curation-article-display__title-link" href="{{ article_href }}">{{ item.title|e }}</a>
-                        </h3>
-                        <div
-                            class="article-main curation-article-display__main"
-                            data-controller="user-highlight-tooltip"
-                        >
-                            {{ tile.body_html|raw }}
+                                {{ tile.body_html|raw }}
+                            </div>
                         </div>
                     </div>
                 </article>

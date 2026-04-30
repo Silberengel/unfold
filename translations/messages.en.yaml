@@ -1,6 +1,7 @@
 sidebar:
     featured_authors: 'Featured authors'
     topics: 'Topics'
+    category_recent: 'Latest in categories'
     highlights: 'Highlights'
     highlight_view: 'View highlight: %title%'
 topic:

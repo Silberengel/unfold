@@ -23,6 +23,9 @@
 {% endblock %}
 
 {% block nav %}
+    {% if home_sidebar_category_recent|default([]) is not empty %}
+        {% include 'components/Organisms/SidebarMagazineCategoryRecent.html.twig' with { articles: home_sidebar_category_recent } only %}
+    {% endif %}
 {% endblock %}
 
 {% block body %}

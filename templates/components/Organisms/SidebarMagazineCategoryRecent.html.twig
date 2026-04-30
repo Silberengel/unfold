@@ -1,0 +1,13 @@
+{% if articles is defined and articles is not empty %}
+    <section class="sidebar-magazine-recent" aria-label="{{ 'sidebar.category_recent'|trans }}">
+        <h2 class="sidebar-magazine-recent__title">{{ 'sidebar.category_recent'|trans }}</h2>
+        <ol class="sidebar-magazine-recent__list" role="list">
+            {% for item in articles %}
+                {% set href = (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) %}
+                <li class="sidebar-magazine-recent__item">
+                    <a class="sidebar-magazine-recent__link" href="{{ href }}">{{ item.title|e }}</a>
+                </li>
+            {% endfor %}
+        </ol>
+    </section>
+{% endif %}

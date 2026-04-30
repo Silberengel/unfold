@@ -49,6 +49,7 @@ parameters:
     d_tag: '%d_tag_magazine%'
     # NIP-51 kind 30004 curation set #d for `npub` (home landing stack): optional `title` tag = section heading; ordered `a` for kind 30023 only (full-width article blocks). Other `a` kinds and `e` tags ignored. Empty or `d-tag-goes-here` disables.
     d_tag_curation_set: 'nostr-curated-headlines'
+    # Whether to show community articles on the home page
     community_articles: true
     # Domain for site-assigned NIP-05 for featured (magazine category) authors; must match the host serving /.well-known/nostr.json
     nip05_domain: 'blog.imwald.eu'
@@ -67,5 +68,5 @@ parameters:
         url: "https://git.imwald.eu/silberengel/unfold/src/branch/imwald"
         description: "This site’s Unfold source (imwald branch)."
       - title: "Decent Newsroom"
-        url: "https://decentnewsroom.com/"
-        description: "Decentralized magazine platform."
+        url: "https://decentnewsroom.com/mag/newsroom-magazine-on-imwald-by-laeserin"
+        description: "Decentralized magazine platform. View the magazine on Decent Newsroom."

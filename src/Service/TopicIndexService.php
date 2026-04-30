@@ -20,11 +20,11 @@ final class TopicIndexService
     }
 
     /**
-     * Up to 25 most relevant topic strings, scored by count + 5× featured (magazine home cards).
+     * Most relevant topic strings (default cap 10 in sidebar), scored by count + 5× featured (magazine home cards).
      *
      * @return list<string> topic labels (lowercase, no #)
      */
-    public function getTopTopicLabels(int $limit = 25): array
+    public function getTopTopicLabels(int $limit = 10): array
     {
         $conn = $this->articleRepository->getEntityManager()->getConnection();
         $slugs = $this->magazineContent->collectFeaturedArticleSlugsForHome(

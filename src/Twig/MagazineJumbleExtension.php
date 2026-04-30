@@ -12,7 +12,7 @@ use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 
 /**
- * Footer “View this magazine on Jumble”: Jumble /feed/notes/{naddr} for the site root kind 30040 index.
+ * Footer “View this magazine on Jumble Imwald”: Jumble /feed/notes/{naddr} for the site root kind 30040 index.
  */
 final class MagazineJumbleExtension extends AbstractExtension
 {

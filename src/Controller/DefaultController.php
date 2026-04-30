@@ -31,6 +31,7 @@ class DefaultController extends AbstractController
             'home_curation_heading' => $curation['heading'],
             'home_curation_tiles' => $curation['tiles'],
             'home_featured_tiles' => $this->magazineContent->buildHomeMixedFeaturedWallTiles($categoryATags),
+            'home_sidebar_category_recent' => $this->magazineContent->buildHomeSidebarCategorizedRecent($categoryATags),
             'home_highlights' => $this->articleHighlightRepository->findRecentForHome(40),
         ]);
     }

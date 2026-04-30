@@ -61,6 +61,55 @@
     display: none;
 }
 
+/* “Latest in categories” (only rendered on home when data exists). Hidden until wide layout or home stacked nav. */
+.sidebar-magazine-recent {
+    display: none;
+}
+
+.sidebar-magazine-recent__title {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-family), sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-text-mid) 72%, var(--color-bg) 28%);
+    line-height: 1.3;
+}
+
+.sidebar-magazine-recent__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.layout > nav .sidebar-magazine-recent__item {
+    margin: 0;
+}
+
+.sidebar-magazine-recent__link {
+    display: block;
+    font-family: var(--font-family), system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--color-primary);
+    text-decoration: none;
+    padding: 0.15rem 0;
+    border-bottom: 1px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.layout > nav .sidebar-magazine-recent__link:hover,
+.layout > nav .sidebar-magazine-recent__link:focus-visible {
+    color: color-mix(in srgb, var(--color-secondary) 55%, var(--color-primary));
+    text-decoration: none;
+    border-bottom-color: color-mix(in srgb, var(--color-text-mid) 22%, var(--color-border));
+}
+
 @media (min-width: 1025px) {
     .sidebar-featured-authors {
         display: block;
@@ -204,6 +253,13 @@
         color: color-mix(in srgb, var(--color-primary) 42%, var(--color-text-mid));
         text-decoration: none;
     }
+
+    .sidebar-magazine-recent {
+        display: block;
+        margin-top: 1.05rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid var(--color-border);
+    }
 }
 
 /* Only the app chrome in Header.html.twig (#site-header). A bare `header` rule also
@@ -222,7 +278,7 @@
    .header__logo padding in the max-width block below. */
 @media (min-width: 1025px) {
     #site-header {
-        padding-top: max(0.65rem, env(safe-area-inset-top, 0px));
+        padding-top: max(0.4rem, env(safe-area-inset-top, 0px));
     }
 }
 
@@ -387,9 +443,9 @@ a.nostr-share-menu__action {
         box-sizing: border-box;
         justify-content: space-between;
         align-items: center;
-        gap: 0.5rem;
-        /* Top: safe area (notch) + room so the site title isn’t flush under the browser chrome */
-        padding: max(0.5rem, env(safe-area-inset-top, 0px)) max(0.65rem, env(safe-area-inset-left)) 0.45rem max(0.65rem, env(safe-area-inset-right));
+        gap: 0.45rem;
+        /* Top: safe area (notch) + tighter bar so content starts sooner */
+        padding: max(0.32rem, env(safe-area-inset-top, 0px)) max(0.55rem, env(safe-area-inset-left)) 0.32rem max(0.55rem, env(safe-area-inset-right));
     }
 
     .header__brand {
@@ -402,8 +458,8 @@ a.nostr-share-menu__action {
     .header__categories {
         display: none;
         flex-direction: column;
-        padding-top: 10px;
-        padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+        padding-top: 0.35rem;
+        padding-bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
     }
 
     .header__categories.active {
@@ -416,24 +472,33 @@ a.nostr-share-menu__action {
     }
 
     .header__categories ul {
-        flex-direction: column;
-        gap: 0.35rem;
-        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4rem 0.55rem;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 0.15rem 0.35rem 0.35rem;
     }
 
     .header__cat-link {
-        width: 100%;
-        min-height: 2.6rem;
+        width: auto;
+        min-width: 0;
+        min-height: 2.35rem;
+        padding: 0.35rem 0.7rem;
+        box-sizing: border-box;
     }
 
     /* Log in / account block below category links in the hamburger */
     .header__mobile-account {
         align-self: stretch;
-        text-align: left;
+        text-align: center;
         width: 100%;
         max-width: 32rem;
         margin: 0 auto;
-        padding: 0.75rem 0.25rem 0;
+        padding: 0.65rem 0.35rem 0;
         border-top: 1px solid var(--color-border);
     }
 }
@@ -465,7 +530,7 @@ a.nostr-share-menu__action {
 /* Main content */
 :root {
     /* Clears fixed #site-header; keep in sync with main margin-top per breakpoint below. */
-    --site-fixed-header-offset: 140px;
+    --site-fixed-header-offset: 112px;
 }
 
 /* #:target / in-page links: scroll position leaves room under the fixed bar (scroll-margin on inline <mark> is unreliable alone). */
@@ -483,7 +548,7 @@ main {
 
 .user-menu {
     position: fixed;
-    top: 150px;
+    top: calc(var(--site-fixed-header-offset, 112px) + 0.35rem);
     width: calc(21vw - 10px);
     min-width: 150px;
     max-width: 270px;
@@ -491,7 +556,7 @@ main {
 
 @media (min-width: 1025px) {
     :root {
-        --site-fixed-header-offset: 152px;
+        --site-fixed-header-offset: 120px;
     }
 
     /* Match extra header padding-top so content and menu clear the fixed bar */
@@ -616,25 +681,22 @@ aside {
 .home-aside-highlights__item-inner {
     position: relative;
     color: color-mix(in srgb, var(--color-text-mid) 90%, var(--color-primary) 10%);
-    padding: 0.1rem 0 0.15rem 0.55rem;
+    padding: 0.1rem 0 0.15rem 0;
     border: none;
-    border-left: 1px solid color-mix(in srgb, var(--color-text-mid) 7%, var(--color-border) 93%);
     border-radius: 0;
     background: transparent;
     line-height: 1.45;
     font-size: 0.78rem;
-    transition: color 0.18s ease, border-left-color 0.18s ease, background 0.18s ease;
+    transition: color 0.18s ease, background 0.18s ease;
 }
 
 .home-aside-highlights__item-inner:hover {
     color: var(--color-primary);
-    border-left-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border) 68%);
     background: color-mix(in srgb, var(--color-primary) 4%, var(--color-bg) 96%);
 }
 
 .home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) {
     color: var(--color-primary);
-    border-left-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border) 62%);
     background: color-mix(in srgb, var(--color-primary) 4%, var(--color-bg) 96%);
     outline: 2px solid var(--color-focus-ring, var(--color-primary));
     outline-offset: 3px;
@@ -645,51 +707,6 @@ aside {
     inset: 0;
     z-index: 2;
     text-decoration: none;
-}
-
-/* Highlight author (small badge link) + date above quote; badge is clickable, rest of row opens article. */
-.home-aside-highlights__byline {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.3rem 0.5rem;
-    margin: 0 0 0.35rem;
-    position: relative;
-    z-index: 3;
-    font-family: var(--font-family), system-ui, sans-serif;
-    font-size: 0.68rem;
-    line-height: 1.2;
-    pointer-events: none;
-}
-
-.home-aside-highlights__who {
-    display: inline-flex;
-    max-width: 100%;
-    pointer-events: auto;
-}
-
-.home-aside-highlights__byline .user-badge {
-    gap: 0.28rem;
-}
-
-.home-aside-highlights__byline .user-badge__avatar {
-    width: 1.125rem;
-    height: 1.125rem;
-}
-
-.home-aside-highlights__byline .user-badge__name {
-    font-size: 0.68rem;
-    max-width: 7.5rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.home-aside-highlights__time {
-    font-size: 0.65rem;
-    color: color-mix(in srgb, var(--color-text-mid) 88%, var(--color-bg) 12%);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
 }
 
 /* Let clicks go to the overlay; quote/meta stay visible above background only visually (no pointer on text). */
@@ -744,11 +761,6 @@ aside {
     color: color-mix(in srgb, var(--color-primary) 45%, var(--color-text-mid) 55%);
 }
 
-.home-aside-highlights__item-inner:hover .home-aside-highlights__time,
-.home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) .home-aside-highlights__time {
-    color: color-mix(in srgb, var(--color-primary) 32%, var(--color-text-mid) 68%);
-}
-
 table {
     width: 100%;
     margin: 20px 0;
@@ -776,26 +788,233 @@ dt {
     aside {
         display: none; /* Hide the sidebars on small screens */
     }
-    /* Home: keep highlights — stack <aside> under the featured wall (same DOM order; row layout would squeeze it beside main). */
+    /* Home: main first, then left chrome (topics + lists), then highlights — single column, full viewport width. */
     .layout:has(.home-body--wall) {
         flex-direction: column;
         align-items: stretch;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .layout:has(.home-body--wall) > main {
+        order: 1;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding-left: max(1em, env(safe-area-inset-left, 0px));
+        padding-right: max(1em, env(safe-area-inset-right, 0px));
+    }
+
+    .layout:has(.home-body--wall) > nav {
+        display: block;
+        order: 2;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        flex-shrink: 0;
+        margin-top: 0.25rem;
+        padding: 0.75rem max(1rem, env(safe-area-inset-left, 0px)) 1.25rem max(1rem, env(safe-area-inset-right, 0px));
+        box-sizing: border-box;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .layout:has(.home-body--wall) > nav .user-menu {
+        position: static;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        top: auto;
+        left: auto;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-top-topics {
+        display: block;
+        margin-top: 0.35rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors {
+        display: block;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .layout:has(.home-body--wall) .sidebar-magazine-recent {
+        display: block;
+        margin-top: 0.65rem;
+        padding-top: 0.65rem;
+        border-top: 1px solid var(--color-border);
     }
 
     .layout:has(.home-body--wall) > aside {
         display: block;
+        order: 3;
         width: 100%;
         max-width: none;
         min-width: 0;
         flex-shrink: 0;
         margin-top: 0.5rem;
-        padding: 0 1em 1.75rem;
+        padding: 0 max(1rem, env(safe-area-inset-left, 0px)) 1.75rem max(1rem, env(safe-area-inset-right, 0px));
         box-sizing: border-box;
     }
+
+    /* Sidebar chrome is styled only inside min-width:1025px elsewhere; restyle here for stacked home nav. */
+    .layout:has(.home-body--wall) > nav .sidebar-featured-authors__grid > li,
+    .layout:has(.home-body--wall) > nav .sidebar-top-topics__list > li,
+    .layout:has(.home-body--wall) > nav .sidebar-magazine-recent__list > li {
+        margin: 0;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__title,
+    .layout:has(.home-body--wall) .sidebar-top-topics__title,
+    .layout:has(.home-body--wall) .sidebar-magazine-recent__title {
+        margin: 0 0 0.55rem;
+        font-family: var(--font-family), sans-serif;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--color-text-mid) 72%, var(--color-bg) 28%);
+        line-height: 1.3;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(3.75rem, 1fr));
+        gap: 0.75rem 0.65rem;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__item {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        min-width: 0;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__link {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        max-width: 100%;
+        border-radius: 50%;
+        overflow: hidden;
+        line-height: 0;
+        color: inherit;
+        text-decoration: none;
+        box-sizing: border-box;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__link:hover {
+        text-decoration: none;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__link:focus-visible {
+        outline: 2px solid var(--color-focus-ring);
+        outline-offset: 2px;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__avatar {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        overflow: hidden;
+        background: var(--color-bg-light);
+        box-shadow: 0 0 0 1px var(--color-border);
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__avatar img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__avatar img[src*="favicon-96x96"] {
+        object-fit: contain;
+        object-position: center;
+        padding: 0.2rem;
+        box-sizing: border-box;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-featured-authors__link:hover .sidebar-featured-authors__avatar {
+        box-shadow: 0 0 0 2px var(--color-secondary);
+    }
+
+    .layout:has(.home-body--wall) .sidebar-top-topics__list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.4rem;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        align-items: flex-start;
+    }
+
+    .layout:has(.home-body--wall) > nav a.topic-badge.sidebar-top-topics__link,
+    .layout:has(.home-body--wall) > nav a.topic-badge {
+        display: inline-block;
+        max-width: 100%;
+        background-color: color-mix(in srgb, var(--color-text-mid) 7%, var(--color-bg));
+        color: color-mix(in srgb, var(--color-text-mid) 78%, var(--color-bg) 22%);
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        line-height: 1.35;
+        font-weight: 400;
+        text-decoration: none;
+        border: none;
+        box-sizing: border-box;
+        word-break: break-word;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .layout:has(.home-body--wall) > nav a.topic-badge.sidebar-top-topics__link:hover,
+    .layout:has(.home-body--wall) > nav a.topic-badge:hover,
+    .layout:has(.home-body--wall) > nav a.topic-badge.sidebar-top-topics__link:focus-visible,
+    .layout:has(.home-body--wall) > nav a.topic-badge:focus-visible {
+        background-color: color-mix(in srgb, var(--color-text-mid) 12%, var(--color-bg));
+        color: color-mix(in srgb, var(--color-primary) 42%, var(--color-text-mid));
+        text-decoration: none;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-magazine-recent__list {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .layout:has(.home-body--wall) .sidebar-magazine-recent__link {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .layout:has(.home-body--wall) .home-aside-highlights {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
     /* Fixed header is taller than 90px (safe-area + logo row + title padding). Match it or the first
        main content (e.g. featured authors intro) sits under the bar and looks “cut off” at the top. */
     :root {
-        --site-fixed-header-offset: max(7.25rem, calc(4.8rem + env(safe-area-inset-top, 0px)));
+        --site-fixed-header-offset: max(5.85rem, calc(3.85rem + env(safe-area-inset-top, 0px)));
     }
 
     main {
