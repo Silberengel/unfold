@@ -1,6 +1,28 @@
+{% set _theme_dark_cfg = website_theme_stylesheet_dark|default('')|trim %}
+{% set _color_scheme_site_default = _theme_dark_cfg != '' ? 'dark' : 'light' %}
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ website_theme }}">
+<html
+    lang="en"
+    data-theme="{{ website_theme }}"
+    data-color-scheme-default="{{ _color_scheme_site_default }}"
+>
 <head>
+    {# Apply saved color scheme before first paint; site default is dark when a dark magazine sheet is configured. #}
+    <script>
+    (function () {
+        var def = document.documentElement.getAttribute('data-color-scheme-default') || 'dark';
+        var p = def;
+        try {
+            var s = localStorage.getItem('unfold-color-scheme');
+            if (def === 'light' && s === 'dark') {
+                p = 'light';
+            } else if (s === 'light' || s === 'dark') {
+                p = s;
+            }
+        } catch (e) {}
+        document.documentElement.setAttribute('data-color-scheme', p);
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ website_name }}{% endblock %}</title>
@@ -26,7 +48,39 @@
         {% block importmap %}{{ importmap('app') }}{% endblock %}
     {% endblock %}
     {% block stylesheets %}
-        <link rel="stylesheet" href="{{ asset('theme.css') }}">
+        {% set _theme_light = website_theme_stylesheet_light|default('theme.css') %}
+        {% set _theme_dark = _theme_dark_cfg %}
+        <link
+            rel="stylesheet"
+            id="theme-magazine-stylesheet"
+            href="{{ _theme_dark != '' ? asset(_theme_dark) : asset(_theme_light) }}"
+            data-href-light="{{ asset(_theme_light)|e('html_attr') }}"
+            {% if _theme_dark != '' %}
+                data-href-dark="{{ asset(_theme_dark)|e('html_attr') }}"
+            {% endif %}
+        >
+        {% if _theme_dark != '' %}
+            <script>
+            (function () {
+                var el = document.getElementById('theme-magazine-stylesheet');
+                if (!el) {
+                    return;
+                }
+                var scheme = document.documentElement.getAttribute('data-color-scheme')
+                    || document.documentElement.getAttribute('data-color-scheme-default')
+                    || 'dark';
+                var dark = el.getAttribute('data-href-dark');
+                var light = el.getAttribute('data-href-light');
+                if (scheme === 'light') {
+                    el.setAttribute('href', light);
+                } else if (dark) {
+                    el.setAttribute('href', dark);
+                } else {
+                    el.setAttribute('href', light);
+                }
+            })();
+            </script>
+        {% endif %}
     {% endblock %}
 </head>
 <body data-controller="service-worker">

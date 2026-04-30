@@ -8,6 +8,8 @@ twig:
         website_theme: '%theme%'
         website_theme_color: '%theme_color%'
         website_bg_color: '%theme_bg_color%'
+        website_theme_stylesheet_light: '%theme_stylesheet_light%'
+        website_theme_stylesheet_dark: '%theme_stylesheet_dark%'
         magazine_community_articles: '%community_articles%'
 
 when@test:

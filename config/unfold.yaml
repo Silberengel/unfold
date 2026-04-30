@@ -1,4 +1,6 @@
 # Site identity and theme (see assets/theme/local/ to override default assets).
+# Magazine color tokens: theme_stylesheet_light + optional theme_stylesheet_dark (logical asset names).
+# Use theme_stylesheet_dark: '' to disable the footer scheme toggle and load only the light sheet.
 
 parameters:
     # Per-relay WebSocket I/O (seconds) in NostrClient; also default_socket_timeout during app:prewarm.
@@ -39,9 +41,15 @@ parameters:
     #   - 'wss://nos.lol'
     #   - 'wss://relay.ditto.pub'
 
+    # Magazine identity for data-theme=… (CSS hooks). Unrelated to light/dark color scheme.
     theme: 'imwald'
     theme_color: '#8c2f1c'
     theme_bg_color: '#f1ebe4'
+    # Per–color-scheme stylesheets: logical asset names under assets/theme/{local,default}/ (see asset_mapper paths).
+    # imwald: light = editorial cream tokens; dark = second sheet (warm charcoal). Set theme_stylesheet_dark to ''
+    # to ship only one magazine theme and hide the footer sun/moon control.
+    theme_stylesheet_light: 'theme.css'
+    theme_stylesheet_dark: 'theme-dark.css'
 
     npub: 'npub1m4ny6hjqzepn4rxknuq94c2gpqzr29ufkkw7ttcxyak7v43n6vvsajc2jl'
     # Kind 30040 magazine root #d (NIP-33). Exposed as `d_tag` for backward compatibility.
