@@ -91,6 +91,8 @@ final class MagazineRefresher
 
         $this->store->putRoot($npub, $dTag, $root);
 
+        $this->refreshCuration30004FromRelays($npub);
+
         $deadline = microtime(true) + $budgetSeconds;
 
         $mergedPrefer = $this->mergePreferSlugsInOrder($preferSlugs, $preferFromEnv);
@@ -159,6 +161,34 @@ final class MagazineRefresher
         }
 
         $this->touchLastRelayTime();
+    }
+
+    /**
+     * Persists NIP-51 kind 30004 (home curation strip) when `d_tag_curation_set` is configured.
+     */
+    private function refreshCuration30004FromRelays(string $npub): void
+    {
+        $d = trim((string) $this->params->get('d_tag_curation_set'));
+        if ($d === '' || strcasecmp($d, 'd-tag-goes-here') === 0) {
+            return;
+        }
+        try {
+            $ev = $this->nostrClient->getCurationSet30004($npub, $d);
+            if ($ev !== null) {
+                $this->store->putCuration30004($npub, $d, $ev);
+                try {
+                    $this->nostrClient->persistCuration30004ReferencedItems($ev);
+                } catch (\Throwable $e2) {
+                    $this->logger->warning('MagazineRefresher: curation 30004 referenced ingest failed', [
+                        'message' => $e2->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('MagazineRefresher: curation set 30004 fetch failed', [
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

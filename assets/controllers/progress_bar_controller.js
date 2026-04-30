@@ -11,17 +11,27 @@ export default class extends Controller {
     // removeEventListener; new .bind() references each connect() would leave stale listeners.
     this.boundHandleInteraction ??= this.handleInteraction.bind(this);
     this.boundPageShow ??= this.onPageShow.bind(this);
+    this.boundTouchStart ??= this.handleTouchStart.bind(this);
+    this.boundTouchEnd ??= this.handleTouchEnd.bind(this);
+    document.removeEventListener('click', this.boundHandleInteraction);
     document.addEventListener('click', this.boundHandleInteraction);
-    document.addEventListener('touchstart', this.handleTouchStart);
-    document.addEventListener('touchend', this.handleTouchEnd);
+    document.removeEventListener('touchstart', this.boundTouchStart);
+    document.addEventListener('touchstart', this.boundTouchStart);
+    document.removeEventListener('touchend', this.boundTouchEnd);
+    document.addEventListener('touchend', this.boundTouchEnd);
+    window.removeEventListener('pageshow', this.boundPageShow);
     window.addEventListener('pageshow', this.boundPageShow);
     this.resumeIfPending();
   }
 
   disconnect() {
     document.removeEventListener('click', this.boundHandleInteraction);
-    document.removeEventListener('touchstart', this.handleTouchStart);
-    document.removeEventListener('touchend', this.handleTouchEnd);
+    if (this.boundTouchStart) {
+      document.removeEventListener('touchstart', this.boundTouchStart);
+    }
+    if (this.boundTouchEnd) {
+      document.removeEventListener('touchend', this.boundTouchEnd);
+    }
     window.removeEventListener('pageshow', this.boundPageShow);
     if (this.loadListener) {
       window.removeEventListener('load', this.loadListener);
@@ -85,20 +95,20 @@ export default class extends Controller {
     this.barTarget.style.width = '0';
   }
 
-  handleTouchStart = (event) => {
+  handleTouchStart(event) {
     const touch = event.changedTouches[0];
     this.touchStartX = touch.screenX;
     this.touchStartY = touch.screenY;
-  };
+  }
 
-  handleTouchEnd = (event) => {
+  handleTouchEnd(event) {
     const touch = event.changedTouches[0];
     const dx = Math.abs(touch.screenX - this.touchStartX);
     const dy = Math.abs(touch.screenY - this.touchStartY);
     if (dx < 10 && dy < 10) {
       this.handleInteraction(event);
     }
-  };
+  }
 
   handleInteraction(event) {
     const link = event.target.closest('a');

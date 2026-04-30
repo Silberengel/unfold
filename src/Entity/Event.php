@@ -17,6 +17,8 @@ class Event
 
     public const STORAGE_MAGAZINE_CATEGORY = 'magazine_category';
 
+    public const STORAGE_MAGAZINE_CURATION_30004 = 'magazine_curation_30004';
+
     public const STORAGE_PROFILE_KIND0 = 'profile';
 
     public const STORAGE_RELAY_LIST_10002 = 'relay_list';

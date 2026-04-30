@@ -7,8 +7,8 @@ namespace App\Service;
 use App\Enum\KindsEnum;
 
 /**
- * NIP-09 kind-5: keep only deletion events that target kinds persisted in MySQL (profile, relay list, payto,
- * long-form, magazine). Skips thread/reply deletions to reduce relay payload.
+ * NIP-09 kind-5: keep deletion events that may affect MySQL-backed rows (profile, relay list, payto,
+ * long-form, magazine 30040, home curation 30004). Skips thread/reply deletions to reduce relay payload.
  */
 final class NostrKind5DeletionFilter
 {
@@ -28,7 +28,8 @@ final class NostrKind5DeletionFilter
             }
             if ((string) $r[0] === 'a') {
                 $parts = explode(':', (string) $r[1], 3);
-                if (\in_array((int) $parts[0], $kinds, true)) {
+                $kindNum = (int) $parts[0];
+                if (\in_array($kindNum, $kinds, true)) {
                     return true;
                 }
             }
@@ -49,6 +50,7 @@ final class NostrKind5DeletionFilter
             KindsEnum::LONGFORM->value,
             KindsEnum::LONGFORM_DRAFT->value,
             KindsEnum::PUBLICATION_INDEX->value,
+            KindsEnum::CURATION_SET->value,
         ];
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Dto;
 
+use App\Entity\Article;
+
 /**
  * Minimal article row for home/category list cards (avoids loading long-form `content` from the DB).
  */
@@ -19,6 +21,28 @@ final readonly class FeaturedArticleCard
         private ?\DateTimeImmutable $publishedAt,
         private ?string $pubkey,
     ) {
+    }
+
+    public static function fromArticle(Article $a): self
+    {
+        $rawId = $a->getId();
+        $id = null;
+        if (\is_int($rawId)) {
+            $id = $rawId;
+        } elseif (\is_string($rawId) && ctype_digit($rawId)) {
+            $id = (int) $rawId;
+        }
+
+        return new self(
+            $id,
+            $a->getSlug(),
+            $a->getTitle(),
+            $a->getSummary(),
+            $a->getImage(),
+            $a->getCreatedAt(),
+            $a->getPublishedAt(),
+            $a->getPubkey(),
+        );
     }
 
     public function getId(): ?int

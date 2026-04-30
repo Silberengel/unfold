@@ -433,12 +433,6 @@ parameters:
 			path: src/Service/MagazineContentService.php
 
 		-
-			message: '#^Call to function method_exists\(\) with App\\Entity\\Event and ''getTags'' will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: src/Service/MagazineContentService.php
-
-		-
 			message: '#^Offset ''categories'' on array\{categories\: list\<array\{entries\: list\<array\{coordinate\: string, status\: string, reason\: string\}\>\}\>\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1

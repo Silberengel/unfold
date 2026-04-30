@@ -40,4 +40,15 @@ final class NostrKind5DeletionFilterTest extends TestCase
         ];
         $this->assertTrue($f->isRelevantToStoredDbData($ev));
     }
+
+    public function testAddressTagWithCurationSetKindIsRelevant(): void
+    {
+        $f = new NostrKind5DeletionFilter();
+        $pk = str_repeat('c', 64);
+        $ev = (object) [
+            'kind' => 5,
+            'tags' => [['a', KindsEnum::CURATION_SET->value.':'.$pk.':home']],
+        ];
+        $this->assertTrue($f->isRelevantToStoredDbData($ev));
+    }
 }

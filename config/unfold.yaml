@@ -44,7 +44,11 @@ parameters:
     theme_bg_color: '#f1ebe4'
 
     npub: 'npub1m4ny6hjqzepn4rxknuq94c2gpqzr29ufkkw7ttcxyak7v43n6vvsajc2jl'
-    d_tag: 'newsroom-magazine-on-imwald-by-laeserin'
+    # Kind 30040 magazine root #d (NIP-33). Exposed as `d_tag` for backward compatibility.
+    d_tag_magazine: 'newsroom-magazine-on-imwald-by-laeserin'
+    d_tag: '%d_tag_magazine%'
+    # NIP-51 kind 30004 curation set #d for `npub` (home “spotlight” strip): ordered `a` for kind 30023 only; other `a` kinds and `e` tags are ignored. Empty or `d-tag-goes-here` disables.
+    d_tag_curation_set: 'd-tag-goes-here'
     community_articles: true
     # Domain for site-assigned NIP-05 for featured (magazine category) authors; must match the host serving /.well-known/nostr.json
     nip05_domain: 'blog.imwald.eu'

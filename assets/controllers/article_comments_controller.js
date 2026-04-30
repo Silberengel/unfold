@@ -13,7 +13,10 @@ export default class extends Controller {
 
     connect() {
         this.partialReloads = 0;
-        this.boundOnAuth = this.onAuthChanged.bind(this);
+        // Stable reference across reconnects: rebinding each connect() would strand old listeners
+        // because removeEventListener must use the same function reference that was passed to add.
+        this.boundOnAuth ??= this.onAuthChanged.bind(this);
+        window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
         window.addEventListener('unfold:auth-changed', this.boundOnAuth);
         if (!this.hasContainerTarget || !this.urlValue) {
             return;
@@ -28,7 +31,9 @@ export default class extends Controller {
     }
 
     disconnect() {
-        window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
+        if (this.boundOnAuth) {
+            window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
+        }
     }
 
     onAuthChanged() {

@@ -3,13 +3,13 @@
 #}
 {% if tiles is not empty %}
     <div
-        class="featured-list featured-list--wall"
+        class="featured-list featured-list--wall{{ wall_extra_class|default('') != '' ? ' ' ~ wall_extra_class : '' }}"
         role="region"
-        aria-label="{{ (website_name ~ ' — featured articles')|e('html_attr') }}"
+        aria-label="{{ (region_aria_label|default(website_name ~ ' — featured articles'))|e('html_attr') }}"
     >
         {% for tile in tiles %}
-            {% set item = tile.article %}
             {% set _hue = (tile.categoryTitle|default('x')|length * 47) % 360 %}
+            {% set item = tile.article %}
             <article class="featured-tile" style="--tile-hue: {{ _hue }};">
                 <a
                     class="featured-tile__link"

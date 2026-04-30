@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\Article;
 use App\Entity\Event as PublicationEventEntity;
 use App\Enum\KindsEnum;
+use App\Util\CurationSet30004Home;
 use App\Factory\ArticleFactory;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
@@ -603,6 +604,85 @@ class NostrClient
 
         // Return the first matching event
         return $events[0];
+    }
+
+    /**
+     * Batch-fetch kind-1 events by id (e.g. discussion / tooling). Merges article relay set first, then
+     * profile-only relays for any still missing ids.
+     *
+     * @param list<string> $eventIdHexes
+     *
+     * @return array<string, object> lowercase event id hex → wire event (kind 1)
+     */
+    public function getKind1EventsByIdsIndexed(array $eventIdHexes): array
+    {
+        $want = [];
+        foreach ($eventIdHexes as $raw) {
+            $id = strtolower(trim((string) $raw));
+            if (64 === \strlen($id) && ctype_xdigit($id)) {
+                $want[$id] = true;
+            }
+        }
+        $idList = array_keys($want);
+        if ($idList === []) {
+            return [];
+        }
+        $idList = \array_slice($idList, 0, 100);
+
+        $articleSet = $this->relayListFactory->createRelaySetMergedWithArticleList([]);
+        $byId = $this->queryKind1EventsByIdsFromRelaySet($idList, $articleSet);
+        $missing = array_values(array_diff($idList, array_keys($byId)));
+        if ($missing !== []) {
+            $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromArticleRelays();
+            if ($profileExtra !== []) {
+                $pfSet = $this->relayListFactory->createRelaySetFromUrlsOnly($profileExtra);
+                $extra = $this->queryKind1EventsByIdsFromRelaySet($missing, $pfSet);
+                foreach ($extra as $id => $ev) {
+                    if (!isset($byId[$id])) {
+                        $byId[$id] = $ev;
+                    }
+                }
+            }
+        }
+
+        return $byId;
+    }
+
+    /**
+     * @param list<string> $eventIdHexes
+     *
+     * @return array<string, object>
+     */
+    private function queryKind1EventsByIdsFromRelaySet(array $eventIdHexes, RelaySet $relaySet): array
+    {
+        if ($eventIdHexes === []) {
+            return [];
+        }
+        $request = $this->nostrRelayQuery->createNostrRequest(
+            defaultRelaySet: $this->defaultRelaySet,
+            relaySet: $relaySet,
+            kinds: [KindsEnum::TEXT_NOTE],
+            filters: ['ids' => $eventIdHexes],
+        );
+        $events = $this->nostrRelayQuery->processResponse($request->send(), static fn (object $event) => $event);
+        $out = [];
+        foreach ($events as $e) {
+            if (!\is_object($e)) {
+                continue;
+            }
+            $id = strtolower((string) ($e->id ?? ''));
+            if (64 !== \strlen($id) || !ctype_xdigit($id)) {
+                continue;
+            }
+            if ((int) ($e->kind ?? 0) !== KindsEnum::TEXT_NOTE->value) {
+                continue;
+            }
+            if (!isset($out[$id])) {
+                $out[$id] = $e;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -1553,6 +1633,83 @@ class NostrClient
         return $this->queryMagazineIndex($npub, $dTag, $pfSet, $relaysForLog2);
     }
 
+    /**
+     * Latest NIP-51 kind 30004 curation set for this author and #d (parameterized replaceable).
+     *
+     * Relay strategy matches {@see getMagazineIndex}: article relays first, then profile relays only
+     * if nothing matched.
+     */
+    public function getCurationSet30004(mixed $npub, string $dTag): ?PublicationEventEntity
+    {
+        $dTag = trim($dTag);
+        if ($dTag === '') {
+            return null;
+        }
+        $urls = $this->relayListFactory->getConfiguredArticleRelayUrlList();
+        $relaysForLog = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $urls));
+        $result = $this->queryCurationSet30004($npub, $dTag, $this->defaultRelaySet, $relaysForLog);
+        if ($result !== null) {
+            return $result;
+        }
+        $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromArticleRelays();
+        if ($profileExtra === []) {
+            return null;
+        }
+        $pfSet = $this->relayListFactory->createRelaySetFromUrlsOnly($profileExtra);
+        $relaysForLog2 = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $profileExtra)).' (profile_relays)';
+
+        return $this->queryCurationSet30004($npub, $dTag, $pfSet, $relaysForLog2);
+    }
+
+    private function queryCurationSet30004(mixed $npub, string $dTag, RelaySet $relaySet, string $relaysForLog): ?PublicationEventEntity
+    {
+        $authorHex = $this->wireMerge->npubToHexPubkey($npub);
+        if ($authorHex === null) {
+            $this->logger->warning('Curation set 30004: could not resolve npub to hex pubkey', [
+                'npub' => $npub,
+                'dTag' => $dTag,
+            ]);
+
+            return null;
+        }
+        $request = $this->nostrRelayQuery->createNostrRequest(
+            defaultRelaySet: $this->defaultRelaySet,
+            relaySet: $relaySet,
+            kinds: [KindsEnum::CURATION_SET],
+            filters: ['authors' => [(string) $npub], 'tag' => ['#d', [$dTag]]],
+        );
+        $this->logger->info(sprintf('Curation set 30004 query (relays: %s)', $relaysForLog), [
+            'npub' => $npub,
+            'dTag' => $dTag,
+            'relays' => $relaysForLog,
+        ]);
+        $response = $request->send();
+        $events = $this->nostrRelayQuery->processResponse($response, function ($received) {
+            return $received;
+        });
+        if ($events === []) {
+            return null;
+        }
+        $raw = $this->wireMerge->pickLatestNip33ParameterizedForQuery(
+            $events,
+            KindsEnum::CURATION_SET->value,
+            $authorHex,
+            $dTag
+        );
+        if ($raw === null) {
+            $this->logger->warning('Curation set 30004: no event matched NIP-33 address (kind:pubkey:d) after merge', [
+                'npub' => $npub,
+                'dTag' => $dTag,
+                'relays' => $relaysForLog,
+                'event_count' => \count($events),
+            ]);
+
+            return null;
+        }
+
+        return $this->wireMerge->magazineEventToPublicationEntity($raw);
+    }
+
     private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet, string $relaysForLog): ?PublicationEventEntity
     {
         $authorHex = $this->wireMerge->npubToHexPubkey($npub);
@@ -1933,5 +2090,36 @@ class NostrClient
             }
         }
         $this->logger->info('[longform_ingest] ingestLongform: done (all groups)');
+    }
+
+    /**
+     * After persisting NIP-51 kind 30004, ingest each listed **30023** `a` coordinate into {@see Article}.
+     * Non-30023 `a` tags and `e` tags are ignored at parse time ({@see CurationSet30004Home}).
+     */
+    public function persistCuration30004ReferencedItems(PublicationEventEntity $curation30004): void
+    {
+        try {
+            $parsed = CurationSet30004Home::parseTitleAndOrderedRefs($curation30004->getTags());
+        } catch (\Throwable $e) {
+            $this->logger->warning('[curation_30004] parse refs failed', ['message' => $e->getMessage()]);
+
+            return;
+        }
+        $addresses = [];
+        foreach ($parsed['items'] as $it) {
+            $addresses[] = (string) KindsEnum::LONGFORM->value.':'.strtolower((string) $it['pk']).':'.trim((string) $it['slug']);
+        }
+        $addresses = array_values(array_unique($addresses));
+        if ($addresses === []) {
+            return;
+        }
+        try {
+            $this->ingestLongformForCategoryCoordinates($addresses);
+        } catch (\Throwable $e) {
+            $this->logger->warning('[curation_30004] longform ingest for curated list failed', [
+                'message' => $e->getMessage(),
+                'address_count' => \count($addresses),
+            ]);
+        }
     }
 }

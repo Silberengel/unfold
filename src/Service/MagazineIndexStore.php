@@ -10,8 +10,8 @@ use App\Repository\EventRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Magazine Nostr index events (kind 30040) in MySQL {@see Event}. Updated by {@see MagazineRefresher}
- * (`app:prewarm` / cron).
+ * Magazine Nostr index events (kind 30040) and the site’s NIP-51 kind 30004 curation set in MySQL {@see Event}.
+ * Updated by {@see MagazineRefresher} (`app:prewarm` / cron).
  */
 final class MagazineIndexStore
 {
@@ -44,6 +44,20 @@ final class MagazineIndexStore
         return $this->eventRepository->findOneByCoreRowKey($key);
     }
 
+    public function getCuration30004(string $npub, string $dTag): ?Event
+    {
+        $dTag = trim($dTag);
+        if ($dTag === '') {
+            return null;
+        }
+        $key = MagazineEventKeys::magazineCuration30004($npub, $dTag);
+        if ($key === '') {
+            return null;
+        }
+
+        return $this->eventRepository->findOneByCoreRowKey($key);
+    }
+
     public function putRoot(string $npub, string $dTag, Event $event): void
     {
         if ($dTag === '') {
@@ -63,6 +77,19 @@ final class MagazineIndexStore
         }
         $key = MagazineEventKeys::magazineCategory($slug);
         $this->replaceByCoreKey($key, Event::STORAGE_MAGAZINE_CATEGORY, $event);
+    }
+
+    public function putCuration30004(string $npub, string $dTag, Event $event): void
+    {
+        $dTag = trim($dTag);
+        if ($dTag === '') {
+            return;
+        }
+        $key = MagazineEventKeys::magazineCuration30004($npub, $dTag);
+        if ($key === '') {
+            return;
+        }
+        $this->replaceByCoreKey($key, Event::STORAGE_MAGAZINE_CURATION_30004, $event);
     }
 
     public function deleteCategory(string $slug): void

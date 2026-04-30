@@ -16,7 +16,8 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 /**
  * Applies NIP-09 (kind 5) deletion requests to:
  * - MySQL: long-form articles ({@see KindsEnum::LONGFORM} 30023, {@see KindsEnum::LONGFORM_DRAFT} 30024)
- * - MySQL {@see Event} rows: kind 30040 magazine indices (root + category), kind 0 profile, 10002 relay list, 10133 payto
+ * - MySQL {@see Event} rows: kind 30040 magazine indices (root + category), kind 30004 home curation set,
+ *   kind 0 profile, 10002 relay list, 10133 payto
  *
  * Handled for `e` tags (with `k` when present) and for NIP-33 `a` tags.
  *
@@ -40,7 +41,7 @@ final class Nip09DeletionApplier
     /**
      * @param list<object> $deletionEvents Kind-5 events from relays (e.g. {@see NostrClient::fetchKind5DeletionEventsForAuthors})
      *
-     * @return array{articles_removed: int, magazine_roots: int, magazine_categories: int}
+     * @return array{articles_removed: int, magazine_roots: int, magazine_categories: int, magazine_curation_30004: int}
      */
     public function apply(array $deletionEvents): array
     {
@@ -48,6 +49,7 @@ final class Nip09DeletionApplier
         $articlesPendingFlush = 0;
         $roots = 0;
         $cats = 0;
+        $curation30004 = 0;
         $seenArticleIds = [];
 
         foreach ($deletionEvents as $ev) {
@@ -78,11 +80,8 @@ final class Nip09DeletionApplier
                         KindsEnum::METADATA->value,
                         KindsEnum::RELAY_LIST->value,
                         KindsEnum::PAYMENT_TARGETS->value,
-                        1, // NIP-09 may include kind 1; we do not store notes, but must not treat k as “unknown”
+                        KindsEnum::CURATION_SET->value,
                     ], true)) {
-                    continue;
-                }
-                if ($declared === 1) {
                     continue;
                 }
                 if ($this->removeArticleByEventIdIfValid($eId, $deletionPubkey, $declared, $seenArticleIds)) {
@@ -97,12 +96,15 @@ final class Nip09DeletionApplier
                     KindsEnum::LONGFORM->value,
                     KindsEnum::LONGFORM_DRAFT->value,
                     KindsEnum::PUBLICATION_INDEX->value,
+                    KindsEnum::CURATION_SET->value,
                 ], true)) {
                     $mag = $this->tryRemoveMagazine30040ByEventId($eId, $deletionPubkey);
                     if ($mag === 1) {
                         ++$roots;
                     } elseif ($mag === 2) {
                         ++$cats;
+                    } elseif ($this->tryRemoveStoredCuration30004ByEventId($eId, $deletionPubkey)) {
+                        ++$curation30004;
                     }
                 }
             }
@@ -113,6 +115,7 @@ final class Nip09DeletionApplier
                 $articlesPendingFlush += $r['articles'];
                 $roots += $r['roots'];
                 $cats += $r['cats'];
+                $curation30004 += $r['curation'];
             }
         }
 
@@ -126,6 +129,7 @@ final class Nip09DeletionApplier
             'articles_removed' => $articlesRemoved,
             'magazine_roots' => $roots,
             'magazine_categories' => $cats,
+            'magazine_curation_30004' => $curation30004,
         ];
     }
 
@@ -209,6 +213,30 @@ final class Nip09DeletionApplier
         return 0;
     }
 
+    private function tryRemoveStoredCuration30004ByEventId(string $eventId, string $deletionPubkey): bool
+    {
+        $eid = strtolower($eventId);
+        $e = $this->eventRepository->find($eid);
+        if ($e === null) {
+            return false;
+        }
+        if ((int) $e->getKind() !== KindsEnum::CURATION_SET->value) {
+            return false;
+        }
+        if (!$this->pubkeyEquals($e->getPubkey(), $deletionPubkey)) {
+            return false;
+        }
+        if ($e->getStorageRole() !== MagazineNostrEvent::STORAGE_MAGAZINE_CURATION_30004) {
+            return false;
+        }
+        $this->entityManager->remove($e);
+        $this->logger->notice('NIP-09: removed home curation 30004 row (event table)', [
+            'event_id' => $eid,
+        ]);
+
+        return true;
+    }
+
     private function pubkeyEquals(string $a, string $b): bool
     {
         if (64 !== \strlen($a) || 64 !== \strlen($b)) {
@@ -263,11 +291,11 @@ final class Nip09DeletionApplier
      *
      * @param array<string, true> $seenArticleIds
      *
-     * @return array{articles: int, roots: int, cats: int}
+     * @return array{articles: int, roots: int, cats: int, curation: int}
      */
     private function removeByNip33Address(string $addr, string $deletionPubkey, array &$seenArticleIds): array
     {
-        $out = ['articles' => 0, 'roots' => 0, 'cats' => 0];
+        $out = ['articles' => 0, 'roots' => 0, 'cats' => 0, 'curation' => 0];
         $parts = explode(':', $addr, 3);
         if (\count($parts) < 3) {
             return $out;
@@ -376,6 +404,27 @@ final class Nip09DeletionApplier
                     ]);
                 }
             }
+        }
+
+        if ($kind === KindsEnum::CURATION_SET->value) {
+            if ($d === '') {
+                return $out;
+            }
+            $key = MagazineEventKeys::magazineCuration30004FromPubkeyHex($pk, $d);
+            if ($key === '') {
+                return $out;
+            }
+            $row = $this->eventRepository->findOneByCoreRowKey($key);
+            if ($row !== null
+                && (int) $row->getKind() === KindsEnum::CURATION_SET->value
+                && $row->getStorageRole() === MagazineNostrEvent::STORAGE_MAGAZINE_CURATION_30004
+                && $this->pubkeyEquals($row->getPubkey(), $deletionPubkey)) {
+                $this->entityManager->remove($row);
+                ++$out['curation'];
+                $this->logger->notice('NIP-09: removed home curation 30004 (a tag)', ['address' => $addr]);
+            }
+
+            return $out;
         }
 
         return $out;

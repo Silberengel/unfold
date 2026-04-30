@@ -29,8 +29,9 @@ export default class extends Controller {
       if (!response.ok) return false;
       return 'Authentication Successful';
     })
-    if (!!result) {
-      await this.component.render();
+    if (result) {
+      // Do not await render(): in UX Live Component it can deadlock the same update/render loop.
+      void this.component.render();
       window.dispatchEvent(
         new CustomEvent('unfold:auth-changed', { detail: { loggedIn: true } })
       );

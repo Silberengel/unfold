@@ -2,8 +2,10 @@
 **/*.md
 **/*.php~
 **/*.dist.php
-**/*.dist
-!.env.dist
+# Do not use `**/*.dist`: it matches `.env.dist`, and negation order is easy to get wrong across
+# Docker versions. Ignore other *.dist templates explicitly (see Dockerfile `cp .env.dist`).
+**/phpunit.xml.dist
+**/phpstan.neon.dist
 **/*.cache
 **/._*
 **/.dockerignore
