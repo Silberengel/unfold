@@ -3,9 +3,8 @@
 namespace App\Controller;
 
 use App\Entity\Article;
-use App\Repository\ArticleHighlightRepository;
 use App\Repository\ArticleRepository;
-use App\Service\ArticleBodyHighlightInjector;
+use App\Service\ArticleBodyHtmlRenderer;
 use App\Enum\KindsEnum;
 use App\Nostr\Nip10Kind1ArticleReplyTags;
 use App\Nostr\Nip22CommentTags;
@@ -307,10 +306,8 @@ class ArticleController  extends AbstractController
         string $slug,
         EntityManagerInterface $entityManager,
         CacheService $cacheService,
-        Converter $converter,
         ArticleCommentThreadLoader $commentThreadLoader,
-        ArticleHighlightRepository $articleHighlightRepository,
-        ArticleBodyHighlightInjector $articleBodyHighlightInjector,
+        ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
         NostrKeyHelper $nostrKeyHelper,
     ): Response {
         $article = $this->loadLatestArticleBySlug($entityManager, $slug);
@@ -324,10 +321,8 @@ class ArticleController  extends AbstractController
         return $this->renderArticle(
             $article,
             $cacheService,
-            $converter,
             $commentThreadLoader,
-            $articleHighlightRepository,
-            $articleBodyHighlightInjector,
+            $articleBodyHtmlRenderer,
             $nostrKeyHelper
         );
     }
@@ -366,16 +361,14 @@ class ArticleController  extends AbstractController
     private function renderArticle(
         Article $article,
         CacheService $cacheService,
-        Converter $converter,
         ArticleCommentThreadLoader $commentThreadLoader,
-        ArticleHighlightRepository $articleHighlightRepository,
-        ArticleBodyHighlightInjector $articleBodyHighlightInjector,
+        ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
         NostrKeyHelper $nostrKeyHelper,
     ): Response {
         set_time_limit(300); // 5 minutes
         ini_set('max_execution_time', '300');
 
-        $html = $converter->convertToHtml($article->getContent());
+        $html = $articleBodyHtmlRenderer->renderForArticle($article);
 
         $npub = $nostrKeyHelper->convertPublicKeyToBech32($article->getPubkey());
         $author = $cacheService->getMetadata($npub);
@@ -402,10 +395,6 @@ class ArticleController  extends AbstractController
             $commentReplyContext = $commentsData['comment_reply_context'] ?? $commentReplyContext;
             $commentsPreloaded = true;
         }
-
-        $highlights = $articleHighlightRepository->findByArticle($article);
-        $injection = $articleBodyHighlightInjector->inject($html, $highlights);
-        $html = $injection['html'];
 
         return $this->render('pages/article.html.twig', [
             'article' => $article,

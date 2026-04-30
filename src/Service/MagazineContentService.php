@@ -27,6 +27,7 @@ final class MagazineContentService
         private readonly ArticleRepository $articleRepository,
         private readonly NostrClient $nostrClient,
         private readonly RequestStack $requestStack,
+        private readonly ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
     ) {
     }
 
@@ -703,7 +704,7 @@ final class MagazineContentService
      * Home strip from NIP-51 kind 30004 (curation set): `d_tag_curation_set` on `npub`, ordered `a` tags for
      * kind **30023** only (other kinds and `e` tags are ignored). Tiles resolve from the local `article` table.
      *
-     * @return array{heading: string, tiles: list<array<string, mixed>>}
+     * @return array{heading: string, tiles: list<array{article: FeaturedArticleCard, body_html: string}>}
      */
     public function buildHomeCurationWallData(): array
     {
@@ -749,7 +750,7 @@ final class MagazineContentService
             }
             $indexed = $this->articleRepository->findByAuthorAndSlugIndexed($pairsArg);
         }
-        $heading = $parsed['title'] !== '' ? $parsed['title'] : 'Spotlight';
+        $heading = trim($parsed['title']);
         $tiles = [];
         $seenArticle = [];
         foreach ($parsed['items'] as $it) {
@@ -764,7 +765,7 @@ final class MagazineContentService
             $seenArticle[$key] = true;
             $tiles[] = [
                 'article' => FeaturedArticleCard::fromArticle($article),
-                'categoryTitle' => $heading,
+                'body_html' => $this->articleBodyHtmlRenderer->renderForArticle($article),
             ];
         }
         if ($tiles === []) {

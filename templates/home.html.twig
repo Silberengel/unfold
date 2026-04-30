@@ -28,13 +28,9 @@
 {% block body %}
     <div class="home-body home-body--wall">
         {% if home_curation_tiles|default([]) is not empty %}
-            {% if home_curation_heading|default('') != '' %}
-                <h2 class="home-curation-heading h5 mb-3 text-body-secondary">{{ home_curation_heading|e }}</h2>
-            {% endif %}
-            {% include 'components/Organisms/FeaturedWall.html.twig' with {
+            {% include 'components/Organisms/HomeCurationHeadlines.html.twig' with {
                 tiles: home_curation_tiles,
-                region_aria_label: home_curation_heading|default('') != '' ? (home_curation_heading ~ ' — curated articles') : (website_name ~ ' — curated articles'),
-                wall_extra_class: 'featured-list--curation',
+                section_title: home_curation_heading|default(''),
             } only %}
         {% endif %}
         {% include 'components/Organisms/FeaturedWall.html.twig' with { tiles: home_featured_tiles|default([]) } only %}
