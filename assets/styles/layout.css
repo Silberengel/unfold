@@ -641,18 +641,28 @@ aside {
     padding: 1em;
 }
 
-/* Home: full list height — no max-height; window scroll. */
+/* Home: list lives in a short pane (~10 cards); more rows load from DB but scroll inside the aside. */
 .home-aside-highlights {
+    --home-highlights-visible-rows: 10;
+    --home-aside-highlights-gap: 0.9rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     min-width: 0;
+    min-height: 0;
     width: 100%;
 }
 
-/* Wrapper around the list (keeps end padding; no max-height so highlights aren’t trapped in a short box). */
+/* Scroll: roughly ten line-clamped cards (quote + meta + gap); full list up to repository limit. */
 .home-aside-highlights__scroller {
-    overflow: visible;
+    max-height: min(
+        80vh,
+        calc(var(--home-highlights-visible-rows, 10) * (5.85rem + var(--home-aside-highlights-gap, 0.9rem)) - var(--home-aside-highlights-gap, 0.9rem))
+    );
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     padding-right: max(0.6rem, calc(0.35rem + env(safe-area-inset-right, 0px)));
     box-sizing: border-box;
 }
@@ -674,7 +684,7 @@ aside {
     padding: 0 0.2rem 0 0; /* keep inset from scrollbar */
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: var(--home-aside-highlights-gap);
 }
 
 /* Block body HTML (full quote + <mark> like the article) must not sit inside <a> — use overlay “hit” link. */

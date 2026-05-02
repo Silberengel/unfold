@@ -22,10 +22,11 @@ class ArticleHighlightRepository extends ServiceEntityRepository
 
     /**
      * Newest highlights across published/archived long-form, for the home aside.
+     * The home page caps the query (e.g. 100); the template scroller shows roughly ten at a time.
      *
      * @return list<ArticleHighlight>
      */
-    public function findRecentForHome(int $limit = 36): array
+    public function findRecentForHome(int $limit = 100): array
     {
         if ($limit <= 0) {
             return [];

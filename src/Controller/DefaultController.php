@@ -31,7 +31,7 @@ class DefaultController extends AbstractController
             'home_magazine_strip_tiles' => $magazineStrip['tiles'],
             'home_featured_tiles' => $this->magazineContent->buildHomeMixedFeaturedWallTiles($categoryATags),
             'home_sidebar_category_recent' => $this->magazineContent->buildHomeSidebarCategorizedRecent($categoryATags),
-            'home_highlights' => $this->articleHighlightRepository->findRecentForHome(40),
+            'home_highlights' => $this->articleHighlightRepository->findRecentForHome(100),
         ]);
     }
 
