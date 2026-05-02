@@ -96,14 +96,17 @@ class NostrAuthenticator extends AbstractAuthenticator implements InteractiveAut
     /**
      * Handles successful authentication.
      *
+     * Returns null so the request reaches {@see \App\Controller\LoginController}, which responds with JSON
+     * (including npub). Returning a plain-text body here broke clients that parse JSON from /login.
+     *
      * @param Request $request The HTTP request.
      * @param TokenInterface $token The authenticated token.
      * @param string $firewallName The firewall name.
-     * @return Response|null The response to return, or null to continue.
+     * @return Response|null The response to return, or null to continue to the controller.
      */
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
-        return new Response('Authentication Successful', 200);
+        return null;
     }
 
     /**

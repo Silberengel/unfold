@@ -82,4 +82,47 @@ final class NostrEventTags
 
         return $out;
     }
+
+    /**
+     * Like {@see publicationIndexNestedDSlugs} but only {@code a} coordinates whose pubkey matches
+     * {@code $ownerHexLower} (hex).
+     *
+     * @param iterable<mixed> $tagRows
+     *
+     * @return list<string>
+     */
+    public static function publicationIndexNestedDSlugsForOwner(iterable $tagRows, string $ownerHexLower): array
+    {
+        $ownerHexLower = strtolower($ownerHexLower);
+        $out = [];
+        $seen = [];
+        foreach ($tagRows as $tag) {
+            if (!self::tagNameMatches($tag, 'a')) {
+                continue;
+            }
+            $seq = self::rowToStringList($tag);
+            if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $parts = explode(':', (string) $seq[1], 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
+                continue;
+            }
+            $pk = strtolower(trim((string) $parts[1]));
+            if (!hash_equals($ownerHexLower, $pk)) {
+                continue;
+            }
+            $d = trim((string) $parts[2]);
+            if ($d === '' || isset($seen[$d])) {
+                continue;
+            }
+            $seen[$d] = true;
+            $out[] = $d;
+        }
+
+        return $out;
+    }
 }

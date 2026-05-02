@@ -1,0 +1,92 @@
+.magazine-editor {
+    max-width: 52rem;
+    margin-inline: auto;
+}
+
+.magazine-editor__intro {
+    margin: 0 0 1.25rem;
+    line-height: 1.5;
+    color: var(--color-text-mid, inherit);
+}
+
+.magazine-editor__status {
+    min-height: 1.5rem;
+    margin: 0 0 1rem;
+    font-size: 0.95rem;
+}
+
+.magazine-editor__nodes {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.magazine-editor__node {
+    margin: 0;
+    padding: 1rem 1rem 1.1rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-light, var(--color-bg));
+    --mag-node-depth: 0;
+}
+
+/* Tree rail for nested kind-30040 sections (depth ≥ 2 under root). */
+.magazine-editor__node--nested {
+    position: relative;
+    padding-left: calc(1rem + 0.35rem);
+    border-left: 2px solid var(--color-border, rgba(120, 120, 120, 0.42));
+    border-radius: 0 2px 2px 0;
+}
+
+.magazine-editor__node--nested::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: 0.85rem;
+    width: 0.65rem;
+    height: 2px;
+    background: var(--color-border, rgba(120, 120, 120, 0.42));
+    border-radius: 1px;
+}
+
+.magazine-editor__legend {
+    padding: 0 0.35rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.magazine-editor__slug {
+    font-weight: 400;
+    font-size: 0.85rem;
+    margin-left: 0.35rem;
+}
+
+.magazine-editor__label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0 0 0.9rem;
+}
+
+.magazine-editor__label-text {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.magazine-editor__input,
+.magazine-editor__textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.magazine-editor__textarea--mono {
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.magazine-editor__actions {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+}

@@ -12,3 +12,9 @@
     background-color: var(--color-bg-light); /* Light version of --color-primary */
     color: var(--color-text); /* Use theme text color for better contrast */
 }
+
+.notice.error {
+    background-color: color-mix(in srgb, var(--color-bg-light) 85%, #c0392b);
+    color: var(--color-text);
+    border: 1px solid color-mix(in srgb, #c0392b 35%, transparent);
+}

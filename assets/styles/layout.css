@@ -1107,6 +1107,11 @@ footer {
     max-width: 100%;
 }
 
+/* [hidden] alone is ignored when display:flex is set on these <li>s (author CSS beats hidden’s UA style). */
+.site-footer__syndication-list > li[hidden] {
+    display: none !important;
+}
+
 .site-footer__syndication-list > li + li::before {
     content: "·";
     color: var(--color-text-mid, #666);

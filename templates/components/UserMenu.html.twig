@@ -1,4 +1,11 @@
-<div class="user-menu{{ inline ? ' user-menu--inline' : '' }}" {{ attributes.defaults(stimulus_controller('login')) }}>
+<div
+    class="user-menu{{ inline ? ' user-menu--inline' : '' }}"
+    {{ attributes.defaults(stimulus_controller('login', {
+        noExtensionMessage: 'login.error_no_extension'|trans,
+        cancelledMessage: 'login.error_cancelled'|trans,
+        failedMessage: 'login.error_failed'|trans,
+    })) }}
+>
     {% if app.user %}
         <div class="notice info">
             <twig:Molecules:UserFromNpub ident="{{ app.user.npub }}" />
@@ -16,7 +23,7 @@
 {#                <a href="{{ path('editor-create') }}">Write an article</a>#}
 {#            </li>#}
             <li>
-                <a href="/logout" data-action="live#$render">{{ 'heading.logout'|trans }}</a>
+                <a href="/logout" data-action="click->login#authLogout click->live#$render">{{ 'heading.logout'|trans }}</a>
             </li>
             <li>
                 <a href="{{ path('search') }}">{{ 'heading.search'|trans }}</a>
@@ -26,7 +33,11 @@
         <div class="notice info">
             <p>Log in to access search.</p>
         </div>
-        <twig:Atoms:Button {{ ...stimulus_action('login', 'loginAct') }}>{{ 'heading.logIn'|trans }}</twig:Atoms:Button>
+        <p class="notice error user-menu__login-error" data-login-target="error" role="alert" hidden></p>
+        <twig:Atoms:Button
+            data-login-target="submitButton"
+            {{ ...stimulus_action('login', 'loginAct') }}
+        >{{ 'heading.logIn'|trans }}</twig:Atoms:Button>
     {% endif %}
     <div>
         <div class="spinner" data-loading>

@@ -19,3 +19,4 @@ import './styles/form.css';
 import './styles/notice.css';
 import './styles/spinner.css';
 import './styles/a2hs.css';
+import './styles/magazine-editor.css';

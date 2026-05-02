@@ -15,6 +15,10 @@ text:
     search: 'Search...'
     searching: 'Searching...'
     noResults: 'No results.'
+login:
+    error_no_extension: 'No Nostr signing extension found. Install a Nostr browser extension (e.g. Alby, nos2x) and try again.'
+    error_cancelled: 'Signing was cancelled or failed. Try again when you are ready.'
+    error_failed: 'Login was rejected. Check that your extension is unlocked and try again.'
 heading:
     roles: 'Roles'
     logout: 'Log out'

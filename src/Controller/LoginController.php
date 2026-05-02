@@ -19,6 +19,7 @@ class LoginController extends AbstractController
         if (null !== $user) {
             return new JsonResponse([
                 'message' => 'Authentication Successful',
+                'npub' => $user->getNpub(),
             ], 200);
         }
 

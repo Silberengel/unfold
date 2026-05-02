@@ -1,0 +1,83 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Magazine index editor — {{ website_name }}{% endblock %}
+
+{% block meta_description %}
+    <meta name="description" content="{{ 'Edit kind-30040 magazine hierarchy (owner only).'|e('html_attr') }}">
+{% endblock %}
+
+{% block body %}
+    <div class="card magazine-editor">
+        <div class="card-header">
+            <h1 class="card-title">Magazine index editor</h1>
+        </div>
+        <div class="card-body">
+            <p class="magazine-editor__intro">
+                Edit kind <strong>30040</strong> indices (root, categories, subcategories), then sign with your Nostr extension. Only indices you changed are signed; any other index required so nested <code>a</code> links stay consistent is still included in the same batch (same rules as before).
+            </p>
+
+            <div
+                class="magazine-editor__panel"
+                data-controller="magazine-hierarchy-editor"
+                data-magazine-hierarchy-editor-publish-url-value="{{ path('magazine_edit_publish') }}"
+                data-magazine-hierarchy-editor-csrf-value="{{ magazine_edit_csrf }}"
+                data-magazine-hierarchy-editor-owner-hex-value="{{ editor_payload.owner_hex }}"
+                data-magazine-hierarchy-editor-root-d-tag-value="{{ editor_payload.root_d_tag|e('html_attr') }}"
+            >
+                <p class="magazine-editor__status" data-magazine-hierarchy-editor-target="status" aria-live="polite"></p>
+
+                <div class="magazine-editor__nodes">
+                    {% for node in editor_payload.nodes %}
+                        {% set depth = node.depth|default(0) %}
+                        <fieldset
+                            class="magazine-editor__node{% if depth > 1 %} magazine-editor__node--nested{% endif %}"
+                            style="--mag-node-depth: {{ depth }}; margin-left: calc(max(0, var(--mag-node-depth) - 1) * 1.15rem);"
+                            data-magazine-hierarchy-editor-target="node"
+                        >
+                            <legend class="magazine-editor__legend">
+                                {% if node.is_root %}
+                                    Root index
+                                {% elseif depth > 1 %}
+                                    Subcategory
+                                {% else %}
+                                    Category
+                                {% endif %}
+                                <code class="magazine-editor__slug">{{ node.d_tag }}</code>
+                            </legend>
+
+                            <input type="hidden" data-magazine-hierarchy-editor-target="preservedJson" value="{{ node.preserved_tags|json_encode(constant('JSON_UNESCAPED_UNICODE'))|e('html_attr') }}">
+
+                            <label class="magazine-editor__label">
+                                <span class="magazine-editor__label-text">Title</span>
+                                <input type="text" class="magazine-editor__input" data-magazine-hierarchy-editor-target="title" value="{{ node.title|e('html_attr') }}" autocomplete="off">
+                            </label>
+
+                            <label class="magazine-editor__label">
+                                <span class="magazine-editor__label-text">Summary</span>
+                                <textarea class="magazine-editor__textarea" data-magazine-hierarchy-editor-target="summary" rows="3">{{ node.summary }}</textarea>
+                            </label>
+
+                            <label class="magazine-editor__label">
+                                <span class="magazine-editor__label-text">Content</span>
+                                <textarea class="magazine-editor__textarea" data-magazine-hierarchy-editor-target="content" rows="2">{{ node.content }}</textarea>
+                            </label>
+
+                            <label class="magazine-editor__label">
+                                <span class="magazine-editor__label-text"><code>a</code> coordinates (one per line: <code>kind:hex64pubkey:identifier</code>, long-form <code>30023</code>/<code>30024</code>, or NIP-19 <code>naddr1…</code> / <code>nostr:naddr1…</code> — naddrs are expanded before signing)</span>
+                                <textarea class="magazine-editor__textarea magazine-editor__textarea--mono" data-magazine-hierarchy-editor-target="aLines" rows="8" spellcheck="false">{{ node.a_coordinates|join("\n") }}</textarea>
+                            </label>
+
+                            <input type="hidden" data-magazine-hierarchy-editor-target="dTag" value="{{ node.d_tag|e('html_attr') }}">
+                        </fieldset>
+                    {% endfor %}
+                </div>
+
+                <div class="magazine-editor__actions">
+                    <button type="button" data-action="click->magazine-hierarchy-editor#publish">
+                        Sign and publish all changed events
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
