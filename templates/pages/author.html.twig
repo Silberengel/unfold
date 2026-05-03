@@ -10,6 +10,9 @@
             profile_nip05: profile_nip05,
             profile_payment_links: profile_payment_links,
         } only %}
+        {% if profile_nip30_emojis is defined and profile_nip30_emojis is not empty %}
+            <script type="application/json" id="profile-nip30-emoji-catalog">{{ profile_nip30_emojis|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }}</script>
+        {% endif %}
         <hr class="author-profile__divider" />
 
         <twig:Organisms:CardList :list="articles" class="article-list"></twig:Organisms:CardList>

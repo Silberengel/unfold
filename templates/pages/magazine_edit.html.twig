@@ -1,5 +1,59 @@
 {% extends 'base.html.twig' %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    {# Linked sheet (digested URL). If this 404s on some hosts, JS entry still imports the same file; critical <style> below is the last resort. #}
+    <link rel="stylesheet" href="{{ asset('styles/magazine-editor.css') }}">
+    {# In-document fallback: global `button` (button.css) wins when magazine-editor.css never loads (e.g. asset URL / SW / Docker static). #}
+    <style id="magazine-editor-a-row-critical">
+        .card.magazine-editor [data-mag-a-row] {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.35rem;
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        .card.magazine-editor [data-mag-a-row] > .magazine-editor__a-line-field {
+            min-width: 0;
+            max-width: 100%;
+        }
+        .card.magazine-editor [data-mag-a-row] > .magazine-editor__a-line-field .magazine-editor__a-line-input {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-remove-icon {
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.55rem;
+            min-width: 1.55rem;
+            max-width: 1.55rem;
+            height: 1.55rem;
+            padding: 0;
+            margin: 0;
+            border: 1px solid var(--color-border, #3a3a3a);
+            border-radius: 3px;
+            background: var(--color-bg-light, #2a2a2a) !important;
+            color: var(--color-text-mid, #d8d8d8) !important;
+            border-color: var(--color-border, #3a3a3a) !important;
+            text-transform: none !important;
+            font-weight: normal !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            cursor: pointer;
+        }
+        .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-remove-icon svg {
+            width: 12px;
+            height: 12px;
+            display: block;
+        }
+    </style>
+{% endblock %}
+
 {% block title %}Magazine index editor — {{ website_name }}{% endblock %}
 
 {% block meta_description %}
@@ -13,7 +67,7 @@
         </div>
         <div class="card-body">
             <p class="magazine-editor__intro">
-                Edit kind <strong>30040</strong> indices (root, categories, subcategories), then sign with your Nostr extension. Only indices you changed are signed; any other index required so nested <code>a</code> links stay consistent is still included in the same batch (same rules as before).
+                Edit kind <strong>30040</strong> indices (root, categories, subcategories), then sign with your Nostr extension. Use <strong>Add top-level category</strong> or <strong>Add subcategory</strong> to create new indices; the parent index’s <code>a</code> list is updated automatically so the tree stays linked. Only indices you changed are signed; any other index required so nested <code>a</code> links stay consistent is still included in the same batch (same rules as before).
             </p>
 
             <div
@@ -23,27 +77,138 @@
                 data-magazine-hierarchy-editor-csrf-value="{{ magazine_edit_csrf }}"
                 data-magazine-hierarchy-editor-owner-hex-value="{{ editor_payload.owner_hex }}"
                 data-magazine-hierarchy-editor-root-d-tag-value="{{ editor_payload.root_d_tag|e('html_attr') }}"
+                data-magazine-hierarchy-editor-default-preserved-json-value="{{ editor_payload.default_category_preserved_tags|json_encode(constant('JSON_UNESCAPED_UNICODE'))|e('html_attr') }}"
+                data-magazine-hierarchy-editor-client-tag-value="{{ website_short_name|e('html_attr') }}"
             >
                 <p class="magazine-editor__status" data-magazine-hierarchy-editor-target="status" aria-live="polite"></p>
 
-                <div class="magazine-editor__nodes">
+                <div class="magazine-editor__toolbar">
+                    <button type="button" class="btn btn-secondary btn-sm" data-mag-editor-cmd="add-top-category">
+                        Add top-level category
+                    </button>
+                </div>
+
+                <template data-magazine-hierarchy-editor-target="aRowTemplate">
+                    <div class="magazine-editor__a-row" data-mag-a-row>
+                        <div class="magazine-editor__a-line-field">
+                            <input type="text" class="magazine-editor__input magazine-editor__input--mono magazine-editor__a-line-input" data-mag-a-line value="" spellcheck="false" autocomplete="off">
+                        </div>
+                        <button type="button" class="magazine-editor__a-remove-icon" aria-label="Remove article">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 6h18"/>
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                <line x1="10" x2="10" y1="11" y2="17"/>
+                                <line x1="14" x2="14" y1="11" y2="17"/>
+                            </svg>
+                        </button>
+                    </div>
+                </template>
+
+                <template data-magazine-hierarchy-editor-target="newNodeTemplate">
+                    <fieldset
+                        class="magazine-editor__node magazine-editor__node--new"
+                        data-magazine-hierarchy-editor-target="node"
+                    >
+                        <legend class="magazine-editor__legend magazine-editor__legend--row">
+                            <span class="magazine-editor__legend-main">
+                                <span data-new-node-legend-label>New category</span>
+                            </span>
+                            <span class="magazine-editor__legend-actions">
+                                <button type="button" class="btn btn-secondary btn-sm magazine-editor__add-sub" data-mag-editor-cmd="add-subcategory">
+                                    Add subcategory
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm magazine-editor__remove-node" data-mag-editor-cmd="remove-category" aria-label="Discard new category">
+                                    Remove
+                                </button>
+                            </span>
+                        </legend>
+
+                        <label class="magazine-editor__label" data-new-node-d-row>
+                            <span class="magazine-editor__label-text">Index <code>#d</code> (identifier)</span>
+                            <input
+                                type="text"
+                                class="magazine-editor__input magazine-editor__input--mono"
+                                data-magazine-hierarchy-editor-target="dTag"
+                                spellcheck="false"
+                                autocomplete="off"
+                            >
+                        </label>
+
+                        <input type="hidden" data-magazine-hierarchy-editor-target="preservedJson" value="[]">
+
+                        <label class="magazine-editor__label">
+                            <span class="magazine-editor__label-text">Title</span>
+                            <input type="text" class="magazine-editor__input" data-magazine-hierarchy-editor-target="title" value="" autocomplete="off">
+                        </label>
+
+                        <label class="magazine-editor__label">
+                            <span class="magazine-editor__label-text">Summary</span>
+                            <textarea class="magazine-editor__textarea" data-magazine-hierarchy-editor-target="summary" rows="3"></textarea>
+                        </label>
+
+                        <label class="magazine-editor__label">
+                            <span class="magazine-editor__label-text">Content</span>
+                            <textarea class="magazine-editor__textarea" data-magazine-hierarchy-editor-target="content" rows="2"></textarea>
+                        </label>
+
+                        <div class="magazine-editor__a-block">
+                            <span class="magazine-editor__label-text magazine-editor__a-block-label"><code>a</code> tags (addressable coordinates)</span>
+                            <p class="magazine-editor__a-hint">Each field is one <code>a</code> value: <code>kind:hex64pubkey:identifier</code>, long-form <code>30023</code>/<code>30024</code>, or NIP-19 <code>naddr1…</code> / <code>nostr:naddr1…</code> (expanded when signing).</p>
+                            <div class="magazine-editor__a-list" data-mag-a-list>
+                                <button type="button" class="btn btn-secondary btn-sm magazine-editor__a-add" data-mag-a-add>Add article</button>
+                            </div>
+                        </div>
+                    </fieldset>
+                </template>
+
+                <div class="magazine-editor__nodes" data-magazine-hierarchy-editor-target="nodes">
                     {% for node in editor_payload.nodes %}
                         {% set depth = node.depth|default(0) %}
                         <fieldset
-                            class="magazine-editor__node{% if depth > 1 %} magazine-editor__node--nested{% endif %}"
+                            class="magazine-editor__node{% if depth > 1 %} magazine-editor__node--nested{% endif %}{% if node.is_root %} magazine-editor__node--root{% endif %}"
                             style="--mag-node-depth: {{ depth }}; margin-left: calc(max(0, var(--mag-node-depth) - 1) * 1.15rem);"
                             data-magazine-hierarchy-editor-target="node"
+                            data-mag-depth="{{ depth }}"
+                            {% if node.is_root %}data-magazine-node-is-root="1"{% else %}data-mag-parent-d="{{ node.parent_d_tag|default('')|e('html_attr') }}" data-mag-placed-d="{{ node.d_tag|e('html_attr') }}"{% endif %}
                         >
-                            <legend class="magazine-editor__legend">
-                                {% if node.is_root %}
-                                    Root index
-                                {% elseif depth > 1 %}
-                                    Subcategory
-                                {% else %}
-                                    Category
+                            <legend class="magazine-editor__legend magazine-editor__legend--row">
+                                <span class="magazine-editor__legend-main">
+                                    {% if node.is_root %}
+                                        Root index <code class="magazine-editor__slug">{{ node.d_tag }}</code>
+                                    {% elseif depth > 1 %}
+                                        Subcategory
+                                    {% else %}
+                                        Category
+                                    {% endif %}
+                                </span>
+                                {% if not node.is_root %}
+                                    <span class="magazine-editor__legend-actions">
+                                        <button type="button" class="btn btn-secondary btn-sm magazine-editor__add-sub" data-mag-editor-cmd="add-subcategory">
+                                            Add subcategory
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm magazine-editor__remove-node" data-mag-editor-cmd="remove-category" aria-label="Remove category">
+                                            Remove
+                                        </button>
+                                    </span>
                                 {% endif %}
-                                <code class="magazine-editor__slug">{{ node.d_tag }}</code>
                             </legend>
+
+                            {% if node.is_root %}
+                                <input type="hidden" data-magazine-hierarchy-editor-target="dTag" value="{{ node.d_tag|e('html_attr') }}">
+                            {% else %}
+                                <label class="magazine-editor__label magazine-editor__label--d-tag" data-mag-d-row>
+                                    <span class="magazine-editor__label-text">Index <code>#d</code> (identifier)</span>
+                                    <input
+                                        type="text"
+                                        class="magazine-editor__input magazine-editor__input--mono"
+                                        data-magazine-hierarchy-editor-target="dTag"
+                                        value="{{ node.d_tag|e('html_attr') }}"
+                                        spellcheck="false"
+                                        autocomplete="off"
+                                    >
+                                </label>
+                            {% endif %}
 
                             <input type="hidden" data-magazine-hierarchy-editor-target="preservedJson" value="{{ node.preserved_tags|json_encode(constant('JSON_UNESCAPED_UNICODE'))|e('html_attr') }}">
 
@@ -62,18 +227,36 @@
                                 <textarea class="magazine-editor__textarea" data-magazine-hierarchy-editor-target="content" rows="2">{{ node.content }}</textarea>
                             </label>
 
-                            <label class="magazine-editor__label">
-                                <span class="magazine-editor__label-text"><code>a</code> coordinates (one per line: <code>kind:hex64pubkey:identifier</code>, long-form <code>30023</code>/<code>30024</code>, or NIP-19 <code>naddr1…</code> / <code>nostr:naddr1…</code> — naddrs are expanded before signing)</span>
-                                <textarea class="magazine-editor__textarea magazine-editor__textarea--mono" data-magazine-hierarchy-editor-target="aLines" rows="8" spellcheck="false">{{ node.a_coordinates|join("\n") }}</textarea>
-                            </label>
+                            <div class="magazine-editor__a-block">
+                                <span class="magazine-editor__label-text magazine-editor__a-block-label"><code>a</code> tags (addressable coordinates)</span>
+                                <p class="magazine-editor__a-hint">Each field is one <code>a</code> value: <code>kind:hex64pubkey:identifier</code>, long-form <code>30023</code>/<code>30024</code>, or NIP-19 <code>naddr1…</code> / <code>nostr:naddr1…</code> (expanded when signing).</p>
+                                <div class="magazine-editor__a-list" data-mag-a-list>
+                                    {% for coord in node.a_coordinates %}
+                                        <div class="magazine-editor__a-row" data-mag-a-row>
+                                            <div class="magazine-editor__a-line-field">
+                                                <input type="text" class="magazine-editor__input magazine-editor__input--mono magazine-editor__a-line-input" data-mag-a-line value="{{ coord|e('html_attr') }}" spellcheck="false" autocomplete="off">
+                                            </div>
+                                            <button type="button" class="magazine-editor__a-remove-icon" aria-label="Remove article">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M3 6h18"/>
+                                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                                    <line x1="10" x2="10" y1="11" y2="17"/>
+                                                    <line x1="14" x2="14" y1="11" y2="17"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    {% endfor %}
+                                    <button type="button" class="btn btn-secondary btn-sm magazine-editor__a-add" data-mag-a-add>Add article</button>
+                                </div>
+                            </div>
 
-                            <input type="hidden" data-magazine-hierarchy-editor-target="dTag" value="{{ node.d_tag|e('html_attr') }}">
                         </fieldset>
                     {% endfor %}
                 </div>
 
                 <div class="magazine-editor__actions">
-                    <button type="button" data-action="click->magazine-hierarchy-editor#publish">
+                    <button type="button" class="btn btn-primary" data-mag-editor-cmd="publish">
                         Sign and publish all changed events
                     </button>
                 </div>

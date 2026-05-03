@@ -354,7 +354,7 @@ final class PrewarmCommand extends Command
                 $bar->start();
                 try {
                     foreach (array_chunk($toWarm, $batchSize) as $chunk) {
-                        $fetched = $this->nostrClient->fetchKind0WireEventsForAuthors($chunk, $batchSize);
+                        $fetched = $this->nostrClient->fetchProfilePrewarmWireBundlesForAuthors($chunk, $batchSize);
                         $n += $this->cacheService->putPrewarmMetadataBatch($chunk, $fetched);
                         $bar->advance(\count($chunk));
                         $p0 = (string) ($chunk[0] ?? '');

@@ -208,6 +208,24 @@ class NostrClient
      */
     public function fetchKind0WireEventsForAuthors(array $authorPubkeyHex, int $authorsPerRequest = 50): array
     {
+        $bundles = $this->fetchProfilePrewarmWireBundlesForAuthors($authorPubkeyHex, $authorsPerRequest);
+        $byPub = [];
+        foreach ($bundles as $pk => $bundle) {
+            $byPub[$pk] = $bundle['kind0'];
+        }
+
+        return $byPub;
+    }
+
+    /**
+     * Prewarm: kind 0 + NIP-51 kind 10030 (emoji list) + NIP-38 kind 30315 (status), one REQ per chunk.
+     *
+     * @param list<string> $authorPubkeyHex
+     *
+     * @return array<string, array{kind0: object, emoji_list: ?object, statuses: list<object>}> keyed by lowercase 64-hex pubkey (only authors with a kind-0 hit in this response)
+     */
+    public function fetchProfilePrewarmWireBundlesForAuthors(array $authorPubkeyHex, int $authorsPerRequest = 50): array
+    {
         $authorPubkeyHex = \array_values(\array_unique(\array_filter(
             $authorPubkeyHex,
             static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
@@ -216,14 +234,21 @@ class NostrClient
             return [];
         }
         $authorsPerRequest = max(1, min(200, $authorsPerRequest));
-        $byPub = [];
-        $relaysTried = $this->relayListFactory->getProfileMetadataQueryRelayUrlList();
         $relaySet = $this->relayListFactory->getRelaySetForProfileMetadataFetch();
         $chunks = array_chunk($authorPubkeyHex, $authorsPerRequest);
+        $bundles = [];
         foreach ($chunks as $chunk) {
+            $chunkLower = [];
+            foreach ($chunk as $h) {
+                $chunkLower[strtolower($h)] = true;
+            }
             $request = $this->nostrRelayQuery->createNostrRequest(
                 defaultRelaySet: $this->defaultRelaySet,
-                kinds: [KindsEnum::METADATA],
+                kinds: [
+                    KindsEnum::METADATA,
+                    KindsEnum::EMOJI_LIST,
+                    KindsEnum::USER_STATUS,
+                ],
                 filters: ['authors' => $chunk],
                 relaySet: $relaySet
             );
@@ -231,18 +256,59 @@ class NostrClient
                 $request->send(),
                 static fn ($ev) => $ev,
             );
-            foreach ($this->wireMerge->mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
+            $kind0Only = [];
+            foreach ($events as $ev) {
+                if (\is_object($ev) && (int) ($ev->kind ?? 0) === KindsEnum::METADATA->value) {
+                    $kind0Only[] = $ev;
+                }
+            }
+            $byAddr0 = $this->wireMerge->mergeKind0EventsByReplaceableAddress($kind0Only);
+            $kind0ByPk = [];
+            foreach ($byAddr0 as $addr => $ev) {
+                $pk = \substr((string) $addr, 2);
+                if (64 === \strlen($pk) && ctype_xdigit($pk)) {
+                    $kind0ByPk[strtolower($pk)] = $ev;
+                }
+            }
+            $k10030 = KindsEnum::EMOJI_LIST->value;
+            $k30315 = KindsEnum::USER_STATUS->value;
+            /** @var array<string, object> $by10030 */
+            $by10030 = [];
+            /** @var array<string, list<object>> $by30315 */
+            $by30315 = [];
+            foreach ($events as $ev) {
                 if (!\is_object($ev)) {
                     continue;
                 }
-                $pk = \substr((string) $addr, 2);
-                if (64 === \strlen($pk) && ctype_xdigit($pk)) {
-                    $byPub[strtolower($pk)] = $ev;
+                $k = (int) ($ev->kind ?? 0);
+                $pk = strtolower((string) ($ev->pubkey ?? ''));
+                if (64 !== \strlen($pk) || !ctype_xdigit($pk) || !isset($chunkLower[$pk])) {
+                    continue;
                 }
+                if ($k === $k10030) {
+                    if (!isset($by10030[$pk]) || $this->wireMerge->wireEventSupersedes($ev, $by10030[$pk])) {
+                        $by10030[$pk] = $ev;
+                    }
+                } elseif ($k === $k30315) {
+                    $by30315[$pk][] = $ev;
+                }
+            }
+            foreach ($by30315 as $pk => $list) {
+                \usort($list, function (object $a, object $b): int {
+                    return $this->wireMerge->magazineEventCreatedAt($b) <=> $this->wireMerge->magazineEventCreatedAt($a);
+                });
+                $by30315[$pk] = \array_slice($list, 0, 28);
+            }
+            foreach ($kind0ByPk as $pk => $k0) {
+                $bundles[$pk] = [
+                    'kind0' => $k0,
+                    'emoji_list' => $by10030[$pk] ?? null,
+                    'statuses' => $by30315[$pk] ?? [],
+                ];
             }
         }
 
-        return $byPub;
+        return $bundles;
     }
 
     /**

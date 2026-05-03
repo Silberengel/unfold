@@ -45,8 +45,8 @@ try {
 }
 try {
     app.register('magazine-hierarchy-editor', MagazineHierarchyEditorController);
-} catch {
-    /* already registered by the bundle */
+} catch (e) {
+    console.warn('[bootstrap] magazine-hierarchy-editor did not register; editor buttons will not work.', e);
 }
 try {
     app.register('footer-magazine-edit', FooterMagazineEditController);

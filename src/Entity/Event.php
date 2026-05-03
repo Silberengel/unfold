@@ -49,6 +49,14 @@ class Event
     #[ORM\Column(length: 32, nullable: true)]
     private ?string $storageRole = null;
 
+    /**
+     * NIP-30 merged emoji catalog for {@see STORAGE_PROFILE_KIND0} rows (prewarm); list of {shortcode, url, set?}.
+     *
+     * @var list<array{shortcode: string, url: string, set?: string}>|null
+     */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $nip30CustomEmoji = null;
+
     public function getId(): string
     {
         return $this->id;
@@ -149,6 +157,22 @@ class Event
     public function setStorageRole(?string $storageRole): void
     {
         $this->storageRole = $storageRole;
+    }
+
+    /**
+     * @return list<array{shortcode: string, url: string, set?: string}>|null
+     */
+    public function getNip30CustomEmoji(): ?array
+    {
+        return $this->nip30CustomEmoji;
+    }
+
+    /**
+     * @param list<array{shortcode: string, url: string, set?: string}>|null $nip30CustomEmoji
+     */
+    public function setNip30CustomEmoji(?array $nip30CustomEmoji): void
+    {
+        $this->nip30CustomEmoji = $nip30CustomEmoji;
     }
 
     public function getTitle(): ?string

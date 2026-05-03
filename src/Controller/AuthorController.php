@@ -46,6 +46,7 @@ class AuthorController extends AbstractController
         $bundle = $cacheService->getMetadataBundle($npub);
         $author = $bundle['content'];
         $kind0Tags = $bundle['kind0_tags'];
+        $nip30Emojis = $bundle['nip30_custom_emojis'] ?? [];
         $perPage = 25;
         $page = max(1, $request->query->getInt('page', 1));
         $total = $articleRepository->countByPubkey($pubkey);
@@ -79,6 +80,7 @@ class AuthorController extends AbstractController
             'is_author_profile' => true,
             'profile_websites' => $profileIdentityLinks->buildWebsites($author, $kind0Tags),
             'profile_nip05' => $profileNip05,
+            'profile_nip30_emojis' => $nip30Emojis,
             'profile_payment_links' => $profilePaymentLinks->buildPaymentRows($author, $kind0Tags, $extraPayto),
             'pagination' => [
                 'page' => $page,

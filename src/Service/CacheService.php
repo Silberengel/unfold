@@ -19,6 +19,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         private LoggerInterface $logger,
         private NostrKeyHelper $nostrKeyHelper,
         private NostrNip65RelayUrls $nip65RelayUrls,
+        private Nip30EmojiCatalogBuilder $nip30EmojiCatalogBuilder,
     ) {
     }
 
@@ -28,7 +29,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
     }
 
     /**
-     * @return array{content: \stdClass, kind0_tags: list<list<string>>}
+     * @return array{content: \stdClass, kind0_tags: list<list<string>>, nip30_custom_emojis: list<array{shortcode: string, url: string, set?: string}>}
      */
     public function getMetadataBundle(string $npub): array
     {
@@ -45,10 +46,12 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
             if (!\is_object($ev)) {
                 return $this->placeholderMetadataBundle($npub);
             }
+            $nip30 = $this->nip30EmojiCatalogBuilder->buildMergedCatalog($ev, null, []);
             $this->replaceByCoreKey(
                 MagazineEventKeys::profileKind0($authorHex),
                 Event::STORAGE_PROFILE_KIND0,
-                $ev
+                $ev,
+                $nip30,
             );
             $tags = self::normalizeEventTagsList($ev->tags ?? null);
             $content = $this->decodeKind0ContentObject($ev);
@@ -56,7 +59,11 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
                 $content = $this->namePlaceholderNpubObject($npub);
             }
 
-            return ['content' => $content, 'kind0_tags' => $tags];
+            return [
+                'content' => $content,
+                'kind0_tags' => $tags,
+                'nip30_custom_emojis' => $nip30,
+            ];
         } catch (\Exception $e) {
             $this->logger->warning('Profile metadata fetch failed; using npub placeholder.', [
                 'npub' => $npub,
@@ -68,12 +75,12 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
     }
 
     /**
-     * Prewarm: batch upsert of kind-0 profile rows in {@see Event}.
+     * Prewarm: batch upsert of kind-0 profile rows in {@see Event} with merged NIP-30 emoji catalog.
      *
-     * @param list<string>            $authorPubkeyHex
-     * @param array<string, object>  $wireByLowerHex from {@see NostrClient::fetchKind0WireEventsForAuthors} (keys are lowercase 64-hex)
+     * @param list<string>                              $authorPubkeyHex
+     * @param array<string, array<string, mixed>>       $bundlesByLowerHex from {@see NostrClient::fetchProfilePrewarmWireBundlesForAuthors}
      */
-    public function putPrewarmMetadataBatch(array $authorPubkeyHex, array $wireByLowerHex): int
+    public function putPrewarmMetadataBatch(array $authorPubkeyHex, array $bundlesByLowerHex): int
     {
         $n = 0;
         foreach ($authorPubkeyHex as $hex) {
@@ -81,13 +88,28 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
                 continue;
             }
             $h = strtolower($hex);
-            if (!isset($wireByLowerHex[$h]) || !\is_object($wireByLowerHex[$h])) {
+            if (!isset($bundlesByLowerHex[$h]) || !\is_array($bundlesByLowerHex[$h])) {
                 continue;
             }
+            $bundle = $bundlesByLowerHex[$h];
+            $k0 = $bundle['kind0'] ?? null;
+            if (!\is_object($k0)) {
+                continue;
+            }
+            $emojiList = $bundle['emoji_list'] ?? null;
+            if (!\is_object($emojiList)) {
+                $emojiList = null;
+            }
+            $statuses = $bundle['statuses'] ?? [];
+            if (!\is_array($statuses)) {
+                $statuses = [];
+            }
+            $nip30 = $this->nip30EmojiCatalogBuilder->buildMergedCatalog($k0, $emojiList, $statuses);
             $this->replaceByCoreKey(
                 MagazineEventKeys::profileKind0($h),
                 Event::STORAGE_PROFILE_KIND0,
-                $wireByLowerHex[$h]
+                $k0,
+                $nip30,
             );
             ++$n;
         }
@@ -165,7 +187,10 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         return null;
     }
 
-    private function replaceByCoreKey(string $coreKey, string $storageRole, object $rawWire): void
+    /**
+     * @param list<array{shortcode: string, url: string, set?: string}>|null $nip30Catalog profile rows only
+     */
+    private function replaceByCoreKey(string $coreKey, string $storageRole, object $rawWire, ?array $nip30Catalog = null): void
     {
         $entity = $this->wireToEventEntity($rawWire);
         if ($entity === null) {
@@ -173,6 +198,11 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         }
         $entity->setCoreRowKey($coreKey);
         $entity->setStorageRole($storageRole);
+        if ($storageRole === Event::STORAGE_PROFILE_KIND0) {
+            $entity->setNip30CustomEmoji($nip30Catalog ?? $this->nip30EmojiCatalogBuilder->buildMergedCatalog($rawWire, null, []));
+        } else {
+            $entity->setNip30CustomEmoji(null);
+        }
         if ($entity->getEventId() === null) {
             $entity->setEventId($entity->getId());
         }
@@ -186,6 +216,11 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
             $prev->setSig($entity->getSig());
             $prev->setCoreRowKey($coreKey);
             $prev->setStorageRole($storageRole);
+            if ($storageRole === Event::STORAGE_PROFILE_KIND0) {
+                $prev->setNip30CustomEmoji($entity->getNip30CustomEmoji());
+            } else {
+                $prev->setNip30CustomEmoji(null);
+            }
             if ($entity->getEventId() !== null) {
                 $prev->setEventId($entity->getEventId());
             }
@@ -236,9 +271,15 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
             $content = $this->namePlaceholderNpubObject($npub);
         }
 
+        $nip30 = $row->getNip30CustomEmoji();
+        if (!\is_array($nip30) || $nip30 === []) {
+            $nip30 = $this->nip30EmojiCatalogBuilder->catalogFromTagsOnly($row->getTags());
+        }
+
         return [
             'content' => $content,
             'kind0_tags' => self::normalizeEventTagsList($row->getTags()),
+            'nip30_custom_emojis' => $nip30,
         ];
     }
 
@@ -281,6 +322,7 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         return [
             'content' => $this->namePlaceholderNpubObject($npub),
             'kind0_tags' => [],
+            'nip30_custom_emojis' => [],
         ];
     }
 

@@ -27,6 +27,7 @@ final class MagazineHierarchyEditorService
      *   owner_hex: string,
      *   root_d_tag: string,
      *   site_name: string,
+     *   default_category_preserved_tags: list<list<string>>,
      *   nodes: list<array{
      *     d_tag: string,
      *     is_root: bool,
@@ -35,7 +36,8 @@ final class MagazineHierarchyEditorService
      *     summary: string,
      *     content: string,
      *     preserved_tags: list<list<string>>,
-     *     a_coordinates: list<string>
+     *     a_coordinates: list<string>,
+     *     parent_d_tag: string|null
      *   }>
      * }
      */
@@ -62,9 +64,13 @@ final class MagazineHierarchyEditorService
 
         $nodes = [];
         if ($root !== null) {
-            $nodes[] = $this->withDepth($this->nodeFromEvent($root, $dTag, true, $ownerHex, $siteName), 0);
+            $rootNode = $this->nodeFromEvent($root, $dTag, true, $ownerHex, $siteName);
+            $rootNode['parent_d_tag'] = null;
+            $nodes[] = $this->withDepth($rootNode, 0);
         } else {
-            $nodes[] = $this->withDepth($this->emptyRootNode($dTag, $ownerHex, $siteName), 0);
+            $rootNode = $this->emptyRootNode($dTag, $ownerHex, $siteName);
+            $rootNode['parent_d_tag'] = null;
+            $nodes[] = $this->withDepth($rootNode, 0);
         }
 
         foreach ($this->orderedCategorySlugsForEditor($npub, $dTag, $ownerHex) as $slug) {
@@ -72,15 +78,20 @@ final class MagazineHierarchyEditorService
             if ($slug === '') {
                 continue;
             }
+            $parentD = $parentByChild[$slug] ?? $dTag;
             $cat = $this->store->getCategory($slug);
             if ($cat !== null) {
+                $catNode = $this->nodeFromEvent($cat, $slug, false, $ownerHex, $siteName);
+                $catNode['parent_d_tag'] = $parentD;
                 $nodes[] = $this->withDepth(
-                    $this->nodeFromEvent($cat, $slug, false, $ownerHex, $siteName),
+                    $catNode,
                     $this->depthForCategorySlug($slug, $dTag, $parentByChild),
                 );
             } else {
+                $emptyNode = $this->emptyCategoryNode($slug, $ownerHex, $siteName);
+                $emptyNode['parent_d_tag'] = $parentD;
                 $nodes[] = $this->withDepth(
-                    $this->emptyCategoryNode($slug, $ownerHex, $siteName),
+                    $emptyNode,
                     $this->depthForCategorySlug($slug, $dTag, $parentByChild),
                 );
             }
@@ -91,6 +102,7 @@ final class MagazineHierarchyEditorService
             'root_d_tag' => $dTag,
             'site_name' => $siteName,
             'nodes' => $nodes,
+            'default_category_preserved_tags' => $this->defaultCategoryPreservedTags($ownerHex, $siteName),
         ];
     }
 
@@ -157,7 +169,8 @@ final class MagazineHierarchyEditorService
      *   summary: string,
      *   content: string,
      *   preserved_tags: list<list<string>>,
-     *   a_coordinates: list<string>
+     *   a_coordinates: list<string>,
+     *   parent_d_tag?: string|null
      * }
      */
     private function withDepth(array $node, int $depth): array

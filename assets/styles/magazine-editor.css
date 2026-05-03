@@ -3,10 +3,89 @@
     margin-inline: auto;
 }
 
+/* Panel + fieldset stacking: legend controls must stay above sibling content and decorative rails. */
+.magazine-editor__panel {
+    position: relative;
+}
+
+.magazine-editor__node > legend.magazine-editor__legend--row {
+    position: relative;
+    z-index: 2;
+}
+
+.magazine-editor__legend-actions {
+    position: relative;
+    z-index: 3;
+}
+
+.magazine-editor__toolbar,
+.magazine-editor__actions {
+    position: relative;
+    z-index: 2;
+}
+
+.magazine-editor__node--nested::before {
+    pointer-events: none;
+}
+
+.magazine-editor__panel button {
+    pointer-events: auto;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
 .magazine-editor__intro {
     margin: 0 0 1.25rem;
     line-height: 1.5;
     color: var(--color-text-mid, inherit);
+}
+
+.magazine-editor__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.magazine-editor__legend--row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.magazine-editor__legend-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.magazine-editor__add-sub {
+    flex: 0 0 auto;
+}
+
+.magazine-editor__legend-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.magazine-editor__label--d-tag {
+    margin-bottom: 0.65rem;
+}
+
+.magazine-editor__node--new {
+    border-style: dashed;
+}
+
+.magazine-editor__input--mono {
+    font-family: ui-monospace, monospace;
+    font-size: 0.88rem;
 }
 
 .magazine-editor__status {
@@ -22,11 +101,15 @@
 }
 
 .magazine-editor__node {
+    position: relative;
+    isolation: isolate;
     margin: 0;
     padding: 1rem 1rem 1.1rem;
     border: 1px solid var(--color-border);
     background: var(--color-bg-light, var(--color-bg));
     --mag-node-depth: 0;
+    /* Fieldsets can impose min-content width; allow nested grids to shrink. */
+    min-width: 0;
 }
 
 /* Tree rail for nested kind-30040 sections (depth ≥ 2 under root). */
@@ -89,4 +172,94 @@
     margin-top: 1.25rem;
     padding-top: 1rem;
     border-top: 1px solid var(--color-border);
+}
+
+.magazine-editor__a-block {
+    margin: 0 0 0.9rem;
+}
+
+.magazine-editor__a-block-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.magazine-editor__a-hint {
+    margin: 0 0 0.65rem;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--color-text-mid, inherit);
+}
+
+.magazine-editor__a-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Grid: two columns regardless of flex quirks inside fieldsets / % widths on inputs */
+.magazine-editor__a-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.magazine-editor__a-line-field {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.magazine-editor__a-line-field .magazine-editor__a-line-input {
+    width: 100%;
+    min-width: 0;
+}
+
+.magazine-editor__a-row > .magazine-editor__a-remove-icon {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55rem;
+    min-width: 1.55rem;
+    max-width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--color-border, rgba(140, 140, 140, 0.4));
+    border-radius: 3px;
+    background: var(--color-bg-light, transparent);
+    color: var(--color-text-mid, inherit);
+    cursor: pointer;
+    line-height: 0;
+    justify-self: end;
+    /* Override global `button` (primary fill, padding, uppercase) for icon-only control */
+    text-transform: none;
+    font-weight: normal;
+    font-size: 0;
+}
+
+.magazine-editor__a-remove-icon svg {
+    width: 12px;
+    height: 12px;
+    display: block;
+}
+
+.magazine-editor__a-remove-icon:hover {
+    color: var(--color-danger, #c44);
+    border-color: var(--color-danger, #c44);
+}
+
+.magazine-editor__a-remove-icon:focus-visible {
+    outline: 2px solid var(--color-focus, currentColor);
+    outline-offset: 2px;
+}
+
+.magazine-editor__a-add {
+    align-self: flex-start;
+    margin-top: 0.15rem;
 }
