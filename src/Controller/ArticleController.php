@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Article;
+use App\Http\PhpExecutionTime;
 use App\Repository\ArticleRepository;
 use App\Service\ArticleBodyHtmlRenderer;
 use App\Enum\KindsEnum;
@@ -35,10 +36,11 @@ class ArticleController  extends AbstractController
     #[Route('/fragment/comments', name: 'article_comments_fragment', methods: ['GET'])]
     public function commentsFragment(Request $request, ArticleCommentThreadLoader $loader, LoggerInterface $logger): Response
     {
-        // {@see NostrClient::getArticleDiscussion} runs per-relay work in parallel CLI workers; allow headroom
-        // for all processes + Symfony (45s was too low and caused an uncatchable max-execution fatal → HTTP 500).
-        @set_time_limit(300);
-        @ini_set('max_execution_time', '300');
+        // {@see NostrClient::getArticleDiscussion} uses parallel CLI workers; cap below multi-minute defaults
+        // so Apache event MPM scoreboard slots are not held unnecessarily (see {@see PhpExecutionTime}).
+        $t = PhpExecutionTime::NOSTR_BOUND_WEB_SEC;
+        @set_time_limit($t);
+        @ini_set('max_execution_time', (string) $t);
 
         $t0 = microtime(true);
         $coordinate = $request->query->getString('coordinate');
@@ -365,8 +367,9 @@ class ArticleController  extends AbstractController
         ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
         NostrKeyHelper $nostrKeyHelper,
     ): Response {
-        set_time_limit(300); // 5 minutes
-        ini_set('max_execution_time', '300');
+        $t = PhpExecutionTime::NOSTR_BOUND_WEB_SEC;
+        set_time_limit($t);
+        ini_set('max_execution_time', (string) $t);
 
         $html = $articleBodyHtmlRenderer->renderForArticle($article);
 
@@ -601,8 +604,9 @@ class ArticleController  extends AbstractController
     #[Route('/articles', name: 'articles')]
     public function latestArticles(Request $request, EntityManagerInterface $entityManager): Response
     {
-        set_time_limit(300); // 5 minutes
-        ini_set('max_execution_time', '300');
+        $t = PhpExecutionTime::LIGHT_WEB_SEC;
+        set_time_limit($t);
+        ini_set('max_execution_time', (string) $t);
 
         $perPage = 25;
         $page = max(1, $request->query->getInt('page', 1));

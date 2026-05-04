@@ -16,7 +16,10 @@ final readonly class Nip05VerificationService
 {
     private const CACHE_PREFIX = 'nip05v1_';
 
-    private const FETCH_TIMEOUT_SEC = 8;
+    private const FETCH_TIMEOUT_SEC = 5;
+
+    /** Avoid sequential cold HTTP to many domains on one page tying up a worker. */
+    private const MAX_COLD_VERIFICATIONS_PER_ENRICH = 5;
 
     public function __construct(
         private CacheItemPoolInterface $appCache,
@@ -42,6 +45,7 @@ final readonly class Nip05VerificationService
             }, $rows);
         }
         $out = [];
+        $coldDone = 0;
         foreach ($rows as $r) {
             $label = (string) ($r['label'] ?? '');
             $n = $this->normalizeNip05($label);
@@ -56,12 +60,21 @@ final readonly class Nip05VerificationService
                 $item = $this->appCache->getItem($k);
                 if ($item->isHit() && \is_bool($item->get())) {
                     $verified = (bool) $item->get();
+                } elseif ($coldDone >= self::MAX_COLD_VERIFICATIONS_PER_ENRICH) {
+                    $this->logger->info('nip05.verify_cold_skipped_budget', ['label' => $label]);
+                    $verified = false;
                 } else {
+                    ++$coldDone;
                     // Cold cache: verify now so the profile shows ✓ without a prior prewarm run.
                     $verified = $this->verifyAndCache($h, $label);
                 }
             } catch (InvalidArgumentException) {
-                $verified = $this->verifyAndCache($h, $label);
+                if ($coldDone >= self::MAX_COLD_VERIFICATIONS_PER_ENRICH) {
+                    $verified = false;
+                } else {
+                    ++$coldDone;
+                    $verified = $this->verifyAndCache($h, $label);
+                }
             }
             $out[] = [...$r, 'verified' => $verified];
         }

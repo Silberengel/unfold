@@ -38,9 +38,9 @@ class NostrClient
 {
     /**
      * Hard cap on unique relay URLs for article discussion. More relays do not help much (indexers duplicate)
-     * but blow up wall time when we fall back to sequential in-process {@see Request::send()}.
+     * but each URL can spawn a CLI worker ({@see NostrRelayFanoutTransport::sendParallelWorkers}) → Apache/CPU load.
      */
-    private const MAX_DISCUSSION_RELAY_URLS = 10;
+    private const MAX_DISCUSSION_RELAY_URLS = 8;
 
     /**
      * Kind-9802 highlight ingest ({@see fetchHighlightEventsForArticle} / prewarm): main + article + profile

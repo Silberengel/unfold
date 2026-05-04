@@ -22,6 +22,9 @@ use Symfony\Contracts\Cache\ItemInterface;
 final readonly class ArticleCommentThreadLoader
 {
     private const PARENT_REPLY_TEXT_PREVIEW_MAX = 200;
+
+    /** Partial thread cache: long enough to avoid relay-storm on flaky relays; prewarm still fills full TTL. */
+    private const PARTIAL_THREAD_CACHE_TTL_SEC = 300;
     /** PSR-6 pool backing {@see $cache}; used for true cache-only reads (SSR) without invoking Nostr. */
     public function __construct(
         private NostrClient $nostrClient,
@@ -101,8 +104,8 @@ final readonly class ArticleCommentThreadLoader
                 // On failure, let this throw: Symfony cache will not store a value, so a prior good thread is not replaced by [].
                 $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId);
                 $partial = (bool) ($out['partial'] ?? false);
-                // Partial relay snapshots are intentionally short-lived so the next request can pick up late relays.
-                $item->expiresAfter($partial ? 15 : 86400);
+                // Partial: bounded TTL so late relays can still appear without re-fetching every few seconds.
+                $item->expiresAfter($partial ? self::PARTIAL_THREAD_CACHE_TTL_SEC : 86400);
                 $this->logger->info('comments.loader.nostr_ok', [
                     'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
                     'thread' => \count($out['thread'] ?? []),

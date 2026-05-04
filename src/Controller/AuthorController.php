@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Http\PhpExecutionTime;
 use App\Repository\ArticleRepository;
 use App\Repository\FeaturedAuthorRepository;
 use App\Service\CacheService;
@@ -36,10 +37,9 @@ class AuthorController extends AbstractController
         ProfileIdentityLinksBuilder $profileIdentityLinks,
         NostrKeyHelper $nostrKeyHelper,
     ): Response {
-        // Profile pages chain several sequential Nostr REQ runs; match article pages so a slow relay
-        // set does not hit PHP’s default 30s max_execution_time during Twig render.
-        @set_time_limit(300);
-        @ini_set('max_execution_time', '300');
+        // Profile pages chain several sequential Nostr REQ runs; cap wall time so Apache workers are not held for minutes.
+        @set_time_limit(PhpExecutionTime::NOSTR_BOUND_WEB_SEC);
+        @ini_set('max_execution_time', (string) PhpExecutionTime::NOSTR_BOUND_WEB_SEC);
 
         $pubkey = $nostrKeyHelper->convertToHex($npub);
 
