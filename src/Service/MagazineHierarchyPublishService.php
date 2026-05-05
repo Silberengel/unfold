@@ -13,7 +13,8 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
  * Validates NIP-07–signed kind-30040 magazine batches from the site owner, publishes to article relays,
- * and updates {@see MagazineIndexStore}.
+ * updates {@see MagazineIndexStore}, then ingests listed long-form coordinates into MySQL so the UI
+ * can resolve new `a` tags without waiting for cron {@see NostrClient::ingestLongformForCategoryCoordinates}.
  */
 final class MagazineHierarchyPublishService
 {
@@ -32,7 +33,7 @@ final class MagazineHierarchyPublishService
     /**
      * @param array<int, mixed> $rawEvents Decoded JSON event objects
      *
-     * @return array{ok: true, published: int, stored: int}|array{ok: false, error: string, code: int}
+     * @return array{ok: true, published: int, stored: int, longform_ingest_addresses: int}|array{ok: false, error: string, code: int}
      */
     public function publishOwnerMagazineBatch(User $user, array $rawEvents): array
     {
@@ -93,11 +94,6 @@ final class MagazineHierarchyPublishService
             $byD[$d] = $wire;
         }
 
-        $graphErr = $this->validateGraphClosure($byD, $rootD);
-        if ($graphErr !== null) {
-            return ['ok' => false, 'error' => $graphErr, 'code' => 400];
-        }
-
         $relays = $this->nostrClient->getArticleWriteRelayUrls();
         if ($relays === []) {
             return ['ok' => false, 'error' => 'No write relays configured.', 'code' => 500];
@@ -137,12 +133,29 @@ final class MagazineHierarchyPublishService
             ++$stored;
         }
 
+        $longformAddresses = $this->collectLongformCoordinatesFromBatch($byD);
+        if ($longformAddresses !== []) {
+            try {
+                $this->nostrClient->ingestLongformForCategoryCoordinates($longformAddresses);
+            } catch (\Throwable $e) {
+                $this->logger->warning('magazine_hierarchy.longform_ingest_after_publish_failed', [
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $this->logger->info('magazine_hierarchy.published', [
             'published' => $published,
             'stored' => $stored,
+            'longform_ingest_addresses' => \count($longformAddresses),
         ]);
 
-        return ['ok' => true, 'published' => $published, 'stored' => $stored];
+        return [
+            'ok' => true,
+            'published' => $published,
+            'stored' => $stored,
+            'longform_ingest_addresses' => \count($longformAddresses),
+        ];
     }
 
     /**
@@ -185,24 +198,17 @@ final class MagazineHierarchyPublishService
     }
 
     /**
+     * Long-form `a` coordinates from this publish batch (30023 / 30024) for immediate DB sync.
+     *
      * @param array<string, NostrWireEvent> $byD
+     *
+     * @return list<string>
      */
-    private function validateGraphClosure(array $byD, string $rootD): ?string
+    private function collectLongformCoordinatesFromBatch(array $byD): array
     {
-        if (!isset($byD[$rootD])) {
-            return 'Batch must include the magazine root index (#d '.$rootD.').';
-        }
-
-        $queue = [$rootD];
-        $visited = [];
-        while ($queue !== []) {
-            $d = array_shift($queue);
-            if ($d === '' || isset($visited[$d])) {
-                continue;
-            }
-            $visited[$d] = true;
-            $ev = $byD[$d];
-            foreach ($ev->getTags() as $row) {
+        $out = [];
+        foreach ($byD as $wire) {
+            foreach ($wire->getTags() as $row) {
                 if (!NostrEventTags::tagNameMatches($row, 'a')) {
                     continue;
                 }
@@ -213,32 +219,22 @@ final class MagazineHierarchyPublishService
                 $coord = trim((string) $seq[1]);
                 $parts = explode(':', $coord, 3);
                 if (\count($parts) < 3) {
-                    return 'Malformed nested coordinate under #d '.$d;
-                }
-                $kind = (int) $parts[0];
-                if ($kind !== KindsEnum::PUBLICATION_INDEX->value) {
                     continue;
                 }
-                $childD = trim((string) $parts[2]);
-                if ($childD === '') {
-                    return 'Empty nested magazine #d under #d '.$d;
+                $kind = (int) $parts[0];
+                if (!\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+                    continue;
                 }
-                if (!isset($byD[$childD])) {
-                    return 'Every nested kind-30040 `a` tag must have a matching event in this batch (missing #d '.$childD.' referenced from '.$d.').';
+                $pk = strtolower(trim((string) $parts[1]));
+                $id = trim((string) $parts[2]);
+                if ($id === '' || 64 !== \strlen($pk) || !ctype_xdigit($pk)) {
+                    continue;
                 }
-                if (!isset($visited[$childD])) {
-                    $queue[] = $childD;
-                }
+                $out[] = $kind.':'.$pk.':'.$id;
             }
         }
 
-        foreach (array_keys($byD) as $d) {
-            if (!isset($visited[$d])) {
-                return 'Event #d '.$d.' is not reachable from the magazine root via kind-30040 links.';
-            }
-        }
-
-        return null;
+        return array_values(array_unique($out));
     }
 
     /**

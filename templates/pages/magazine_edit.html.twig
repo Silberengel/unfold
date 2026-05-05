@@ -67,7 +67,7 @@
         </div>
         <div class="card-body">
             <p class="magazine-editor__intro">
-                Edit kind <strong>30040</strong> indices (root, categories, subcategories), then sign with your Nostr extension. Use <strong>Add top-level category</strong> or <strong>Add subcategory</strong> to create new indices; the parent index’s <code>a</code> list is updated automatically so the tree stays linked. Only indices you changed are signed; any other index required so nested <code>a</code> links stay consistent is still included in the same batch (same rules as before).
+                Edit kind <strong>30040</strong> indices (root, categories, subcategories), then sign with your Nostr extension. Use <strong>Add top-level category</strong> or <strong>Add subcategory</strong> to create new indices; the parent index’s <code>a</code> list is updated automatically so the tree stays linked. <strong>Publish</strong> signs only the indices you actually changed; listed long-form posts are fetched into the site database right after a successful publish so category pages can show new <code>a</code> tags without waiting for the prewarm cron.
             </p>
 
             <div

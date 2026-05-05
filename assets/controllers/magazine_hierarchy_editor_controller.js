@@ -6,8 +6,7 @@ const KIND_LONGFORM_DRAFT = 30024;
 
 /**
  * Owner-only magazine hierarchy: build kind-30040 tags from fieldsets, NIP-07 sign each, POST batch.
- * Only signs nodes that differ from the page load snapshot, plus any other index required for
- * graph closure (root + every nested kind-30040 `a` reachable from those events).
+ * Only signs nodes that differ from the page load snapshot (unchanged indices are not re-signed).
  */
 const DTAG_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
@@ -680,34 +679,16 @@ export default class MagazineHierarchyEditorController extends Controller {
             return;
         }
 
-        const dirty = nodes.filter((el) => this.isNodeDirty(el));
-        if (dirty.length === 0) {
-            this.setStatus('No changes to publish.');
-            return;
-        }
-
-        let publishSet;
-        try {
-            publishSet = await this.expandPublishSet(rootD, dirty, ownerHex);
-        } catch (err) {
-            this.setStatus(err instanceof Error ? err.message : String(err));
-            return;
-        }
-
-        const ordered = nodes.filter((el) => publishSet.has(readDTag(el)));
+        const ordered = nodes.filter((el) => this.isNodeDirty(el));
         if (ordered.length === 0) {
-            this.setStatus('Nothing to publish.');
+            this.setStatus('No changes to publish.');
             return;
         }
 
         const baseTime = Math.floor(Date.now() / 1000);
         const signedEvents = [];
 
-        this.setStatus(
-            ordered.length === dirty.length
-                ? 'Signing…'
-                : `Signing ${ordered.length} index event(s) (${dirty.length} edited, ${ordered.length - dirty.length} required for nested links)…`,
-        );
+        this.setStatus(ordered.length === 1 ? 'Signing…' : `Signing ${ordered.length} changed index event(s)…`);
 
         for (let i = 0; i < ordered.length; i++) {
             const el = ordered[i];
@@ -778,13 +759,18 @@ export default class MagazineHierarchyEditorController extends Controller {
             return;
         }
         const n = Number(data.published);
+        const ingested = Number(data.longform_ingest_addresses);
         for (const el of ordered) {
             if (el.dataset.isNewNode === '1') {
                 this.finalizeNewNodeFieldset(el);
             }
             this.nodeBaseline.set(el, snapshotFromElement(el));
         }
-        this.setStatus(Number.isFinite(n) ? `Published and stored ${n} index event(s).` : 'Published.');
+        if (Number.isFinite(n) && Number.isFinite(ingested) && ingested > 0) {
+            this.setStatus(`Published and stored ${n} index event(s); synced ${ingested} long-form address(es) from relays.`);
+        } else {
+            this.setStatus(Number.isFinite(n) ? `Published and stored ${n} index event(s).` : 'Published.');
+        }
     }
 
     isNodeDirty(el) {
@@ -804,60 +790,6 @@ export default class MagazineHierarchyEditorController extends Controller {
             cur.aText !== base.aText ||
             cur.preservedRaw !== base.preservedRaw
         );
-    }
-
-    /**
-     * Minimal set of #d tags that must appear in the POST body: dirty nodes, the root, and every
-     * kind-30040 child referenced (transitively) from those events' `a` tags — matches server
-     * {@see MagazineHierarchyPublishService::validateGraphClosure}.
-     *
-     * @param {HTMLElement} dirtyFieldsets
-     * @returns {Promise<Set<string>>}
-     */
-    async expandPublishSet(rootD, dirtyFieldsets, ownerHex) {
-        /** @type {Map<string, HTMLElement>} */
-        const dToEl = new Map();
-        if (this.hasNodesTarget) {
-            for (const el of queryEditorNodeFieldsets(this.nodesTarget)) {
-                const d = readDTag(el);
-                if (d) {
-                    dToEl.set(d, el);
-                }
-            }
-        }
-
-        const W = new Set();
-        for (const el of dirtyFieldsets) {
-            const d = readDTag(el);
-            if (d) {
-                W.add(d);
-            }
-        }
-        W.add(rootD);
-
-        let growing = true;
-        let guard = 0;
-        while (growing && guard < 256) {
-            guard += 1;
-            growing = false;
-            const snapshot = [...W];
-            for (const d of snapshot) {
-                const el = dToEl.get(d);
-                if (!el) {
-                    continue;
-                }
-                const { dTag, title, summary, content, aText, preserved } = readFieldsForBuild(el);
-                const tags = await this.buildTags(dTag, preserved, title, summary, aText, ownerHex);
-                for (const childD of ownedNested30040DsFromTags(tags, ownerHex)) {
-                    if (!W.has(childD)) {
-                        W.add(childD);
-                        growing = true;
-                    }
-                }
-            }
-        }
-
-        return W;
     }
 
     /**
@@ -1018,39 +950,6 @@ function rewrite30040ChildLineInList(list, ownerHex, oldD, newD) {
         }
     }
     return false;
-}
-
-/**
- * @param {string[][]} tags
- * @param {string} ownerHex
- * @returns {Set<string>}
- */
-function ownedNested30040DsFromTags(tags, ownerHex) {
-    const out = new Set();
-    const oh = ownerHex.toLowerCase();
-    for (const row of tags) {
-        if (row.length < 2 || String(row[0]).toLowerCase() !== 'a') {
-            continue;
-        }
-        const coord = String(row[1]).trim();
-        const parts = splitThree(coord);
-        if (!parts) {
-            continue;
-        }
-        const kind = parseInt(parts.kind, 10);
-        if (kind !== KIND_PUBLICATION_INDEX) {
-            continue;
-        }
-        const pk = parts.pubkey.toLowerCase();
-        if (pk !== oh) {
-            continue;
-        }
-        const id = parts.identifier.trim();
-        if (id !== '') {
-            out.add(id);
-        }
-    }
-    return out;
 }
 
 /**
