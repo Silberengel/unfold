@@ -702,14 +702,12 @@ final class MagazineContentService
             if (!\is_string($coord) || $coord === '') {
                 continue;
             }
-            $b = $this->buildCategoryFeaturedBlock($coord);
-            if ($b === null) {
-                continue;
-            }
-            foreach ($b['cards'] as $card) {
-                $s = \trim((string) $card->getSlug());
-                if ($s !== '') {
-                    $out[$s] = true;
+            foreach ($this->buildFeaturedWallBlocksForCategoryTree($coord) as $b) {
+                foreach ($b['cards'] as $card) {
+                    $s = \trim((string) $card->getSlug());
+                    if ($s !== '') {
+                        $out[$s] = true;
+                    }
                 }
             }
         }
@@ -816,8 +814,10 @@ final class MagazineContentService
     }
 
     /**
-     * Interleaves up to two articles per home category in round-robin order (one “wall” mixing all topics).
-     * Duplicate slugs across categories are skipped so each article appears at most once.
+     * Interleaves up to two articles per wall “brick” in round-robin order (one picture wall mixing all topics).
+     * Each root category and each nested kind-30040 subcategory is its own brick (direct long-form `a` tags only;
+     * subcategory articles are not folded into the parent’s title). Per brick, cards are the two newest by
+     * display date ({@see FeaturedArticleCard::getDisplayAt}). Duplicate slugs across bricks are skipped.
      *
      * @param list<array<int, string>> $categoryATags
      *
@@ -831,9 +831,10 @@ final class MagazineContentService
             if (!\is_string($coord) || $coord === '') {
                 continue;
             }
-            $b = $this->buildCategoryFeaturedBlock($coord);
-            if ($b !== null && $b['cards'] !== []) {
-                $blocks[] = $b;
+            foreach ($this->buildFeaturedWallBlocksForCategoryTree($coord) as $b) {
+                if ($b['cards'] !== []) {
+                    $blocks[] = $b;
+                }
             }
         }
         if ($blocks === []) {
@@ -1010,38 +1011,55 @@ final class MagazineContentService
     }
 
     /**
-     * Same article resolution as {@see \App\Twig\Components\Organisms\FeaturedList} (nested 30040 + long-form);
-     * at most two cards per root category for the home picture wall.
+     * Long-form `#d` slugs from `a` tags on this index only (no descent into nested kind-30040), in tag order.
      *
-     * @return null|array{title: string, cards: list<FeaturedArticleCard>}
+     * @return list<string>
      */
-    private function buildCategoryFeaturedBlock(string $categoryCoord): ?array
+    private function directLongformSlugsFromCategoryIndex(Event $catIndex, int $maxA): array
     {
-        $parts = explode(':', $categoryCoord, 3);
-        if (\count($parts) < 3) {
-            return null;
+        if ($maxA < 1) {
+            return [];
         }
-        $slug = trim((string) $parts[2]);
-        $this->warmCategoryIndexIfMissing($slug);
-        $catIndex = $this->store->getCategory($slug);
-        if ($catIndex === null) {
-            return null;
-        }
-
-        $title = '';
+        $slugs = [];
         foreach ($catIndex->getTags() as $tag) {
-            if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
-                $title = (string) $tag[1];
+            if (($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
+                continue;
+            }
+            $coord = (string) $tag[1];
+            $segs = explode(':', $coord, 3);
+            if (\count($segs) < 3) {
+                continue;
+            }
+            $kind = (int) ($segs[0] ?? 0);
+            $identifier = trim((string) $segs[2]);
+            if ($identifier === '') {
+                continue;
+            }
+            if (\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+                $slugs[] = $identifier;
+                if (\count($slugs) >= $maxA) {
+                    return $slugs;
+                }
             }
         }
 
-        if ($title === '') {
-            $title = $slug;
-        }
-        $slugs = $this->slugsFromCategoryCoord($categoryCoord, 40);
+        return $slugs;
+    }
+
+    /**
+     * One home wall brick: this index’s title and up to {@see $maxCards} featured cards from direct long-form
+     * `a` tags only, choosing the newest by display date ({@see FeaturedArticleCard::getDisplayAt}).
+     *
+     * @return null|array{title: string, cards: list<FeaturedArticleCard>}
+     */
+    private function buildWallBlockForCategoryIndex(Event $catIndex, string $slug, int $maxCards = 2): ?array
+    {
+        $slugs = $this->directLongformSlugsFromCategoryIndex($catIndex, 40);
         if ($slugs === []) {
             return null;
         }
+
+        $title = $this->categoryDisplayTitleFromIndexTags($catIndex, $slug);
 
         $articles = $this->articleRepository->findFeaturedCardsBySlugs($slugs);
         $slugMap = [];
@@ -1055,28 +1073,101 @@ final class MagazineContentService
                 }
             }
         }
-        $orderedList = [];
+        $resolved = [];
         foreach ($slugs as $articleSlug) {
             $articleSlug = \trim((string) $articleSlug);
             if ($articleSlug !== '' && isset($slugMap[$articleSlug])) {
-                $orderedList[] = $slugMap[$articleSlug];
+                $resolved[] = $slugMap[$articleSlug];
             }
         }
-        if ($orderedList !== [] && NostrEventTags::publicationIndexNestedDSlugs($catIndex->getTags()) !== []) {
-            \usort($orderedList, function (FeaturedArticleCard $a, FeaturedArticleCard $b): int {
-                if ($this->featuredCardIsNewer($a, $b)) {
-                    return -1;
-                }
-                if ($this->featuredCardIsNewer($b, $a)) {
-                    return 1;
-                }
-
-                return 0;
-            });
+        if ($resolved === []) {
+            return null;
         }
-        $cards = \array_slice($orderedList, 0, 2);
+        \usort($resolved, function (FeaturedArticleCard $a, FeaturedArticleCard $b): int {
+            if ($this->featuredCardIsNewer($a, $b)) {
+                return -1;
+            }
+            if ($this->featuredCardIsNewer($b, $a)) {
+                return 1;
+            }
+
+            return 0;
+        });
+        $cards = \array_slice($resolved, 0, max(1, $maxCards));
 
         return ['title' => $title, 'cards' => $cards];
+    }
+
+    /**
+     * Ordered wall bricks: this category (direct long-form only), then each nested kind-30040 owned by the
+     * same pubkey, depth-first in `a` tag order.
+     *
+     * @return list<array{title: string, cards: list<FeaturedArticleCard>}>
+     */
+    private function buildFeaturedWallBlocksForCategoryTree(string $categoryCoord, int $depth = 0, int $maxDepth = 8): array
+    {
+        if ($depth > $maxDepth) {
+            return [];
+        }
+        $parts = explode(':', $categoryCoord, 3);
+        if (\count($parts) < 3) {
+            return [];
+        }
+        $ownerHex = strtolower(trim((string) $parts[1]));
+        $slug = trim((string) $parts[2]);
+        if ($slug === '' || 64 !== \strlen($ownerHex) || !ctype_xdigit($ownerHex)) {
+            return [];
+        }
+        $this->warmCategoryIndexIfMissing($slug);
+        $catIndex = $this->store->getCategory($slug);
+        if ($catIndex === null) {
+            return [];
+        }
+
+        $blocks = [];
+        $own = $this->buildWallBlockForCategoryIndex($catIndex, $slug);
+        if ($own !== null) {
+            $blocks[] = $own;
+        }
+
+        foreach ($catIndex->getTags() as $tag) {
+            if (($tag[0] ?? null) !== 'a' || !isset($tag[1])) {
+                continue;
+            }
+            $coord = trim((string) $tag[1]);
+            $segs = explode(':', $coord, 3);
+            if (\count($segs) < 3) {
+                continue;
+            }
+            $kind = (int) ($segs[0] ?? 0);
+            if ($kind !== KindsEnum::PUBLICATION_INDEX->value) {
+                continue;
+            }
+            $pk = strtolower(trim((string) $segs[1]));
+            $childSlug = trim((string) $segs[2]);
+            if ($childSlug === '' || !hash_equals($ownerHex, $pk)) {
+                continue;
+            }
+            $childCoord = $kind.':'.$pk.':'.$childSlug;
+            foreach ($this->buildFeaturedWallBlocksForCategoryTree($childCoord, $depth + 1, $maxDepth) as $b) {
+                $blocks[] = $b;
+            }
+        }
+
+        return $blocks;
+    }
+
+    private function categoryDisplayTitleFromIndexTags(Event $catIndex, string $slugFallback): string
+    {
+        foreach ($catIndex->getTags() as $tag) {
+            if (($tag[0] ?? null) === 'title' && isset($tag[1])) {
+                $t = trim((string) $tag[1]);
+
+                return $t !== '' ? $t : $slugFallback;
+            }
+        }
+
+        return $slugFallback !== '' ? $slugFallback : 'Category';
     }
 
     private function featuredCardIsNewer(FeaturedArticleCard $a, FeaturedArticleCard $b): bool
