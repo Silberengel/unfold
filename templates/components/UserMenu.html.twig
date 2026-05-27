@@ -25,6 +25,13 @@
             <li>
                 <a href="/logout" data-action="click->login#authLogout click->live#$render">{{ 'heading.logout'|trans }}</a>
             </li>
+            <li
+                data-controller="footer-magazine-edit"
+                data-footer-magazine-edit-publisher-npub-value="{{ publisher_npub }}"
+                {% if not (app.user.userIdentifier == publisher_npub) %}hidden{% endif %}
+            >
+                <a href="{{ path('magazine_edit') }}">Edit magazine</a>
+            </li>
             <li>
                 <a href="{{ path('search') }}">{{ 'heading.search'|trans }}</a>
             </li>

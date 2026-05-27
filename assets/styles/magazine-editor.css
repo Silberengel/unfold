@@ -228,14 +228,64 @@
     gap: 0.5rem;
 }
 
-/* Grid: two columns regardless of flex quirks inside fieldsets / % widths on inputs */
+/* Grid: drag-handle | input | remove-btn */
 .magazine-editor__a-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.35rem;
     width: 100%;
     min-width: 0;
+}
+
+.magazine-editor__a-drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.1rem 0.15rem;
+    margin: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-mid, rgba(160, 160, 160, 0.55));
+    cursor: grab;
+    touch-action: none;
+    line-height: 0;
+    font-size: 0;
+    text-transform: none;
+    font-weight: normal;
+    border-radius: 2px;
+    box-shadow: none;
+}
+
+.magazine-editor__a-drag-handle:active {
+    cursor: grabbing;
+}
+
+.magazine-editor__a-drag-handle:hover {
+    color: var(--color-text, inherit);
+}
+
+.magazine-editor__a-drag-handle:focus-visible {
+    outline: 2px solid var(--color-focus, currentColor);
+    outline-offset: 2px;
+}
+
+.magazine-editor__a-drag-handle svg {
+    display: block;
+}
+
+/* Ghost image: fade the row being dragged */
+.magazine-editor__a-row[data-dragging] {
+    opacity: 0.35;
+}
+
+/* Drop-target indicator: a coloured line above or below the target row */
+.magazine-editor__a-row[data-drag-before] {
+    box-shadow: 0 -2px 0 0 var(--color-accent, #5b9) inset;
+}
+
+.magazine-editor__a-row[data-drag-after] {
+    box-shadow: 0 2px 0 0 var(--color-accent, #5b9) inset;
 }
 
 .magazine-editor__a-line-field {

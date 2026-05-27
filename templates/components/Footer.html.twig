@@ -10,13 +10,6 @@
         <nav class="site-footer__nav" aria-label="Sitemap, feeds, and index">
             <ul class="site-footer__syndication-list">
                 <li><a class="site-footer__link" href="{{ path('featured_authors') }}">Featured authors</a></li>
-                <li
-                    data-controller="footer-magazine-edit"
-                    data-footer-magazine-edit-publisher-npub-value="{{ publisher_npub }}"
-                    {% if not (app.user and app.user.userIdentifier == publisher_npub) %}hidden{% endif %}
-                >
-                    <a class="site-footer__link" href="{{ path('magazine_edit') }}">Edit magazine</a>
-                </li>
                 <li><a class="site-footer__link" href="{{ path('sitemap') }}">Sitemap (XML)</a></li>
                 <li><a class="site-footer__link" href="{{ path('robots_txt') }}">Robots</a></li>
                 <li class="site-footer__syndication-list__feeds">

@@ -23,12 +23,10 @@ export default class extends Controller {
     if (!d) {
       return;
     }
-    if (d.loggedIn === false) {
-      this.element.hidden = true;
-      return;
-    }
     if (d.loggedIn && d.npub === this.publisherNpubValue) {
       this.element.hidden = false;
+    } else {
+      this.element.hidden = true;
     }
   }
 }

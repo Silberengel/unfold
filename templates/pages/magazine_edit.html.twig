@@ -8,7 +8,7 @@
     <style id="magazine-editor-a-row-critical">
         .card.magazine-editor [data-mag-a-row] {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-columns: auto minmax(0, 1fr) auto;
             align-items: center;
             gap: 0.35rem;
             width: 100%;
@@ -23,6 +23,28 @@
             width: 100%;
             min-width: 0;
             box-sizing: border-box;
+        }
+        .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-drag-handle {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: auto !important;
+            min-width: 0 !important;
+            padding: 0.1rem 0.15rem !important;
+            margin: 0 !important;
+            background: none !important;
+            border: none !important;
+            color: var(--color-text-mid, rgba(160,160,160,0.55)) !important;
+            cursor: grab !important;
+            text-transform: none !important;
+            font-weight: normal !important;
+            font-size: 0 !important;
+            line-height: 0 !important;
+            box-shadow: none !important;
+            border-radius: 2px !important;
+        }
+        .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-drag-handle svg {
+            display: block;
         }
         .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-remove-icon {
             box-sizing: border-box;
@@ -87,7 +109,14 @@
                 </div>
 
                 <template data-magazine-hierarchy-editor-target="aRowTemplate">
-                    <div class="magazine-editor__a-row" data-mag-a-row>
+                    <div class="magazine-editor__a-row" data-mag-a-row draggable="true">
+                        <button type="button" class="magazine-editor__a-drag-handle" aria-label="Drag to reorder" tabindex="-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true">
+                                <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
+                                <circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/>
+                                <circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/>
+                            </svg>
+                        </button>
                         <div class="magazine-editor__a-line-field">
                             <input type="text" class="magazine-editor__input magazine-editor__input--mono magazine-editor__a-line-input" data-mag-a-line value="" spellcheck="false" autocomplete="off">
                         </div>
@@ -230,7 +259,14 @@
                                 <p class="magazine-editor__a-hint">Each field is one <code>a</code> value: <code>kind:hex64pubkey:identifier</code>, long-form <code>30023</code>/<code>30024</code>, or NIP-19 <code>naddr1…</code> / <code>nostr:naddr1…</code> (expanded when signing).</p>
                                 <div class="magazine-editor__a-list" data-mag-a-list>
                                     {% for coord in node.a_coordinates %}
-                                        <div class="magazine-editor__a-row" data-mag-a-row>
+                                        <div class="magazine-editor__a-row" data-mag-a-row draggable="true">
+                                            <button type="button" class="magazine-editor__a-drag-handle" aria-label="Drag to reorder" tabindex="-1">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true">
+                                                    <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
+                                                    <circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/>
+                                                    <circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/>
+                                                </svg>
+                                            </button>
                                             <div class="magazine-editor__a-line-field">
                                                 <input type="text" class="magazine-editor__input magazine-editor__input--mono magazine-editor__a-line-input" data-mag-a-line value="{{ coord|e('html_attr') }}" spellcheck="false" autocomplete="off">
                                             </div>

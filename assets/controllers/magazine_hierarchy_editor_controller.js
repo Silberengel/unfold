@@ -43,13 +43,25 @@ export default class MagazineHierarchyEditorController extends Controller {
         // reference must be stable so removeEventListener in disconnect() can match it.
         this._onDocClickCapture ??= this._onDocClickCapture.bind(this);
         this._onPanelFocusOut ??= this._onPanelFocusOut.bind(this);
+        this._onDragStart ??= this._onDragStart.bind(this);
+        this._onDragOver ??= this._onDragOver.bind(this);
+        this._onDrop ??= this._onDrop.bind(this);
+        this._onDragEnd ??= this._onDragEnd.bind(this);
         document.addEventListener('click', this._onDocClickCapture, true);
         this.element.addEventListener('focusout', this._onPanelFocusOut);
+        this.element.addEventListener('dragstart', this._onDragStart);
+        this.element.addEventListener('dragover', this._onDragOver);
+        this.element.addEventListener('drop', this._onDrop);
+        this.element.addEventListener('dragend', this._onDragEnd);
     }
 
     disconnect() {
         document.removeEventListener('click', this._onDocClickCapture, true);
         this.element.removeEventListener('focusout', this._onPanelFocusOut);
+        this.element.removeEventListener('dragstart', this._onDragStart);
+        this.element.removeEventListener('dragover', this._onDragOver);
+        this.element.removeEventListener('drop', this._onDrop);
+        this.element.removeEventListener('dragend', this._onDragEnd);
     }
 
     /**
@@ -125,6 +137,102 @@ export default class MagazineHierarchyEditorController extends Controller {
             return;
         }
         this.commitDTag(ev);
+    }
+
+    // -------------------------------------------------------------------------
+    // Drag-and-drop reordering for article (`a`-tag) rows within a list
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param {DragEvent} ev
+     */
+    _onDragStart(ev) {
+        const row = ev.target instanceof Element ? ev.target.closest('[data-mag-a-row]') : null;
+        if (!row) {
+            return;
+        }
+        this._dragRow = row;
+        ev.dataTransfer.effectAllowed = 'move';
+        // Firefox requires at least one dataTransfer item for drag to start.
+        ev.dataTransfer.setData('text/plain', '');
+        // Defer the opacity change so the browser captures the ghost image at full opacity first.
+        requestAnimationFrame(() => {
+            if (this._dragRow === row) {
+                row.dataset.dragging = '1';
+            }
+        });
+    }
+
+    /**
+     * @param {DragEvent} ev
+     */
+    _onDragOver(ev) {
+        if (!this._dragRow) {
+            return;
+        }
+        const row = ev.target instanceof Element ? ev.target.closest('[data-mag-a-row]') : null;
+        if (!row || row === this._dragRow) {
+            this._clearDragOver();
+            return;
+        }
+        // Only allow reordering within the same `[data-mag-a-list]` container.
+        const dragList = this._dragRow.closest('[data-mag-a-list]');
+        if (!dragList || dragList !== row.closest('[data-mag-a-list]')) {
+            this._clearDragOver();
+            return;
+        }
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        // Re-evaluate insert position as the cursor moves within the same row.
+        this._clearDragOver();
+        this._dragOverRow = row;
+        const rect = row.getBoundingClientRect();
+        row.dataset[ev.clientY < rect.top + rect.height / 2 ? 'dragBefore' : 'dragAfter'] = '1';
+    }
+
+    /**
+     * @param {DragEvent} ev
+     */
+    _onDrop(ev) {
+        ev.preventDefault();
+        const overRow = this._dragOverRow;
+        const dragRow = this._dragRow;
+        if (!overRow || !dragRow || overRow === dragRow) {
+            this._clearDrag();
+            return;
+        }
+        const dragList = dragRow.closest('[data-mag-a-list]');
+        if (!dragList || dragList !== overRow.closest('[data-mag-a-list]')) {
+            this._clearDrag();
+            return;
+        }
+        const insertBefore = 'dragBefore' in overRow.dataset;
+        this._clearDrag();
+        if (insertBefore) {
+            dragList.insertBefore(dragRow, overRow);
+        } else {
+            overRow.insertAdjacentElement('afterend', dragRow);
+        }
+    }
+
+    _onDragEnd() {
+        this._clearDrag();
+    }
+
+    _clearDragOver() {
+        if (this._dragOverRow) {
+            delete this._dragOverRow.dataset.dragBefore;
+            delete this._dragOverRow.dataset.dragAfter;
+            this._dragOverRow = null;
+        }
+    }
+
+    _clearDrag() {
+        if (this._dragRow) {
+            delete this._dragRow.dataset.dragging;
+            this._dragRow = null;
+        }
+        this._clearDragOver();
     }
 
     captureBaselines() {

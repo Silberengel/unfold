@@ -107,6 +107,11 @@ RUN set -eux; \
 	composer dump-autoload --classmap-authoritative --no-dev; \
 	composer dump-env prod; \
 	rm -f .env; \
+	# Strip deployment secrets from the compiled .env.local.php so they cannot be read from the
+	# image layers. APP_SECRET, DATABASE_URL, and MYSQL_* passwords must be injected as real
+	# environment variables at runtime. If they are absent at runtime Symfony will raise an error
+	# rather than silently using the public .env.dist defaults.
+	php -r '$e=include(".env.local.php"); unset($e["APP_SECRET"],$e["DATABASE_URL"],$e["MYSQL_USER"],$e["MYSQL_PASSWORD"],$e["MYSQL_ROOT_PASSWORD"]); file_put_contents(".env.local.php","<?php return ".var_export($e,true).";".PHP_EOL);' ; \
 	composer run-script --no-dev post-install-cmd; \
 	php bin/console asset-map:compile --no-debug; \
 	chmod +x bin/console; sync;
