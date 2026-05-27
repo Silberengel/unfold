@@ -58,13 +58,20 @@ export default class extends Controller {
         return u.includes('?') ? `${u}&${qs}` : `${u}?${qs}`;
     }
 
-    async load() {
+    async load(isPartialRetry = false) {
         // Track whether Phase 2 has already written to the DOM so Phase 1 never clobbers it.
         this._fullFetchDone = false;
-        this.partialReloads = 0;
+        // Only reset the partial-retry counter on a fresh top-level load, not on retries triggered
+        // by a partial result — otherwise the counter resets every call and the retry loop never stops.
+        if (!isPartialRetry) {
+            this.partialReloads = 0;
+        }
 
         // Phase 1: fire a cache-only request in the background — completes in < 100 ms.
-        void this._showCachedVersion();
+        // Skip on partial retries: the container already has content; Phase 1 would overwrite it.
+        if (!isPartialRetry) {
+            void this._showCachedVersion();
+        }
 
         // Phase 2: full relay fetch — replaces Phase 1 output when it resolves.
         const t0 = performance.now();
@@ -95,7 +102,7 @@ export default class extends Controller {
                     this.partialReloads += 1;
                     window.setTimeout(() => {
                         if (this.hasContainerTarget) {
-                            void this.load();
+                            void this.load(true);
                         }
                     }, 1200);
                 }
