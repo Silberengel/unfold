@@ -29,7 +29,6 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
         private EventRepository $eventRepository,
         private LoggerInterface $logger,
         private NostrKeyHelper $nostrKeyHelper,
-        private NostrNip65RelayUrls $nip65RelayUrls,
         private Nip30EmojiCatalogBuilder $nip30EmojiCatalogBuilder,
     ) {
     }
@@ -223,26 +222,6 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
         return $n;
     }
 
-    public function getRelays($npub)
-    {
-        $authorHex = $this->npubToAuthorHex64($npub);
-        if ($authorHex === null) {
-            return [];
-        }
-        $key = MagazineEventKeys::relayList10002($authorHex);
-        $row = $this->eventRepository->findOneByCoreRowKey($key);
-        if ($row !== null) {
-            return self::relayWssListFromNip65Tags($row->getTags());
-        }
-        $wire = $this->nostrClient->getNpubRelayList10002Wire($npub);
-        if ($wire === null) {
-            return [];
-        }
-        $this->replaceByCoreKey($key, Event::STORAGE_RELAY_LIST_10002, $wire);
-
-        return $this->nip65RelayUrls->wssListFromKind10002Wire($wire);
-    }
-
     /**
      * @return list<list<string>>
      */
@@ -432,24 +411,4 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
         ];
     }
 
-    /**
-     * @param list<list<string>>|array $tags
-     * @return list<string>
-     */
-    private static function relayWssListFromNip65Tags(array $tags): array
-    {
-        $relays = [];
-        foreach ($tags as $tag) {
-            if (!\is_array($tag) || !isset($tag[0], $tag[1])) {
-                continue;
-            }
-            if ((string) $tag[0] === 'r') {
-                $relays[] = (string) $tag[1];
-            }
-        }
-
-        return array_filter(array_unique($relays), static function (string $relay) {
-            return str_starts_with($relay, 'wss:') && !str_contains($relay, 'localhost');
-        });
-    }
 }

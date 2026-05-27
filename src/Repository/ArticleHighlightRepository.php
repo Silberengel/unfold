@@ -22,7 +22,9 @@ class ArticleHighlightRepository extends ServiceEntityRepository
 
     /**
      * Newest highlights across published/archived long-form, for the home aside.
-     * The home page caps the query (e.g. 100); the template scroller shows roughly ten at a time.
+     * At most one highlight is returned per article so a single heavily-highlighted
+     * article cannot flood the sidebar.  The most recent highlight for each article
+     * wins (ORDER BY eventCreatedAt DESC).
      *
      * @return list<ArticleHighlight>
      */
@@ -32,18 +34,42 @@ class ArticleHighlightRepository extends ServiceEntityRepository
             return [];
         }
 
+        // Fetch a larger pool so that after per-article deduplication we still
+        // have enough items to fill the sidebar.  Cap the raw fetch at 2 000 to
+        // avoid unbounded memory use on busy sites.
+        $fetchLimit = min($limit * 20, 2000);
+
         $qb = $this->createQueryBuilder('h')
             ->innerJoin('h.article', 'a')
             ->where('a.eventStatus IN (:st)')
             ->setParameter('st', [EventStatusEnum::PUBLISHED, EventStatusEnum::ARCHIVED])
             ->orderBy('h.eventCreatedAt', 'DESC')
             ->addOrderBy('h.id', 'DESC')
-            ->setMaxResults($limit);
+            ->setMaxResults($fetchLimit);
 
         /** @var list<ArticleHighlight> $rows */
         $rows = $qb->getQuery()->getResult();
 
-        return $rows;
+        // Keep only the first (= most recent) highlight per article.
+        $seen = [];
+        $out = [];
+        foreach ($rows as $h) {
+            $article = $h->getArticle();
+            $articleId = $article?->getId();
+            if ($articleId === null) {
+                continue;
+            }
+            if (isset($seen[$articleId])) {
+                continue;
+            }
+            $seen[$articleId] = true;
+            $out[] = $h;
+            if (\count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
     }
 
     /**

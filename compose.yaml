@@ -17,7 +17,7 @@ services:
       # Caddy site address: :80 accepts any Host (needed when the app is reached via localhost:HTTP_PORT).
       SERVER_NAME: ${SERVER_NAME:-:80}
       # Defaults match .env.dist so a first boot without a .env file creates the same DB user as copying .env.dist later.
-      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0}&charset=${MYSQL_CHARSET:-utf8mb4}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -30,7 +30,7 @@ services:
   # you can comment out or remove this block. Make sure to update the DATABASE_URL in the php service accordingly.
   # ---
   database:
-    image: mysql:${MYSQL_VERSION:-8.0}
+    image: mysql:${MYSQL_VERSION:-8.0.36}
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}
       MYSQL_USER: ${MYSQL_USER:-unfold_user}

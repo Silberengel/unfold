@@ -2,9 +2,9 @@ doctrine:
     dbal:
         url: '%env(resolve:DATABASE_URL)%'
         driver: pdo_mysql
-        # Pin version so DBAL 4 does not treat the server as "MySQL &lt; 8" and emit deprecations
-        # on every request (see AbstractMySQLDriver + serverVersion auto-detection).
-        server_version: '8.0'
+        # DBAL 4 requires a full x.y.z version string to unambiguously identify MySQL 8.0.x vs 8.4+.
+        # Using '8.0' (without patch) triggers a deprecation notice on every request.
+        server_version: '8.0.36'
         charset: utf8mb4
         default_table_options:
             charset: utf8mb4

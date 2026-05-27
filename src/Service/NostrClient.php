@@ -17,7 +17,6 @@ use swentel\nostr\Relay\Relay;
 use swentel\nostr\Relay\RelaySet;
 use swentel\nostr\Request\Request;
 use swentel\nostr\Subscription\Subscription;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 /**
  * Main integration point for swentel/nostr against configured relays: long-form fetch, kind-0 profile
@@ -58,7 +57,6 @@ class NostrClient
         private readonly EntityManagerInterface $entityManager,
         private readonly ManagerRegistry $managerRegistry,
         private readonly ArticleFactory $articleFactory,
-        private readonly TokenStorageInterface $tokenStorage,
         private readonly LoggerInterface $logger,
         private readonly string $projectDir,
         private readonly NostrRelayRequestFactory $relayRequestFactory,
@@ -138,66 +136,6 @@ class NostrClient
     public function getNostrLandAggrReaderCacheSuffix(): string
     {
         return $this->relayListFactory->getNostrLandAggrReaderCacheSuffix();
-    }
-
-    /**
-     * Batched kind-0 profile fetch: one Nostr REQ per chunk with multiple "authors" (hex pubkeys).
-     *
-     * @param list<string> $authorPubkeyHex
-     * @return array<string, \stdClass> Newest kind-0 JSON per pubkey, keyed by hex
-     */
-    public function fetchKind0MetadataForAuthors(array $authorPubkeyHex, int $authorsPerRequest = 50): array
-    {
-        $authorPubkeyHex = \array_values(\array_unique(\array_filter(
-            $authorPubkeyHex,
-            static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
-        )));
-        if ($authorPubkeyHex === []) {
-            return [];
-        }
-        $authorsPerRequest = max(1, min(200, $authorsPerRequest));
-        $byPub = [];
-        $relaysTried = $this->relayListFactory->getProfileMetadataQueryRelayUrlList();
-        $relaysTriedStr = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relaysTried));
-        $relaySet = $this->relayListFactory->getRelaySetForProfileMetadataFetch();
-        $chunks = array_chunk($authorPubkeyHex, $authorsPerRequest);
-        foreach ($chunks as $i => $chunk) {
-            $t0 = microtime(true);
-            $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
-                kinds: [KindsEnum::METADATA],
-                filters: ['authors' => $chunk],
-                relaySet: $relaySet
-            );
-            $events = $this->nostrRelayQuery->processResponse(
-                $request->send(),
-                static fn ($ev) => $ev,
-            );
-            $this->logger->info('nostr.metadata.batch_chunk', [
-                'chunk' => 1 + $i,
-                'of' => \count($chunks),
-                'authors' => \count($chunk),
-                'events' => \count($events),
-                'relays' => $relaysTriedStr,
-                'ms' => (int) round((microtime(true) - $t0) * 1000),
-            ]);
-            foreach ($this->wireMerge->mergeKind0EventsByReplaceableAddress($events) as $addr => $ev) {
-                if (!\is_object($ev) || !isset($ev->content)) {
-                    continue;
-                }
-                $pk = \substr($addr, 2);
-                try {
-                    $data = \json_decode((string) $ev->content, false, 512, \JSON_THROW_ON_ERROR);
-                } catch (\JsonException) {
-                    continue;
-                }
-                if (\is_object($data)) {
-                    $byPub[$pk] = $data;
-                }
-            }
-        }
-
-        return $byPub;
     }
 
     /**
@@ -382,47 +320,6 @@ class NostrClient
     }
 
     /**
-     * @throws \Exception
-     */
-    public function getNpubMetadata($npub): \stdClass
-    {
-        $authorHex = $this->wireMerge->authorIdentToHexLower($npub);
-        if ($authorHex === null) {
-            throw new \Exception('Invalid npub for metadata: '.$npub);
-        }
-        $relaysTried = $this->relayListFactory->capSequentialRelaysForProfileFetches($this->relayListFactory->getProfileMetadataQueryRelayUrlList());
-        $relaysTriedStr = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relaysTried));
-        $relaySet = $this->relayListFactory->relaySetFromDistinctUrlList($relaysTried);
-        $this->logger->info(sprintf('Getting metadata for npub (relays: %s)', $relaysTriedStr), ['npub' => $npub, 'relays' => $relaysTried]);
-        $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
-            kinds: [KindsEnum::METADATA],
-            filters: ['authors' => [$authorHex]],
-            relaySet: $relaySet
-        );
-
-        $events = $this->nostrRelayQuery->processResponse(
-            $request->send(),
-            function ($received) {
-                $this->logger->debug('nostr.metadata.relay_event', ['event' => $received]);
-
-                return $received;
-            },
-        );
-
-        if (empty($events)) {
-            throw new \Exception('No metadata for npub '.$npub.' (relays: '.$relaysTriedStr.')');
-        }
-        $byAddr = $this->wireMerge->mergeKind0EventsByReplaceableAddress($events);
-        $key = '0:'.$authorHex;
-        if (!isset($byAddr[$key])) {
-            throw new \Exception('No kind-0 metadata for npub '.$npub.' (relays: '.$relaysTriedStr.')');
-        }
-
-        return $byAddr[$key];
-    }
-
-    /**
      * NIP-A3 kind 10133: payment target events; NIP kind-range 10_000–19_999 is replaceable by
      * (kind, pubkey), so multi-relay results are merged to the live revision per
      * {@see wireEventSupersedes} (at most one event for this author).
@@ -463,49 +360,6 @@ class NostrClient
         }
 
         return $this->wireMerge->mergeNip33ParameterizedWireEvents($events);
-    }
-
-    public function getNpubLongForm($npub): void
-    {
-        $authorHex = $this->wireMerge->authorIdentToHexLower($npub);
-        if ($authorHex === null) {
-            $this->logger->warning('nostr.longform_by_author.invalid_npub', ['npub' => $npub]);
-
-            return;
-        }
-        $subscription = new Subscription();
-        $subscriptionId = $subscription->setId();
-        $filter = new Filter();
-        $filter->setKinds([KindsEnum::LONGFORM]);
-        $filter->setAuthors([$authorHex]);
-        $filter->setSince(strtotime('-6 months')); // too much?
-        $requestMessage = new RequestMessage($subscriptionId, [$filter]);
-
-        // if user is logged in, use their settings
-        /* @var  $user */
-        $user = $this->tokenStorage->getToken()?->getUser();
-        $relays = $this->defaultRelaySet;
-        if ($user && $user->getRelays()) {
-            $relays = new RelaySet();
-            foreach ($user->getRelays() as $relayArr) {
-                if ($relayArr[2] == 'write') {
-                    $relays->addRelay(new Relay($relayArr[1]));
-                }
-            }
-        }
-
-        $request = $this->relayRequestFactory->createTimedRequest($relays, $requestMessage);
-
-        $wrappers = $this->nostrRelayQuery->processResponse($request->send(), function (object $event) {
-            $w = new \stdClass();
-            $w->event = $event;
-
-            return $w;
-        });
-        if ($wrappers !== []) {
-            $this->saveLongFormContent($wrappers);
-        }
-        // TODO handle relays that require auth
     }
 
     public function publishEvent(Event $event, array $relays): array
@@ -604,13 +458,20 @@ class NostrClient
         }
         $relaysTriedStr = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relaysTried));
 
+        $authorHex = $this->wireMerge->authorIdentToHexLower($author);
+        if ($authorHex === null) {
+            $this->logger->warning('nostr.longform_naddr.invalid_author', ['author' => $author]);
+
+            return;
+        }
+
         try {
             // Create request using the helper method for forest relay set
             $request = $this->nostrRelayQuery->createNostrRequest(
                 defaultRelaySet: $this->defaultRelaySet,
                 kinds: [$kind],
                 filters: [
-                    'authors' => [$author],
+                    'authors' => [$authorHex],
                     'tag' => ['#d', [$slug]]
                 ],
                 relaySet: $authorRelaySet
@@ -623,9 +484,8 @@ class NostrClient
 
             if (!empty($events)) {
                 $kindI = (int) $kind;
-                $authorH = $this->wireMerge->authorIdentToHexLower($author);
-                $event = $this->wireMerge->isNip33ParameterizedKind($kindI) && $authorH !== null
-                    ? $this->wireMerge->pickLatestNip33ParameterizedForQuery($events, $kindI, $authorH, (string) $slug)
+                $event = $this->wireMerge->isNip33ParameterizedKind($kindI)
+                    ? $this->wireMerge->pickLatestNip33ParameterizedForQuery($events, $kindI, $authorHex, (string) $slug)
                     : null;
                 if ($event === null) {
                     $event = $events[0];
@@ -780,9 +640,13 @@ class NostrClient
         if (empty($pubkey) || empty($identifier)) {
             return null;
         }
+        $authorHex = $this->wireMerge->authorIdentToHexLower($pubkey);
+        if ($authorHex === null) {
+            return null;
+        }
 
         // Try author's relays first
-        $authorRelays = empty($relays) ? $this->authorRelayCache->getTopReputableRelaysForAuthor($pubkey) : $relays;
+        $authorRelays = empty($relays) ? $this->authorRelayCache->getTopReputableRelaysForAuthor($authorHex) : $relays;
         $relaySet = $this->relayListFactory->createRelaySetMergedWithArticleList($authorRelays);
 
         // Create request using the helper method
@@ -790,7 +654,7 @@ class NostrClient
             defaultRelaySet: $this->defaultRelaySet,
             kinds: [$kind],
             filters: [
-                'authors' => [$pubkey],
+                'authors' => [$authorHex],
                 'tag' => ['#d', [$identifier]]
             ],
             relaySet: $relaySet
@@ -810,14 +674,12 @@ class NostrClient
             defaultRelaySet: $this->defaultRelaySet,
             kinds: [$kind],
             filters: [
-                'authors' => [$pubkey],
+                'authors' => [$authorHex],
                 'tag' => ['#d', [$identifier]]
             ]
         );
 
-        $events = $this->nostrRelayQuery->processResponse($request->send(), function($event) {
-            return $event;
-        });
+        $events = $this->nostrRelayQuery->processResponse($request->send(), static fn (object $e) => $e);
 
         return !empty($events) ? $events[0] : null;
     }
@@ -1222,52 +1084,6 @@ class NostrClient
             $this->logger->debug('Received zap event', ['event_id' => $event->id]);
             return $event;
         });
-    }
-
-    /**
-     * @throws \Exception
-     */
-    public function getLongFormContentForPubkey(string $ident): array
-    {
-        $authorRelays = $this->authorRelayCache->getTopReputableRelaysForAuthor($ident);
-        $base = $this->relayListFactory->getConfiguredArticleRelayUrlList();
-        $merged = $authorRelays !== [] ? array_merge($base, $authorRelays) : $base;
-        $seen = [];
-        $deduped = [];
-        foreach ($merged as $url) {
-            if (!\is_string($url) || $url === '' || isset($seen[$url])) {
-                continue;
-            }
-            $seen[$url] = true;
-            $deduped[] = $url;
-        }
-        $capped = $this->relayListFactory->capSequentialRelaysForProfileFetches($deduped);
-        $relaySet = $this->relayListFactory->relaySetFromDistinctUrlList($capped);
-
-        // Create request using the helper method
-        $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
-            kinds: [KindsEnum::LONGFORM],
-            filters: [
-                'authors' => [$ident],
-                'limit' => 10
-            ],
-            relaySet: $relaySet
-        );
-
-        $events = $this->nostrRelayQuery->processResponse(
-            $request->send(),
-            static fn (object $event) => $event,
-        );
-        foreach ($this->wireMerge->mergeNip33ParameterizedWireEvents($events) as $event) {
-            if (!\is_object($event)) {
-                continue;
-            }
-            $article = $this->articleFactory->createFromLongFormContentEvent($event);
-            $this->saveEachArticleToTheDatabase($article);
-        }
-
-        return [];
     }
 
     public function getArticles(array $slugs): array

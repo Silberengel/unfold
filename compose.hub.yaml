@@ -33,7 +33,7 @@ services:
       APP_SECRET: ${APP_SECRET}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
       SERVER_NAME: ${SERVER_NAME:-:80}
-      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0}&charset=${MYSQL_CHARSET:-utf8mb4}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -83,7 +83,7 @@ services:
       APP_SECRET: ${APP_SECRET}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
       SERVER_NAME: ${SERVER_NAME:-:80}
-      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0}&charset=${MYSQL_CHARSET:-utf8mb4}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
       PREWARM_FLAGS: ${PREWARM_FLAGS:-}
     depends_on:
       database:
@@ -92,7 +92,7 @@ services:
         condition: service_started
 
   database:
-    image: mysql:${MYSQL_VERSION:-8.0}
+    image: mysql:${MYSQL_VERSION:-8.0.36}
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}

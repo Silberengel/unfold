@@ -4,6 +4,7 @@ namespace App\Util\CommonMark;
 
 use App\Nostr\Nip19Codec;
 use App\Service\CacheService;
+use App\Util\NpubBech32Extractor;
 use App\Util\CommonMark\ImagesExtension\RawImageLinkExtension;
 use App\Util\CommonMark\NostrSchemeExtension\NostrSchemeExtension;
 use League\CommonMark\Environment\Environment;
@@ -36,6 +37,8 @@ readonly class Converter
      */
     public function convertToHTML(string $markdown): string
     {
+        $this->cacheService->prefetchMetadataForNpubs(NpubBech32Extractor::extractFromText($markdown));
+
         // Check if the article has more than three headings
         // Match all headings (from level 1 to 6)
         preg_match_all('/^#+\s.*$/m', $markdown, $matches);
