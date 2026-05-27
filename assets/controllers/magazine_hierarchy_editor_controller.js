@@ -28,15 +28,21 @@ export default class MagazineHierarchyEditorController extends Controller {
     };
 
     connect() {
-        this.nodeBaseline = new WeakMap();
+        // Preserve the WeakMap across Stimulus reconnects so that baselines captured at page-load
+        // (or after a successful publish) are not lost. A fresh WeakMap would make captureBaselines()
+        // re-snapshot the *current* (potentially edited) DOM state, causing isNodeDirty() to return
+        // false for every node and publish to silently do nothing.
+        this.nodeBaseline ??= new WeakMap();
         this.captureBaselines();
         /**
          * Clicks: `document` capture + `this.element.contains(target)` so we still run when bubble
          * never reaches the panel (e.g. `stopPropagation` from another listener) or fieldset/legend
          * hit-testing is odd.
          */
-        this._onDocClickCapture = this._onDocClickCapture.bind(this);
-        this._onPanelFocusOut = this._onPanelFocusOut.bind(this);
+        // Bind once: re-binding on every reconnect wraps the already-bound function, and the bound
+        // reference must be stable so removeEventListener in disconnect() can match it.
+        this._onDocClickCapture ??= this._onDocClickCapture.bind(this);
+        this._onPanelFocusOut ??= this._onPanelFocusOut.bind(this);
         document.addEventListener('click', this._onDocClickCapture, true);
         this.element.addEventListener('focusout', this._onPanelFocusOut);
     }
@@ -126,7 +132,13 @@ export default class MagazineHierarchyEditorController extends Controller {
             return;
         }
         for (const el of queryEditorNodeFieldsets(this.nodesTarget)) {
-            this.nodeBaseline.set(el, snapshotFromElement(el));
+            // Only set a baseline for nodes that don't already have one. On reconnect the WeakMap
+            // is preserved (see connect()), so existing entries reflect the true pre-edit state.
+            // Overwriting them here would reset "original = current dirty state", making every node
+            // appear clean and causing publish to silently skip it.
+            if (!this.nodeBaseline.has(el)) {
+                this.nodeBaseline.set(el, snapshotFromElement(el));
+            }
         }
     }
 

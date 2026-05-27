@@ -1,4 +1,52 @@
 {% set ctx = comment_reply_context|default(null) %}
+
+{% if superchats is defined and superchats|length > 0 %}
+<div class="superchats">
+    <h3 class="superchats__title">Superchats</h3>
+    {% for sc in superchats %}
+        {% set tier = sc.tier|default('') %}
+        {% set ptype = sc.payment_type|default('lightning') %}
+        {% set is_monero = ptype starts with 'monero' %}
+        <div class="card superchat{% if tier != '' %} superchat--{{ tier }}{% endif %}{% if is_monero %} superchat--monero{% endif %}">
+            <div class="metadata superchat__head">
+                <p>
+                    {% if tier == 'gold' %}
+                        <span class="ui-badge ui-badge--warning" title="Gold superchat">⭐ gold</span>
+                    {% elseif tier == 'silver' %}
+                        <span class="ui-badge ui-badge--secondary" title="Silver superchat">silver</span>
+                    {% elseif tier == 'bronze' %}
+                        <span class="ui-badge ui-badge--neutral" title="Bronze superchat">bronze</span>
+                    {% endif %}
+                    {% if is_monero %}
+                        <img src="{{ asset('monero.png') }}" alt="Monero" title="Monero" class="superchat__payment-icon superchat__payment-icon--monero" width="16" height="16">
+                    {% else %}
+                        <span class="superchat__payment-icon" title="Lightning">⚡</span>
+                    {% endif %}
+                    {% if sc.pubkey|default('') != '' %}
+                        <twig:Molecules:UserFromNpub ident="{{ sc.pubkey }}" />
+                    {% else %}
+                        <span class="text-subtle">Unknown</span>
+                    {% endif %}
+                </p>
+                <div class="metadata__end">
+                    {% if sc.amount_sats|default(0) > 0 %}
+                        <span class="superchat__amount">{{ sc.amount_sats|number_format }} {{ is_monero ? 'sats (XMR approx.)' : 'sats' }}</span>
+                    {% endif %}
+                    {% if sc.created_at|default(null) %}
+                        <small>{{ sc.created_at|date('F j Y') }}</small>
+                    {% endif %}
+                </div>
+            </div>
+            {% if sc.content|default('')|trim != '' %}
+                <div class="card-body superchat__body">
+                    {{ sc.content|e }}
+                </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div class="comments" data-comments-partial="{{ comments_partial|default(false) ? '1' : '0' }}">
     {% for item in list %}
         {% set cid = item.id|default('')|lower %}

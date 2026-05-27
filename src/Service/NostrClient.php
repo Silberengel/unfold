@@ -762,7 +762,7 @@ class NostrClient
      * @param string               $coordinate      kind:pubkey:d-identifier (e.g. longform address)
      * @param null|string          $rootEventHexId  Published article event id (hex) for #e / #q matching
      *
-     * @return array{thread: array<int, object>, quotes: array<int, object>, partial?: bool}
+     * @return array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}
      */
     public function getArticleDiscussion(string $coordinate, ?string $rootEventHexId = null): array
     {
@@ -797,6 +797,9 @@ class NostrClient
         }
 
         $filters = $this->articleDiscussion->createArticleDiscussionFilters($coordinate, $rootEventHexId);
+        foreach ($this->articleDiscussion->createSuperchatFilters($coordinate, $pubkey) as $sf) {
+            $filters[] = $sf;
+        }
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $requestMessage = new RequestMessage($subscriptionId, $filters);
@@ -877,9 +880,24 @@ class NostrClient
         $all = array_values($byId);
         $thread = [];
         $threadIds = [];
+        $attestRequiredSuperchats = []; // kind 9740 (Lightning payto) + kind 9736 (Monero zap receipt)
+        $selfAttestingSuperchats  = []; // kind 1814 (Garnet Monero tip, proof embedded)
+        $attestations9741 = [];
 
         foreach ($all as $event) {
             $kind = (int) ($event->kind ?? 0);
+            if ($kind === KindsEnum::PAYMENT_NOTIFICATION->value || $kind === KindsEnum::MONERO_ZAP_RECEIPT->value) {
+                $attestRequiredSuperchats[] = $event;
+                continue;
+            }
+            if ($kind === KindsEnum::MONERO_TIP->value) {
+                $selfAttestingSuperchats[] = $event;
+                continue;
+            }
+            if ($kind === KindsEnum::PAYMENT_ATTESTATION->value) {
+                $attestations9741[] = $event;
+                continue;
+            }
             if ($kind === KindsEnum::COMMENTS->value && $this->articleDiscussion->eventIsNip22ArticleThreadReply($event, $coordinate)) {
                 $thread[] = $event;
                 $threadIds[(string) $event->id] = true;
@@ -892,16 +910,32 @@ class NostrClient
             }
         }
 
+        $superchatKinds = [
+            KindsEnum::PAYMENT_NOTIFICATION->value,
+            KindsEnum::MONERO_ZAP_RECEIPT->value,
+            KindsEnum::MONERO_TIP->value,
+            KindsEnum::PAYMENT_ATTESTATION->value,
+        ];
         $quotes = [];
         foreach ($all as $event) {
             $id = (string) ($event->id ?? '');
             if ($id === '' || isset($threadIds[$id])) {
                 continue;
             }
+            if (\in_array((int) ($event->kind ?? 0), $superchatKinds, true)) {
+                continue;
+            }
             if ($this->articleDiscussion->eventIsArticleQuote($event, $coordinate, $rootEventHexId)) {
                 $quotes[] = $event;
             }
         }
+
+        $superchats = $this->articleDiscussion->buildSuperchatItems(
+            $attestRequiredSuperchats,
+            $selfAttestingSuperchats,
+            $attestations9741,
+            $pubkey,
+        );
 
         $sortAsc = static function ($a, $b): int {
             return ((int) ($a->created_at ?? 0)) <=> ((int) ($b->created_at ?? 0));
@@ -915,12 +949,13 @@ class NostrClient
         $this->logger->info('nostr.article_discussion.done', [
             'thread_count' => \count($thread),
             'quotes_count' => \count($quotes),
+            'superchat_count' => \count($superchats),
             'partial' => $partial,
             'responded_relays' => $respondedRelayCount,
             'planned_relays' => \count($plannedRelayUrls),
         ]);
 
-        return ['thread' => $thread, 'quotes' => $quotes, 'partial' => $partial];
+        return ['thread' => $thread, 'quotes' => $quotes, 'superchats' => $superchats, 'partial' => $partial];
     }
 
     /**

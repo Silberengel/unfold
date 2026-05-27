@@ -39,6 +39,7 @@ final readonly class ArticleCommentThreadLoader
      * @return array{
      *     list: array<int, object>,
      *     quotes: array<int, object>,
+     *     superchats: list<array<string,mixed>>,
      *     commentLinks: array<string, array<int, mixed>>,
      *     quoteLinks: array<string, array<int, mixed>>,
      *     processedContent: array<string, string>
@@ -46,6 +47,7 @@ final readonly class ArticleCommentThreadLoader
      *
      * Each object in `list` may be enriched with: unfold_reply_blurb, unfold_body, unfold_depth
      * (0–3, for UI indentation).
+     * `superchats` contains attested NIP-A3 kind-9740 items sorted by amount desc.
      */
     public function tryLoadFromCacheOnly(string $coordinate, ?string $articleEventHexId = null): ?array
     {
@@ -78,6 +80,7 @@ final readonly class ArticleCommentThreadLoader
      * @return array{
      *     list: array<int, object>,
      *     quotes: array<int, object>,
+     *     superchats: list<array<string,mixed>>,
      *     commentLinks: array<string, array<int, mixed>>,
      *     quoteLinks: array<string, array<int, mixed>>,
      *     processedContent: array<string, string>
@@ -148,11 +151,12 @@ final readonly class ArticleCommentThreadLoader
     }
 
     /**
-     * @param array{thread: array<int, object>, quotes: array<int, object>} $discussion
+     * @param array{thread: array<int, object>, quotes: array<int, object>, superchats?: list<array<string,mixed>>} $discussion
      *
      * @return array{
      *     list: array<int, object>,
      *     quotes: array<int, object>,
+     *     superchats: list<array<string,mixed>>,
      *     commentLinks: array<string, array<int, mixed>>,
      *     quoteLinks: array<string, array<int, mixed>>,
      *     processedContent: array<string, string>
@@ -162,10 +166,12 @@ final readonly class ArticleCommentThreadLoader
     {
         $list = $discussion['thread'] ?? [];
         $quotes = $discussion['quotes'] ?? [];
+        $superchats = $discussion['superchats'] ?? [];
         $this->logger->info('comments.loader.cache_resolved', [
             'elapsed_since_start_ms' => (int) round((microtime(true) - $t0) * 1000),
             'thread_events' => \count($list),
             'quote_events' => \count($quotes),
+            'superchat_count' => \count($superchats),
         ]);
 
         $this->enrichThreadListForDisplay($list, $articleEventHexId);
@@ -196,6 +202,7 @@ final readonly class ArticleCommentThreadLoader
         return [
             'list' => $list,
             'quotes' => $quotes,
+            'superchats' => $discussion['superchats'] ?? [],
             'commentLinks' => $commentLinks,
             'quoteLinks' => $quoteLinks,
             'processedContent' => $processedContent,

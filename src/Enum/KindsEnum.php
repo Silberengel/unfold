@@ -37,7 +37,12 @@ enum KindsEnum: int
     {
         return [self::LONGFORM->value, self::LONGFORM_DRAFT->value, self::WIKI->value];
     }
-    case ZAP = 9735; // NIP-57, Zaps
+    case ZAP_REQUEST = 9734; // NIP-57, Zap request
+    case ZAP = 9735; // NIP-57, Zap receipt (Lightning)
+    case MONERO_ZAP_RECEIPT = 9736; // Monero zap receipt (Garnet/Nosmero, analogous to 9735)
+    case PAYMENT_NOTIFICATION = 9740; // NIP-A3, payment notification (superchat sender)
+    case PAYMENT_ATTESTATION = 9741; // NIP-A3, payment attestation (superchat recipient confirms)
+    case MONERO_TIP = 1814; // Garnet Monero tip (self-attesting, proof embedded in content JSON)
     case HIGHLIGHTS = 9802;
     case RELAY_LIST = 10002; // NIP-65, Relay list metadata
     case EMOJI_LIST = 10030; // NIP-51 standard list, NIP-30 emoji tags

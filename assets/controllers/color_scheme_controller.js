@@ -40,7 +40,12 @@ export default class extends Controller {
         }
         if (this.link) {
             const light = this.link.getAttribute('data-href-light');
-            this.link.setAttribute('href', scheme === 'dark' && darkHref ? darkHref : light);
+            const href = scheme === 'dark' && darkHref ? darkHref : light;
+            // getAttribute returns null when the attribute is absent; passing null to setAttribute
+            // would coerce it to the string "null", producing a broken stylesheet URL.
+            if (href !== null) {
+                this.link.setAttribute('href', href);
+            }
         }
         this._refreshIcons();
     }
