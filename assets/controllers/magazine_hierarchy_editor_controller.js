@@ -11,7 +11,7 @@ const KIND_LONGFORM_DRAFT = 30024;
 const DTAG_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export default class MagazineHierarchyEditorController extends Controller {
-    static targets = ['status', 'node', 'nodes', 'newNodeTemplate', 'aRowTemplate'];
+    static targets = ['status', 'publishBtn', 'node', 'nodes', 'newNodeTemplate', 'aRowTemplate'];
 
     static values = {
         publishUrl: String,
@@ -126,7 +126,11 @@ export default class MagazineHierarchyEditorController extends Controller {
         }
     }
 
-    publish() {
+    /**
+     * @param {Event} [event]
+     */
+    publish(event) {
+        event?.preventDefault?.();
         void this._publish();
     }
 
@@ -641,135 +645,168 @@ export default class MagazineHierarchyEditorController extends Controller {
     }
 
     async _publish() {
-        this.setStatus('');
-        if (!this.hasNip07()) {
-            this.setStatus('Install a Nostr extension (NIP-07) to sign index events.');
+        if (this._publishInFlight) {
             return;
         }
-        const ownerHex = (this.ownerHexValue || '').toLowerCase().trim();
-        if (ownerHex.length !== 64) {
-            this.setStatus('Missing owner pubkey.');
-            return;
-        }
-        const rootD = (this.rootDTagValue || '').trim();
-        if (rootD === '') {
-            this.setStatus('Missing root index #d.');
-            return;
-        }
+        this._publishInFlight = true;
+        this.setPublishBusy(true, 'Checking…');
+        this.setStatus('Checking for changes…', { tone: 'info', scroll: true });
 
-        if (!this.hasNodesTarget) {
-            this.setStatus('Editor is missing the nodes list.');
-            return;
-        }
-        const nodes = queryEditorNodeFieldsets(this.nodesTarget);
-        if (nodes.length === 0) {
-            this.setStatus('Nothing to publish.');
-            return;
-        }
-
-        for (const el of nodes) {
-            if (el.dataset.isNewNode === '1') {
-                this.applySlugChange(el);
-            }
-        }
-
-        const graphErr = this.validateAllNodes(rootD);
-        if (graphErr !== null) {
-            this.setStatus(graphErr);
-            return;
-        }
-
-        const ordered = nodes.filter((el) => this.isNodeDirty(el));
-        if (ordered.length === 0) {
-            this.setStatus('No changes to publish.');
-            return;
-        }
-
-        const baseTime = Math.floor(Date.now() / 1000);
-        const signedEvents = [];
-
-        this.setStatus(ordered.length === 1 ? 'Signing…' : `Signing ${ordered.length} changed index event(s)…`);
-
-        for (let i = 0; i < ordered.length; i++) {
-            const el = ordered[i];
-            const dTag = readDTag(el);
-            const title = el.querySelector('[data-magazine-hierarchy-editor-target="title"]')?.value ?? '';
-            const summary = el.querySelector('[data-magazine-hierarchy-editor-target="summary"]')?.value ?? '';
-            const content = el.querySelector('[data-magazine-hierarchy-editor-target="content"]')?.value ?? '';
-            const aText = readJoinedALinesFromNode(el);
-            const preservedRaw = el.querySelector('[data-magazine-hierarchy-editor-target="preservedJson"]')?.value ?? '[]';
-
-            let preserved;
-            try {
-                preserved = JSON.parse(preservedRaw);
-            } catch {
-                this.setStatus(`Invalid preserved-tags JSON for #d ${dTag}.`);
-                return;
-            }
-            if (!Array.isArray(preserved)) {
-                this.setStatus(`Preserved tags must be a JSON array for #d ${dTag}.`);
-                return;
-            }
-
-            let tags;
-            try {
-                tags = await this.buildTags(dTag, preserved, title, summary, aText, ownerHex);
-            } catch (err) {
-                this.setStatus(err instanceof Error ? err.message : String(err));
-                return;
-            }
-
-            const unsigned = {
-                kind: KIND_PUBLICATION_INDEX,
-                created_at: baseTime + i,
-                tags,
-                content: content ?? '',
-            };
-
-            let signed;
-            try {
-                signed = await window.nostr.signEvent(unsigned);
-            } catch (err) {
-                this.setStatus(`Signing failed (#d ${dTag}): ${err instanceof Error ? err.message : String(err)}`);
-                return;
-            }
-            signedEvents.push(signed);
-        }
-
-        this.setStatus('Publishing…');
-        let res;
         try {
-            res = await fetch(this.publishUrlValue, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({ csrf: this.csrfValue, events: signedEvents }),
-            });
-        } catch (err) {
-            this.setStatus(`Network error: ${err instanceof Error ? err.message : String(err)}`);
-            return;
-        }
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            this.setStatus(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`);
-            return;
-        }
-        const n = Number(data.published);
-        const ingested = Number(data.longform_ingest_addresses);
-        for (const el of ordered) {
-            if (el.dataset.isNewNode === '1') {
-                this.finalizeNewNodeFieldset(el);
+            if (!this.hasNip07()) {
+                this.setStatus('Install a Nostr extension (NIP-07) to sign index events.', { tone: 'error', scroll: true });
+                return;
             }
-            this.nodeBaseline.set(el, snapshotFromElement(el));
-        }
-        if (Number.isFinite(n) && Number.isFinite(ingested) && ingested > 0) {
-            this.setStatus(`Published and stored ${n} index event(s); synced ${ingested} long-form address(es) from relays.`);
-        } else {
-            this.setStatus(Number.isFinite(n) ? `Published and stored ${n} index event(s).` : 'Published.');
+            const ownerHex = (this.ownerHexValue || '').toLowerCase().trim();
+            if (ownerHex.length !== 64) {
+                this.setStatus('Missing owner pubkey.', { tone: 'error', scroll: true });
+                return;
+            }
+            const rootD = (this.rootDTagValue || '').trim();
+            if (rootD === '') {
+                this.setStatus('Missing root index #d.', { tone: 'error', scroll: true });
+                return;
+            }
+
+            if (!this.hasNodesTarget) {
+                this.setStatus('Editor is missing the nodes list.', { tone: 'error', scroll: true });
+                return;
+            }
+            const nodes = queryEditorNodeFieldsets(this.nodesTarget);
+            if (nodes.length === 0) {
+                this.setStatus('Nothing to publish.', { tone: 'error', scroll: true });
+                return;
+            }
+
+            for (const el of nodes) {
+                if (el.dataset.isNewNode === '1') {
+                    this.applySlugChange(el);
+                }
+            }
+
+            const graphErr = this.validateAllNodes(rootD);
+            if (graphErr !== null) {
+                this.setStatus(graphErr, { tone: 'error', scroll: true });
+                return;
+            }
+
+            const ordered = nodes.filter((el) => this.isNodeDirty(el));
+            if (ordered.length === 0) {
+                this.setStatus('No changes to publish.', { tone: 'info', scroll: true });
+                return;
+            }
+
+            const baseTime = Math.floor(Date.now() / 1000);
+            const signedEvents = [];
+
+            const signingLabel =
+                ordered.length === 1
+                    ? 'Signing 1 event in extension…'
+                    : `Signing ${ordered.length} events in extension…`;
+            this.setPublishBusy(true, 'Waiting for extension…');
+            this.setStatus(signingLabel, { tone: 'info', scroll: true });
+
+            for (let i = 0; i < ordered.length; i++) {
+                const el = ordered[i];
+                const dTag = readDTag(el);
+                const title = el.querySelector('[data-magazine-hierarchy-editor-target="title"]')?.value ?? '';
+                const summary = el.querySelector('[data-magazine-hierarchy-editor-target="summary"]')?.value ?? '';
+                const content = el.querySelector('[data-magazine-hierarchy-editor-target="content"]')?.value ?? '';
+                const aText = readJoinedALinesFromNode(el);
+                const preservedRaw =
+                    el.querySelector('[data-magazine-hierarchy-editor-target="preservedJson"]')?.value ?? '[]';
+
+                let preserved;
+                try {
+                    preserved = JSON.parse(preservedRaw);
+                } catch {
+                    this.setStatus(`Invalid preserved-tags JSON for #d ${dTag}.`, { tone: 'error', scroll: true });
+                    return;
+                }
+                if (!Array.isArray(preserved)) {
+                    this.setStatus(`Preserved tags must be a JSON array for #d ${dTag}.`, { tone: 'error', scroll: true });
+                    return;
+                }
+
+                let tags;
+                try {
+                    tags = await this.buildTags(dTag, preserved, title, summary, aText, ownerHex);
+                } catch (err) {
+                    this.setStatus(err instanceof Error ? err.message : String(err), { tone: 'error', scroll: true });
+                    return;
+                }
+
+                const unsigned = {
+                    kind: KIND_PUBLICATION_INDEX,
+                    created_at: baseTime + i,
+                    tags,
+                    content: content ?? '',
+                };
+
+                let signed;
+                try {
+                    signed = await window.nostr.signEvent(unsigned);
+                } catch (err) {
+                    this.setStatus(`Signing failed (#d ${dTag}): ${err instanceof Error ? err.message : String(err)}`, {
+                        tone: 'error',
+                        scroll: true,
+                    });
+                    return;
+                }
+                signedEvents.push(signed);
+            }
+
+            this.setPublishBusy(true, 'Publishing…');
+            this.setStatus('Publishing to relays and saving…', { tone: 'info', scroll: true });
+            let res;
+            try {
+                res = await fetch(this.publishUrlValue, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ csrf: this.csrfValue, events: signedEvents }),
+                });
+            } catch (err) {
+                this.setStatus(`Network error: ${err instanceof Error ? err.message : String(err)}`, {
+                    tone: 'error',
+                    scroll: true,
+                });
+                return;
+            }
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                this.setStatus(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`, {
+                    tone: 'error',
+                    scroll: true,
+                });
+                return;
+            }
+            const n = Number(data.published);
+            const ingested = Number(data.longform_ingest_addresses);
+            for (const el of ordered) {
+                if (el.dataset.isNewNode === '1') {
+                    this.finalizeNewNodeFieldset(el);
+                }
+                this.nodeBaseline.set(el, snapshotFromElement(el));
+            }
+            if (Number.isFinite(n) && Number.isFinite(ingested) && ingested > 0) {
+                this.setStatus(
+                    `Published and stored ${n} index event(s); synced ${ingested} long-form address(es) from relays.`,
+                    { tone: 'success', scroll: true },
+                );
+            } else {
+                this.setStatus(Number.isFinite(n) ? `Published and stored ${n} index event(s).` : 'Published.', {
+                    tone: 'success',
+                    scroll: true,
+                });
+            }
+        } finally {
+            this._publishInFlight = false;
+            this.setPublishBusy(false);
         }
     }
 
@@ -862,9 +899,56 @@ export default class MagazineHierarchyEditorController extends Controller {
         }
     }
 
-    setStatus(msg) {
-        if (this.hasStatusTarget) {
-            this.statusTarget.textContent = msg;
+    /**
+     * @param {string} msg
+     * @param {{ tone?: 'info' | 'success' | 'error', scroll?: boolean }} [opts]
+     */
+    setStatus(msg, opts = {}) {
+        if (!this.hasStatusTarget) {
+            return;
+        }
+        const el = this.statusTarget;
+        const tone = opts.tone ?? 'info';
+        const trimmed = msg.trim();
+        el.textContent = trimmed;
+        el.hidden = trimmed === '';
+        el.classList.remove(
+            'magazine-editor__status--info',
+            'magazine-editor__status--success',
+            'magazine-editor__status--error',
+        );
+        if (trimmed !== '') {
+            el.classList.add(`magazine-editor__status--${tone}`);
+            if (opts.scroll) {
+                el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+    }
+
+    /**
+     * @param {boolean} busy
+     * @param {string} [label]
+     */
+    setPublishBusy(busy, label) {
+        if (!this.hasPublishBtnTarget) {
+            return;
+        }
+        const btn = this.publishBtnTarget;
+        if (busy) {
+            if (!this._publishBtnDefaultLabel) {
+                this._publishBtnDefaultLabel = btn.textContent?.trim() ?? 'Sign and publish all changed events';
+            }
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+            if (label) {
+                btn.textContent = label;
+            }
+        } else {
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
+            if (this._publishBtnDefaultLabel) {
+                btn.textContent = this._publishBtnDefaultLabel;
+            }
         }
     }
 

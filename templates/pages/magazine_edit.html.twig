@@ -80,8 +80,6 @@
                 data-magazine-hierarchy-editor-default-preserved-json-value="{{ editor_payload.default_category_preserved_tags|json_encode(constant('JSON_UNESCAPED_UNICODE'))|e('html_attr') }}"
                 data-magazine-hierarchy-editor-client-tag-value="{{ website_short_name|e('html_attr') }}"
             >
-                <p class="magazine-editor__status" data-magazine-hierarchy-editor-target="status" aria-live="polite"></p>
-
                 <div class="magazine-editor__toolbar">
                     <button type="button" class="btn btn-secondary btn-sm" data-mag-editor-cmd="add-top-category">
                         Add top-level category
@@ -256,7 +254,19 @@
                 </div>
 
                 <div class="magazine-editor__actions">
-                    <button type="button" class="btn btn-primary" data-mag-editor-cmd="publish">
+                    <p
+                        class="magazine-editor__status"
+                        data-magazine-hierarchy-editor-target="status"
+                        aria-live="polite"
+                        hidden
+                    ></p>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        data-magazine-hierarchy-editor-target="publishBtn"
+                        data-mag-editor-cmd="publish"
+                        data-action="click->magazine-hierarchy-editor#publish"
+                    >
                         Sign and publish all changed events
                     </button>
                 </div>
