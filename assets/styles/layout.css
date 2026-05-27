@@ -696,7 +696,7 @@ aside {
     border-radius: 0;
     background: transparent;
     line-height: 1.45;
-    font-size: 0.78rem;
+    font-size: 0.875rem;
     transition: color 0.18s ease, background 0.18s ease;
 }
 
@@ -744,7 +744,7 @@ aside {
 /* Match article `bodyHtml` semantics; keep aside scale (`.user-highlight__body` is larger in-article). */
 .home-aside-highlights__quote--html.user-highlight__body {
     margin: 0 0 0.3rem;
-    font-size: 0.78rem;
+    font-size: 0.875rem;
     line-height: 1.45;
     color: inherit;
 }
@@ -758,7 +758,7 @@ aside {
 
 .home-aside-highlights__meta {
     display: block;
-    font-size: 0.78rem;
+    font-size: 0.875rem;
     font-style: normal;
     font-weight: 500;
     font-family: var(--font-family), system-ui, sans-serif;
@@ -1067,9 +1067,8 @@ footer {
 
 .site-footer__syndication-hint {
     margin: 0 0 0.75rem;
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: var(--color-text);
-    opacity: 0.9;
     max-width: 40rem;
 }
 

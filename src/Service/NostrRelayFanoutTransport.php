@@ -144,7 +144,7 @@ final readonly class NostrRelayFanoutTransport
                 }
                 if (microtime(true) >= $deadlineAt) {
                     foreach ($pending as $wss => $p) {
-                        $this->logger->warning('nostr.article_discussion.relay_worker_soft_timeout', [
+                        $this->logger->info('nostr.article_discussion.relay_worker_soft_timeout', [
                             'relay' => $wss,
                             'soft_deadline_sec' => self::DISCUSSION_PARALLEL_SOFT_DEADLINE_SEC,
                         ]);

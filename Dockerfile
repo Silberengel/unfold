@@ -107,13 +107,15 @@ RUN set -eux; \
 	composer dump-autoload --classmap-authoritative --no-dev; \
 	composer dump-env prod; \
 	rm -f .env; \
+	composer run-script --no-dev post-install-cmd; \
+	php bin/console asset-map:compile --no-debug; \
 	# Strip deployment secrets from the compiled .env.local.php so they cannot be read from the
 	# image layers. The listed keys must be injected as real environment variables at runtime;
 	# Symfony will raise a clear error rather than silently using the public .env.dist defaults.
+	# Done LAST: cache:clear and asset-map:compile both boot the Symfony kernel and need the env
+	# vars resolved; stripping before them causes "Environment variable not found" errors.
 	# MAINTENANCE: if a new secret is added to .env.dist, add it here too so it is not
 	# compiled into the image. Use array_diff_key so the strip is explicit and order-independent;
 	# missing keys are safely ignored (they were never compiled in and therefore never a risk).
 	php -r '$strip=array_flip(["APP_SECRET","DATABASE_URL","MYSQL_USER","MYSQL_PASSWORD","MYSQL_ROOT_PASSWORD"]); $e=array_diff_key(include(".env.local.php"),$strip); file_put_contents(".env.local.php","<?php return ".var_export($e,true).";".PHP_EOL);' ; \
-	composer run-script --no-dev post-install-cmd; \
-	php bin/console asset-map:compile --no-debug; \
 	chmod +x bin/console; sync;

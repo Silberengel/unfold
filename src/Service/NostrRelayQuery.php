@@ -101,7 +101,10 @@ final readonly class NostrRelayQuery
             foreach ($relayRes as $item) {
                 try {
                     if (!\is_object($item)) {
-                        $this->logger->warning(sprintf(
+                        // Non-object relay responses (connection drops, bad HTTP status, etc.)
+                        // are expected for dead or misconfigured relays; INFO keeps them out of
+                        // the warning stream without losing them from the log file.
+                        $this->logger->info(sprintf(
                             'Invalid response item from %s',
                             self::relayLogLabel($relayUrl)
                         ), [
@@ -123,7 +126,9 @@ final readonly class NostrRelayQuery
                             }
                             break;
                         case 'AUTH':
-                            $this->logger->warning(sprintf(
+                            // AUTH challenges are expected from paid/restricted relays; we do not
+                            // support NIP-42 signing, so this is a no-op but not an error.
+                            $this->logger->info(sprintf(
                                 'Relay %s requires authentication',
                                 self::relayLogLabel($relayUrl)
                             ), [
@@ -133,8 +138,11 @@ final readonly class NostrRelayQuery
                             break;
                         case 'ERROR':
                         case 'NOTICE':
+                            // Relay-level ERROR/NOTICE messages (rate limits, dropped connections,
+                            // etc.) are external signals; INFO keeps them observable without
+                            // polluting the warning tier.
                             $msg = (string) ($item->message ?? 'No message');
-                            $this->logger->warning(sprintf(
+                            $this->logger->info(sprintf(
                                 '[%s] %s: %s',
                                 self::relayLogLabel($relayUrl),
                                 $item->type,

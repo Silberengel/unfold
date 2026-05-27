@@ -65,3 +65,6 @@ parameters:
       - title: "Decent Newsroom"
         url: "https://decentnewsroom.com/mag/newsroom-magazine-on-imwald-by-laeserin"
         description: "Decentralized magazine platform. View the magazine on Decent Newsroom."
+      - title: "Alexandria"
+        url: "https://next-alexandria.gitcitadel.eu/publication/naddr/naddr1qvzqqqr4tqpzphtxf40yq9jr82xdd8cqtts5szqyx5tcndvaukhsvfmduetr85ceqqnkuethwdex7mmd94kkzemp0f5kuefddahz66tdwaskcepdvfuj6mrpv4ek2unfdcycjhwp"
+        description: "View the magazine on Alexandria."

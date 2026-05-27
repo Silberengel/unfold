@@ -77,6 +77,9 @@ when@prod:
             console:
                 type: console
                 process_psr_3_messages: false
+                # warning+ already goes to stderr as JSON; set this to error so the console
+                # handler does not duplicate those lines in human-readable form.
+                level: error
                 channels: [ "!event", "!doctrine", "!deprecation" ]
             deprecation:
                 type: stream

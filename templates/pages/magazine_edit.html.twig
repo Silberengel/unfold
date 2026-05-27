@@ -24,7 +24,7 @@
             min-width: 0;
             box-sizing: border-box;
         }
-        .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-drag-handle {
+        .card.magazine-editor [data-mag-a-row] > .magazine-editor__a-drag-handle {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -36,14 +36,10 @@
             border: none !important;
             color: var(--color-text-mid, rgba(160,160,160,0.55)) !important;
             cursor: grab !important;
-            text-transform: none !important;
-            font-weight: normal !important;
-            font-size: 0 !important;
             line-height: 0 !important;
-            box-shadow: none !important;
-            border-radius: 2px !important;
+            font-size: 0 !important;
         }
-        .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-drag-handle svg {
+        .card.magazine-editor [data-mag-a-row] > .magazine-editor__a-drag-handle svg {
             display: block;
         }
         .card.magazine-editor [data-mag-a-row] > button.magazine-editor__a-remove-icon {
@@ -110,13 +106,13 @@
 
                 <template data-magazine-hierarchy-editor-target="aRowTemplate">
                     <div class="magazine-editor__a-row" data-mag-a-row draggable="true">
-                        <button type="button" class="magazine-editor__a-drag-handle" aria-label="Drag to reorder" tabindex="-1">
+                        <span class="magazine-editor__a-drag-handle" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true">
                                 <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
                                 <circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/>
                                 <circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/>
                             </svg>
-                        </button>
+                        </span>
                         <div class="magazine-editor__a-line-field">
                             <input type="text" class="magazine-editor__input magazine-editor__input--mono magazine-editor__a-line-input" data-mag-a-line value="" spellcheck="false" autocomplete="off">
                         </div>
@@ -260,13 +256,13 @@
                                 <div class="magazine-editor__a-list" data-mag-a-list>
                                     {% for coord in node.a_coordinates %}
                                         <div class="magazine-editor__a-row" data-mag-a-row draggable="true">
-                                            <button type="button" class="magazine-editor__a-drag-handle" aria-label="Drag to reorder" tabindex="-1">
+                                            <span class="magazine-editor__a-drag-handle" aria-hidden="true">
                                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 16" width="10" height="16" fill="currentColor" aria-hidden="true">
                                                     <circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/>
                                                     <circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/>
                                                     <circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/>
                                                 </svg>
-                                            </button>
+                                            </span>
                                             <div class="magazine-editor__a-line-field">
                                                 <input type="text" class="magazine-editor__input magazine-editor__input--mono magazine-editor__a-line-input" data-mag-a-line value="{{ coord|e('html_attr') }}" spellcheck="false" autocomplete="off">
                                             </div>
@@ -301,7 +297,6 @@
                         class="btn btn-primary"
                         data-magazine-hierarchy-editor-target="publishBtn"
                         data-mag-editor-cmd="publish"
-                        data-action="click->magazine-hierarchy-editor#publish"
                     >
                         Sign and publish all changed events
                     </button>

@@ -169,7 +169,7 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
                 $this->requestBundlesByHex[$hex] = $this->bundleFromKind0EventRow($rowsAfterRelay[$key], $npub);
                 continue;
             }
-            $this->logger->warning('Profile metadata fetch failed; using npub placeholder.', [
+            $this->logger->info('Profile metadata fetch failed; using npub placeholder.', [
                 'npub' => $npub,
             ]);
             $this->requestBundlesByHex[$hex] = $this->placeholderMetadataBundle($npub);

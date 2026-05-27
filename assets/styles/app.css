@@ -102,17 +102,37 @@ strong:not(>h2), .strong {
 
 a {
     color: var(--color-secondary);
-    text-decoration: none;
+    /* WCAG 1.4.1: links must have a non-colour cue (underline) so they are identifiable
+       without relying on colour alone.  UI-chrome zones (nav, buttons, cards, badges)
+       suppress it below. */
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
 }
 
 a:hover {
+    color: var(--color-link-hover);
     text-decoration: underline;
 }
 
+/* Cards: the whole card is the interactive element; suppress underline on heading/image links. */
+.card a,
 .card a:hover {
     text-decoration: none;
-    color: var(--color-text);
-    cursor: pointer;
+}
+
+/* Buttons used as links. */
+.btn,
+a.btn,
+button a {
+    text-decoration: none;
+}
+
+/* Tags, badges — clearly interactive chips. */
+a.tag,
+.tags a,
+.user-badge,
+.user-badge:hover {
+    text-decoration: none;
 }
 
 .card a:hover h2 {
@@ -1089,9 +1109,9 @@ svg.icon {
         padding: 0.12em 0 0.08em;
     }
 
-    #site-header .header__logo-circle {
-        width: 40px;
-        height: 40px;
+    #site-header .header__logo-banner {
+        width: 100px;
+        height: 38px;
     }
 
     .hamburger {
@@ -1104,37 +1124,26 @@ svg.icon {
     }
 }
 
-/* Fixed square + overflow clips to a true circle. Logo img is out-of-flow so
-   global img { height: auto } cannot shrink the bitmap; object-fit fills the disc.
-   Slight scale crops typical padding baked into square marketing PNGs. */
-.header__logo-circle {
-    display: inline-block;
-    position: relative;
-    width: 60px;
-    height: 60px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    overflow: hidden;
-    box-shadow: 0 0 0 1px var(--color-border);
-    vertical-align: middle;
-}
-
-#site-header .header__logo-circle {
-    width: 48px;
-    height: 48px;
-}
-
-.header__logo-circle > img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    object-fit: cover;
-    object-position: center;
+/* Horizontal banner logo: portrait painting cropped to a wide strip that shows the
+   subject's face/upper body. object-position 50% 14% targets the face at the top
+   of the portrait; adjust the Y value if the crop drifts on a different painting. */
+.header__logo-banner {
     display: block;
-    transform: scale(1.18);
-    transform-origin: center center;
+    flex-shrink: 0;
+    /* Width drives the banner proportions; height clips into the portrait. */
+    width: 140px;
+    height: 48px;
+    object-fit: cover;
+    object-position: 50% 14%;
+    border-radius: 5px;
+    box-shadow: 0 0 0 1px var(--color-border);
+    /* Prevent global img { height: auto } from overriding the fixed height. */
+    max-width: none;
+}
+
+#site-header .header__logo-banner {
+    width: 120px;
+    height: 44px;
 }
 
 .header__logo a:hover {
@@ -1192,7 +1201,9 @@ footer p {
 }
 
 footer a {
-    color: var(--color-text-contrast);
+    /* --color-text-contrast is nearly invisible on the footer background; use the
+       dedicated footer-link token which has ≥4.5:1 contrast in both schemes. */
+    color: var(--color-footer-link);
 }
 
 /* Tags container */
@@ -1335,12 +1346,13 @@ a.tag:focus-visible {
 }
 
 .author-profile__section-type {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--color-text);
-    opacity: 0.75;
+    /* Use --color-text-mid directly rather than --color-text at opacity: 0.75, which
+       falls below 3:1 on dark backgrounds; text-mid has ≥7:1 in both schemes. */
+    color: var(--color-text-mid);
     line-height: 1.35;
     padding-top: 0.15em;
 }
@@ -1386,12 +1398,11 @@ a.tag:focus-visible {
 }
 
 .author-profile__identity-type {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--color-text);
-    opacity: 0.75;
+    color: var(--color-text-mid);
 }
 
 .author-profile__meta-value,
@@ -1459,12 +1470,11 @@ a.tag:focus-visible {
 }
 
 .author-profile__payment-type {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--color-text);
-    opacity: 0.75;
+    color: var(--color-text-mid);
 }
 
 .author-profile__jumble {
@@ -1722,9 +1732,9 @@ a:focus-visible {
         font-size: clamp(0.88rem, 4.4vw, 1.12rem);
     }
 
-    #site-header .header__logo-circle {
-        width: 36px;
-        height: 36px;
+    #site-header .header__logo-banner {
+        width: 88px;
+        height: 34px;
     }
 }
 

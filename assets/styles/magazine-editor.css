@@ -238,23 +238,21 @@
     min-width: 0;
 }
 
+/* Drag handle is a <span> (not a <button>) so it does not absorb the pointer-down
+   that starts the parent row's HTML5 drag.  cursor: grab must be set explicitly here
+   because .magazine-editor__panel button { cursor: pointer } no longer applies. */
 .magazine-editor__a-drag-handle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0.1rem 0.15rem;
     margin: 0;
-    background: none;
-    border: none;
     color: var(--color-text-mid, rgba(160, 160, 160, 0.55));
     cursor: grab;
     touch-action: none;
+    user-select: none;
     line-height: 0;
     font-size: 0;
-    text-transform: none;
-    font-weight: normal;
-    border-radius: 2px;
-    box-shadow: none;
 }
 
 .magazine-editor__a-drag-handle:active {
@@ -263,11 +261,6 @@
 
 .magazine-editor__a-drag-handle:hover {
     color: var(--color-text, inherit);
-}
-
-.magazine-editor__a-drag-handle:focus-visible {
-    outline: 2px solid var(--color-focus, currentColor);
-    outline-offset: 2px;
 }
 
 .magazine-editor__a-drag-handle svg {

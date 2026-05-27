@@ -39,29 +39,30 @@ export default class MagazineHierarchyEditorController extends Controller {
          * never reaches the panel (e.g. `stopPropagation` from another listener) or fieldset/legend
          * hit-testing is odd.
          */
-        // Bind once: re-binding on every reconnect wraps the already-bound function, and the bound
-        // reference must be stable so removeEventListener in disconnect() can match it.
-        this._onDocClickCapture ??= this._onDocClickCapture.bind(this);
-        this._onPanelFocusOut ??= this._onPanelFocusOut.bind(this);
-        this._onDragStart ??= this._onDragStart.bind(this);
-        this._onDragOver ??= this._onDragOver.bind(this);
-        this._onDrop ??= this._onDrop.bind(this);
-        this._onDragEnd ??= this._onDragEnd.bind(this);
-        document.addEventListener('click', this._onDocClickCapture, true);
-        this.element.addEventListener('focusout', this._onPanelFocusOut);
-        this.element.addEventListener('dragstart', this._onDragStart);
-        this.element.addEventListener('dragover', this._onDragOver);
-        this.element.addEventListener('drop', this._onDrop);
-        this.element.addEventListener('dragend', this._onDragEnd);
+        // Bind once using *different* property names than the method names.
+        // ??= would short-circuit for same-name properties because the prototype method is
+        // already non-null, leaving the handler unbound (this === DOM element at call time).
+        this._boundDocClickCapture ??= this._onDocClickCapture.bind(this);
+        this._boundPanelFocusOut ??= this._onPanelFocusOut.bind(this);
+        this._boundDragStart ??= this._onDragStart.bind(this);
+        this._boundDragOver ??= this._onDragOver.bind(this);
+        this._boundDrop ??= this._onDrop.bind(this);
+        this._boundDragEnd ??= this._onDragEnd.bind(this);
+        document.addEventListener('click', this._boundDocClickCapture, true);
+        this.element.addEventListener('focusout', this._boundPanelFocusOut);
+        this.element.addEventListener('dragstart', this._boundDragStart);
+        this.element.addEventListener('dragover', this._boundDragOver);
+        this.element.addEventListener('drop', this._boundDrop);
+        this.element.addEventListener('dragend', this._boundDragEnd);
     }
 
     disconnect() {
-        document.removeEventListener('click', this._onDocClickCapture, true);
-        this.element.removeEventListener('focusout', this._onPanelFocusOut);
-        this.element.removeEventListener('dragstart', this._onDragStart);
-        this.element.removeEventListener('dragover', this._onDragOver);
-        this.element.removeEventListener('drop', this._onDrop);
-        this.element.removeEventListener('dragend', this._onDragEnd);
+        document.removeEventListener('click', this._boundDocClickCapture, true);
+        this.element.removeEventListener('focusout', this._boundPanelFocusOut);
+        this.element.removeEventListener('dragstart', this._boundDragStart);
+        this.element.removeEventListener('dragover', this._boundDragOver);
+        this.element.removeEventListener('drop', this._boundDrop);
+        this.element.removeEventListener('dragend', this._boundDragEnd);
     }
 
     /**
@@ -85,6 +86,9 @@ export default class MagazineHierarchyEditorController extends Controller {
             return;
         }
         const t = ev.target;
+
+        // Publish: handled here via document-capture; the button must NOT also carry a
+        // data-action binding or _publish() would fire twice per click.
         if (t.closest('[data-mag-editor-cmd="publish"]')) {
             void this._publish();
             return;
@@ -93,34 +97,24 @@ export default class MagazineHierarchyEditorController extends Controller {
             this.addTopLevelCategory();
             return;
         }
-        const addSubCmd = t.closest('[data-mag-editor-cmd="add-subcategory"]');
-        if (addSubCmd instanceof HTMLElement) {
-            this.addSubcategory(ev, addSubCmd);
+        const addSubBtn = t.closest('[data-mag-editor-cmd="add-subcategory"]');
+        if (addSubBtn instanceof HTMLElement) {
+            this.addSubcategory(ev, addSubBtn);
             return;
         }
-        const rmCatCmd = t.closest('[data-mag-editor-cmd="remove-category"]');
-        if (rmCatCmd instanceof HTMLElement) {
-            this.removeCategory(ev, rmCatCmd);
+        const rmCatBtn = t.closest('[data-mag-editor-cmd="remove-category"]');
+        if (rmCatBtn instanceof HTMLElement) {
+            this.removeCategory(ev, rmCatBtn);
             return;
         }
-        const addArticle = t.closest('[data-mag-a-add]');
-        if (addArticle instanceof HTMLElement) {
-            this.addALine(ev, addArticle);
+        const addArticleBtn = t.closest('[data-mag-a-add]');
+        if (addArticleBtn instanceof HTMLElement) {
+            this.addALine(ev, addArticleBtn);
             return;
         }
-        const rmArticle = t.closest('.magazine-editor__a-remove-icon');
-        if (rmArticle instanceof HTMLElement) {
-            this.removeALine(ev, rmArticle);
-            return;
-        }
-        const sub = t.closest('.magazine-editor__add-sub');
-        if (sub instanceof HTMLElement) {
-            this.addSubcategory(ev, sub);
-            return;
-        }
-        const rmCat = t.closest('.magazine-editor__remove-node');
-        if (rmCat instanceof HTMLElement) {
-            this.removeCategory(ev, rmCat);
+        const rmArticleBtn = t.closest('.magazine-editor__a-remove-icon');
+        if (rmArticleBtn instanceof HTMLElement) {
+            this.removeALine(ev, rmArticleBtn);
             return;
         }
     }

@@ -84,6 +84,9 @@ export default class extends Controller {
     this.barTarget.style.transition = 'width 0.18s ease-out';
     this.barTarget.style.width = '100%';
     window.setTimeout(() => {
+      if (!this.hasBarTarget) {
+        return;
+      }
       this.barTarget.style.transition = 'none';
       this.barTarget.style.width = '0';
       this.barTarget.style.removeProperty('transition');

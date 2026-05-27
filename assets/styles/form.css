@@ -29,7 +29,7 @@ input:focus, textarea:focus {
 }
 
 .help-text {
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     color: var(--color-text);
     font-weight: lighter;
 }
