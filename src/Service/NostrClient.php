@@ -1774,7 +1774,7 @@ class NostrClient
                     'sample_up_to_25' => $rawSample,
                 ]);
                 if ($rawCount === 0) {
-                    $this->logger->warning('[longform_ingest] ingestLongform: no EVENT rows returned for this filter (check relay index / author filter / #d list)', [
+                    $this->logger->notice('[longform_ingest] ingestLongform: no EVENT rows returned for this filter — trying fallback queries', [
                         'group_key' => $gkey,
                         'authors_filter' => $g['pubkey'],
                     ]);

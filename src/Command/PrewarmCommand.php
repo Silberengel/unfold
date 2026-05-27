@@ -794,6 +794,8 @@ final class PrewarmCommand extends Command
                         $coord,
                         $titleOut !== '' ? ' -> '.$titleOut : ''
                     ));
+                } elseif ($status === 'skipped') {
+                    $io->writeln(sprintf('    · <info>sub-index</info> %s', $coord));
                 } else {
                     $reason = (string) $entry['reason'];
                     $io->writeln(sprintf('    - <comment>MISSING</comment> %s (%s)', $coord, $reason));

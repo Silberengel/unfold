@@ -1,4 +1,4 @@
-{# Shared author “header” + about (no article list). Expects: author, npub, profile_*; show_nip05: true on full /p/ profile only #}
+{# Shared author "header" + about (no article list). Expects: author, npub, profile_*; show_nip05: true on full /p/ profile only #}
     {% set author_pic = null %}
     {% if author.picture is defined and author.picture %}
         {% set author_pic = author.picture %}
@@ -18,14 +18,16 @@
 
         <div class="author-profile__header-meta">
         {% if profile_websites is not empty %}
-            <ul class="author-profile__identity" aria-label="Websites">
-                {% for row in profile_websites %}
-                    <li class="author-profile__identity-row author-profile__meta-line">
-                        <span class="author-profile__identity-type">Website</span>
-                        <a class="author-profile__identity-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">{{ row.label|e }}</a>
-                    </li>
-                {% endfor %}
-            </ul>
+            <div class="author-profile__section author-profile__section--label-value" aria-label="Websites">
+                <span class="author-profile__section-type">Website</span>
+                <ul class="author-profile__value-stack">
+                    {% for row in profile_websites %}
+                        <li class="author-profile__value-stack-line">
+                            <a class="author-profile__identity-link author-profile__meta-value" href="{{ row.href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">{{ row.label|e }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
         {% endif %}
         {% if show_nip05|default(false) and profile_nip05 is not empty %}
             <div class="author-profile__section author-profile__section--label-value" aria-label="NIP-05">
@@ -45,26 +47,38 @@
             </div>
         {% endif %}
         {% if profile_payment_links is not empty %}
+            {# Group payment rows by display_type_label so each type (Lightning, Monero, …) appears once. #}
+            {% set payment_groups = {} %}
+            {% for row in profile_payment_links %}
+                {% set k = row.display_type_label|default('')|trim %}
+                {% set payment_groups = payment_groups|merge({(k): (payment_groups[k] is defined ? payment_groups[k] : [])|merge([row])}) %}
+            {% endfor %}
             <div class="author-profile__section author-profile__section--label-value" aria-label="Payment">
                 <span class="author-profile__section-type">Payment</span>
                 <ul class="author-profile__payments-nested">
-                    {% for row in profile_payment_links %}
-                        <li class="author-profile__payment author-profile__meta-line">
-                            <span class="author-profile__payment-type"{% if row.display_type_label|default('')|trim == '' %} aria-hidden="true"{% endif %}>{{ row.display_type_label|default('')|e }}</span>
-                            <div
-                                class="author-profile__payment-value"
-                                data-controller="copy-text"
-                                data-copy-text-text-value="{{ row.href|e('html_attr') }}"
-                            >
-                                <span class="author-profile__payment-addr author-profile__meta-value" title="{{ row.href|e('html_attr') }}">{{ row.label|e }}</span>
-                                <button
-                                    type="button"
-                                    class="author-profile__copy-btn btn btn-secondary btn-sm"
-                                    data-copy-text-target="button"
-                                    data-action="click->copy-text#copy"
-                                    title="Copy full payment address / URI for your wallet"
-                                >Copy</button>
-                            </div>
+                    {% for type_key, rows in payment_groups %}
+                        <li class="author-profile__payment-group">
+                            <span class="author-profile__payment-type"{% if type_key == '' %} aria-hidden="true"{% endif %}>{{ type_key|e }}</span>
+                            <ul class="author-profile__payment-group-values">
+                                {% for row in rows %}
+                                    <li class="author-profile__payment-group-value">
+                                        <div
+                                            class="author-profile__payment-value"
+                                            data-controller="copy-text"
+                                            data-copy-text-text-value="{{ row.href|e('html_attr') }}"
+                                        >
+                                            <span class="author-profile__payment-addr author-profile__meta-value" title="{{ row.href|e('html_attr') }}">{{ row.label|e }}</span>
+                                            <button
+                                                type="button"
+                                                class="author-profile__copy-btn btn btn-secondary btn-sm"
+                                                data-copy-text-target="button"
+                                                data-action="click->copy-text#copy"
+                                                title="Copy full payment address / URI for your wallet"
+                                            >Copy</button>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
                         </li>
                     {% endfor %}
                 </ul>

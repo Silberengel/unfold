@@ -1469,12 +1469,39 @@ a.tag:focus-visible {
     flex-grow: 0;
 }
 
+/* Payment type groups: one label per type with its addresses stacked in the right column */
+.author-profile__payment-group {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    column-gap: 0.5rem;
+    align-items: start;
+    margin: 0.35rem 0;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.author-profile__payment-group:first-child {
+    margin-top: 0;
+}
+
+.author-profile__payment-group-values {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.author-profile__payment-group-value + .author-profile__payment-group-value {
+    margin-top: 0.3rem;
+}
+
 .author-profile__payment-type {
     font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--color-text-mid);
+    padding-top: 0.15em;
 }
 
 .author-profile__jumble {

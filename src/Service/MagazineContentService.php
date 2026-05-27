@@ -448,8 +448,10 @@ final class MagazineContentService
                 }
                 $kind = (int) $parts[0];
                 if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
-                    $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'unsupported_kind'];
-                    $missing++;
+                    // kind-30040 nested sub-index links are valid in category `a` tags (e.g. Economy → Bitcoin).
+                    // They are not longform articles and are not ingested here; report them separately
+                    // so they don't inflate the "missing articles" count.
+                    $entries[] = ['coordinate' => $coordinate, 'status' => 'skipped', 'reason' => 'unsupported_kind'];
 
                     continue;
                 }
