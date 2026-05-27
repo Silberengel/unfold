@@ -168,13 +168,17 @@ final class PrewarmCommand extends Command
         // any later Nostr phase (long-form can exceed that old cap and was causing max-time fatals).
         $this->disableCliExecutionTimeLimit();
 
-        $io->section('Long-form in DB (category `a` tags — refresh from Nostr)');
+        $io->section('Long-form in DB (magazine root + category `a` tags — refresh from Nostr)');
         try {
+            $nRoot = $this->magazineContent->ingestLongformForMagazineRootHeadline();
+            if ($nRoot > 0) {
+                $io->writeln(sprintf('Magazine root headline strip: refreshed <info>%d</info> long-form coordinate(s).', $nRoot));
+            }
             $n = $this->magazineContent->ingestLongformForAllMagazineCategories();
-            if ($n === 0) {
-                $io->note('No category `a` coordinates in the magazine store (or empty category indices).');
-            } else {
-                $io->writeln(sprintf('Fetched latest long-form for <info>%d</info> coordinate(s) (new rows + NIP-33 updates).', $n));
+            if ($n === 0 && $nRoot === 0) {
+                $io->note('No root or category `a` long-form coordinates in the magazine store (or empty indices).');
+            } elseif ($n > 0) {
+                $io->writeln(sprintf('Category indices: fetched latest long-form for <info>%d</info> coordinate(s) (new rows + NIP-33 updates).', $n));
             }
             $report = $this->magazineContent->buildCategoryArticleDbCoverageReport();
             $missingCoords = $this->magazineContent->missingInDbCoordinatesFromCoverageReport($report);

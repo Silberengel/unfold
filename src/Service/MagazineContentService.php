@@ -361,6 +361,74 @@ final class MagazineContentService
     }
 
     /**
+     * Kind **30023** / **30024** / **30817** `a` tags on the magazine **root** index (home headline strip).
+     * Unlike {@see ingestLongformForAllMagazineCategories}, category nested indices are not walked here.
+     * Nostr I/O — for {@see PrewarmCommand} / cron and optional refresh before rendering the home strip.
+     */
+    public function ingestLongformForMagazineRootHeadline(): int
+    {
+        $coords = $this->collectRootHeadlineLongformCoordinates();
+        if ($coords === []) {
+            return 0;
+        }
+        $this->nostrClient->ingestLongformForCategoryCoordinates($coords);
+
+        return \count($coords);
+    }
+
+    /**
+     * @return list<string> kind:pubkey:d-tag addresses in root `a` tag order (long-form kinds only)
+     */
+    public function collectRootHeadlineLongformCoordinates(): array
+    {
+        $npub = (string) $this->params->get('npub');
+        $dTag = (string) $this->params->get('d_tag');
+        $mag = $this->store->getRoot($npub, $dTag);
+        if ($mag === null) {
+            $this->ensureRoot30040FromRelays($npub, $dTag);
+            $mag = $this->store->getRoot($npub, $dTag);
+        }
+        if ($mag === null) {
+            return [];
+        }
+
+        $orderedCoords = [];
+        $seenAddr = [];
+        foreach ($mag->getTags() as $tagRow) {
+            $seq = NostrEventTags::rowToStringList($tagRow);
+            if ($seq === null) {
+                continue;
+            }
+            $name = strtolower((string) ($seq[0] ?? ''));
+            if ($name !== 'a' || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $coord = trim((string) $seq[1]);
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $kind = (int) $parts[0];
+            if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
+                continue;
+            }
+            $pk = strtolower(trim((string) $parts[1]));
+            $slug = trim((string) $parts[2]);
+            if (64 !== \strlen($pk) || !ctype_xdigit($pk) || $slug === '') {
+                continue;
+            }
+            $dedupe = $pk."\0".$slug;
+            if (isset($seenAddr[$dedupe])) {
+                continue;
+            }
+            $seenAddr[$dedupe] = true;
+            $orderedCoords[] = $kind.':'.$pk.':'.$slug;
+        }
+
+        return $orderedCoords;
+    }
+
+    /**
      * Human-readable prewarm/audit data: what each cached category index (30040) lists and which
      * coordinates are unresolved in local MySQL `article`.
      *
@@ -733,50 +801,7 @@ final class MagazineContentService
      */
     public function buildHomeMagazineRootHeadlineStripData(): array
     {
-        $npub = (string) $this->params->get('npub');
-        $dTag = (string) $this->params->get('d_tag');
-        $mag = $this->store->getRoot($npub, $dTag);
-        if ($mag === null) {
-            $this->ensureRoot30040FromRelays($npub, $dTag);
-            $mag = $this->store->getRoot($npub, $dTag);
-        }
-        if ($mag === null) {
-            return ['tiles' => []];
-        }
-
-        $orderedCoords = [];
-        $seenAddr = [];
-        foreach ($mag->getTags() as $tagRow) {
-            $seq = NostrEventTags::rowToStringList($tagRow);
-            if ($seq === null) {
-                continue;
-            }
-            $name = strtolower((string) ($seq[0] ?? ''));
-            if ($name !== 'a' || !isset($seq[1]) || (string) $seq[1] === '') {
-                continue;
-            }
-            $coord = trim((string) $seq[1]);
-            $parts = explode(':', $coord, 3);
-            if (\count($parts) < 3) {
-                continue;
-            }
-            $kind = (int) $parts[0];
-            if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
-                continue;
-            }
-            $pk = strtolower(trim((string) $parts[1]));
-            $slug = trim((string) $parts[2]);
-            if (64 !== \strlen($pk) || !ctype_xdigit($pk) || $slug === '') {
-                continue;
-            }
-            $dedupe = $pk."\0".$slug;
-            if (isset($seenAddr[$dedupe])) {
-                continue;
-            }
-            $seenAddr[$dedupe] = true;
-            $orderedCoords[] = $kind.':'.$pk.':'.$slug;
-        }
-
+        $orderedCoords = $this->collectRootHeadlineLongformCoordinates();
         if ($orderedCoords === []) {
             return ['tiles' => []];
         }
@@ -786,21 +811,12 @@ final class MagazineContentService
             $parts = explode(':', $coord, 3);
             $pairsArg[] = ['pubkey' => strtolower((string) $parts[1]), 'slug' => trim((string) $parts[2])];
         }
+        // Always refresh from relays so NIP-33 updates to root headline articles are not stuck on a stale DB row.
+        try {
+            $this->nostrClient->ingestLongformForCategoryCoordinates(array_values(array_unique($orderedCoords)));
+        } catch (\Throwable) {
+        }
         $indexed = $this->articleRepository->findByAuthorAndSlugIndexed($pairsArg);
-        $missingCoords = [];
-        foreach ($pairsArg as $i => $pair) {
-            $k = strtolower((string) $pair['pubkey'])."\0".trim((string) $pair['slug']);
-            if (!isset($indexed[$k])) {
-                $missingCoords[] = $orderedCoords[$i];
-            }
-        }
-        if ($missingCoords !== []) {
-            try {
-                $this->nostrClient->ingestLongformForCategoryCoordinates(array_values(array_unique($missingCoords)));
-            } catch (\Throwable) {
-            }
-            $indexed = $this->articleRepository->findByAuthorAndSlugIndexed($pairsArg);
-        }
 
         $tiles = [];
         foreach ($pairsArg as $pair) {
