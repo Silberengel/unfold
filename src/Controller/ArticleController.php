@@ -140,7 +140,7 @@ class ArticleController  extends AbstractController
         string $articleTitle
     ): array {
         $coordparts = explode(':', $coordinate, 3);
-        $articleKind = isset($coordparts[0]) && ctype_digit($coordparts[0]) ? (int) $coordparts[0] : 30023;
+        $articleKind = ctype_digit($coordparts[0]) ? (int) $coordparts[0] : 30023;
         $articleAuthorPubkey = strtolower(trim((string) ($coordparts[1] ?? '')));
 
         $articleReplyTags = null;
@@ -170,11 +170,8 @@ class ArticleController  extends AbstractController
 
         if ($userMayReply) {
             /** @var array<int, object> $list */
-            $list = $data['list'] ?? [];
+            $list = $data['list'];
             foreach ($list as $row) {
-                if (!\is_object($row)) {
-                    continue;
-                }
                 $k = (int) ($row->kind ?? 0);
                 if ($k !== KindsEnum::COMMENTS->value && $k !== KindsEnum::TEXT_NOTE->value) {
                     continue;
@@ -375,7 +372,7 @@ class ArticleController  extends AbstractController
         $npub = $nostrKeyHelper->convertPublicKeyToBech32($article->getPubkey());
         $author = $cacheService->getMetadata($npub);
 
-        $kind = $article->getKind()?->value ?? 30023;
+        $kind = $article->getKind()->value;
         $pubkey = (string) $article->getPubkey();
         $articleSlug = (string) $article->getSlug();
         $coordinate = $kind.':'.$pubkey.':'.$articleSlug;
@@ -394,7 +391,7 @@ class ArticleController  extends AbstractController
                 $eid,
                 $articleTitle
             );
-            $commentReplyContext = $commentsData['comment_reply_context'] ?? $commentReplyContext;
+            $commentReplyContext = $commentsData['comment_reply_context'];
             $commentsPreloaded = true;
         }
 
@@ -489,7 +486,7 @@ class ArticleController  extends AbstractController
                 }
                 if ($html === '' && $previewData === null) {
                     $html = '<span class="text-subtle">No event found on the default relay for this preview.</span>';
-                } elseif ($html === '' && \is_object($previewData)) {
+                } elseif ($html === '') {
                     $previewData->type = $descriptor->type;
                     $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
                         'preview' => $previewData,

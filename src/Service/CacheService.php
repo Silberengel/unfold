@@ -76,7 +76,7 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
     public function prefetchMetadataForNpubs(array $npubs): void
     {
         foreach ($npubs as $npub) {
-            if (!\is_string($npub) || $npub === '') {
+            if ($npub === '') {
                 continue;
             }
             $authorHex = $this->npubToAuthorHex64($npub);
@@ -95,7 +95,7 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
     {
         $npubs = [];
         foreach ($pubkeyHex as $hex) {
-            if (!\is_string($hex) || 64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+            if (64 !== \strlen($hex) || !ctype_xdigit($hex)) {
                 continue;
             }
             try {
@@ -114,9 +114,6 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
         ++$this->metadataBatchDepth;
         try {
             do {
-                if ($this->pendingHexToNpub === []) {
-                    break;
-                }
                 $this->flushPendingMetadataFetches();
             } while ($this->pendingHexToNpub !== []);
         } finally {
@@ -193,7 +190,7 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
                 continue;
             }
             $h = strtolower($hex);
-            if (!isset($bundlesByLowerHex[$h]) || !\is_array($bundlesByLowerHex[$h])) {
+            if (!isset($bundlesByLowerHex[$h])) {
                 continue;
             }
             $bundle = $bundlesByLowerHex[$h];
@@ -239,15 +236,11 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
             if ($seq === []) {
                 continue;
             }
-            $r = array_values(
-                array_map(
-                    static fn (mixed $v): string => (string) $v,
-                    array_values($seq)
-                )
+            $r = array_map(
+                static fn (mixed $v): string => (string) $v,
+                array_values($seq)
             );
-            if ($r !== [] && (string) ($r[0] ?? '') !== '') {
-                $out[] = $r;
-            }
+            $out[] = $r;
         }
 
         return $out;
@@ -352,7 +345,7 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
     private function bundleFromKind0EventRow(Event $row, string $npub): array
     {
         $content = $this->decodeKind0ContentString($row->getContent());
-        if (!\is_object($content) || $this->isPlaceholderContent($content, $npub)) {
+        if ($this->isPlaceholderContent($content, $npub)) {
             $content = $this->namePlaceholderNpubObject($npub);
         }
 
@@ -366,11 +359,6 @@ final class CacheService implements HighlightAuthorMetadataProvider, ResetInterf
             'kind0_tags' => self::normalizeEventTagsList($row->getTags()),
             'nip30_custom_emojis' => $nip30,
         ];
-    }
-
-    private function decodeKind0ContentObject(object $ev): \stdClass
-    {
-        return $this->decodeKind0ContentString((string) ($ev->content ?? ''));
     }
 
     private function decodeKind0ContentString(string $raw): \stdClass

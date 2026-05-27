@@ -91,7 +91,7 @@ final readonly class CommentReplyService
             : '';
         $clientParentOk = 64 === \strlen($rawParentAuthor) && ctype_xdigit($rawParentAuthor);
         $coordBits = explode(':', $expectedCoordinate, 3);
-        $articleAuthor = \count($coordBits) >= 2 ? strtolower((string) $coordBits[1]) : '';
+        $articleAuthor = strtolower((string) $coordBits[1]);
         $articleAuthorOk = 64 === \strlen($articleAuthor) && ctype_xdigit($articleAuthor);
 
         if (\in_array((int) $parentKind, [KindsEnum::COMMENTS->value, KindsEnum::TEXT_NOTE->value], true)) {

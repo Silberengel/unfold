@@ -46,7 +46,7 @@ class AuthorController extends AbstractController
         $bundle = $cacheService->getMetadataBundle($npub);
         $author = $bundle['content'];
         $kind0Tags = $bundle['kind0_tags'];
-        $nip30Emojis = $bundle['nip30_custom_emojis'] ?? [];
+        $nip30Emojis = $bundle['nip30_custom_emojis'];
         $perPage = 25;
         $page = max(1, $request->query->getInt('page', 1));
         $total = $articleRepository->countByPubkey($pubkey);

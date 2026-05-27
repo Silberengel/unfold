@@ -25,14 +25,18 @@ export default class extends Controller {
   }
 
   disconnect() {
-    document.removeEventListener('click', this.boundHandleInteraction);
+    if (this.boundHandleInteraction) {
+      document.removeEventListener('click', this.boundHandleInteraction);
+    }
     if (this.boundTouchStart) {
       document.removeEventListener('touchstart', this.boundTouchStart);
     }
     if (this.boundTouchEnd) {
       document.removeEventListener('touchend', this.boundTouchEnd);
     }
-    window.removeEventListener('pageshow', this.boundPageShow);
+    if (this.boundPageShow) {
+      window.removeEventListener('pageshow', this.boundPageShow);
+    }
     if (this.loadListener) {
       window.removeEventListener('load', this.loadListener);
       this.loadListener = null;

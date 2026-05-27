@@ -108,10 +108,12 @@ RUN set -eux; \
 	composer dump-env prod; \
 	rm -f .env; \
 	# Strip deployment secrets from the compiled .env.local.php so they cannot be read from the
-	# image layers. APP_SECRET, DATABASE_URL, and MYSQL_* passwords must be injected as real
-	# environment variables at runtime. If they are absent at runtime Symfony will raise an error
-	# rather than silently using the public .env.dist defaults.
-	php -r '$e=include(".env.local.php"); unset($e["APP_SECRET"],$e["DATABASE_URL"],$e["MYSQL_USER"],$e["MYSQL_PASSWORD"],$e["MYSQL_ROOT_PASSWORD"]); file_put_contents(".env.local.php","<?php return ".var_export($e,true).";".PHP_EOL);' ; \
+	# image layers. The listed keys must be injected as real environment variables at runtime;
+	# Symfony will raise a clear error rather than silently using the public .env.dist defaults.
+	# MAINTENANCE: if a new secret is added to .env.dist, add it here too so it is not
+	# compiled into the image. Use array_diff_key so the strip is explicit and order-independent;
+	# missing keys are safely ignored (they were never compiled in and therefore never a risk).
+	php -r '$strip=array_flip(["APP_SECRET","DATABASE_URL","MYSQL_USER","MYSQL_PASSWORD","MYSQL_ROOT_PASSWORD"]); $e=array_diff_key(include(".env.local.php"),$strip); file_put_contents(".env.local.php","<?php return ".var_export($e,true).";".PHP_EOL);' ; \
 	composer run-script --no-dev post-install-cmd; \
 	php bin/console asset-map:compile --no-debug; \
 	chmod +x bin/console; sync;

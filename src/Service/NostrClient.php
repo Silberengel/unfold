@@ -117,7 +117,7 @@ class NostrClient
         $out = $base;
         foreach ($pubkeys as $pk) {
             foreach ($this->authorRelayCache->getAuthorNip65RelaysList($pk) as $wss) {
-                if (!\is_string($wss) || $wss === '' || isset($seen[$wss])) {
+                if ($wss === '' || isset($seen[$wss])) {
                     continue;
                 }
                 $seen[$wss] = true;
@@ -166,7 +166,7 @@ class NostrClient
     {
         $authorPubkeyHex = \array_values(\array_unique(\array_filter(
             $authorPubkeyHex,
-            static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
+            static fn (string $h): bool => 64 === \strlen($h),
         )));
         if ($authorPubkeyHex === []) {
             return [];
@@ -265,7 +265,7 @@ class NostrClient
     ): array {
         $authorPubkeyHex = \array_values(\array_unique(\array_filter(
             $authorPubkeyHex,
-            static fn (mixed $h): bool => \is_string($h) && 64 === \strlen($h),
+            static fn (string $h): bool => 64 === \strlen($h),
         )));
         if ($authorPubkeyHex === [] || $since >= $until) {
             return [];
@@ -376,7 +376,7 @@ class NostrClient
                 $relaySet->setMessage($eventMessage);
                 $this->relayRequestFactory->applySocketTimeoutToRelaySet($relaySet);
                 $sent = $relaySet->send();
-                if (\is_array($sent) && \array_key_exists($relayWss, $sent)) {
+                if (\array_key_exists($relayWss, $sent)) {
                     $results[$relayWss] = $sent[$relayWss];
                 } else {
                     $results[$relayWss] = $sent;
@@ -734,7 +734,7 @@ class NostrClient
         $merged = $this->wireMerge->mergeNip33ParameterizedWireEvents($response);
         $k10002 = (int) KindsEnum::RELAY_LIST->value;
         foreach ($merged as $e) {
-            if (\is_object($e) && (int) ($e->kind ?? 0) === $k10002) {
+            if ((int) ($e->kind ?? 0) === $k10002) {
                 return $e;
             }
         }
@@ -1073,7 +1073,7 @@ class NostrClient
         $seen = [];
         $out = [];
         foreach (array_merge($this->relayListFactory->getConfiguredArticleRelayUrlList(), $relayUrls) as $relayUrl) {
-            if (!\is_string($relayUrl) || $relayUrl === '' || isset($seen[$relayUrl])) {
+            if ($relayUrl === '' || isset($seen[$relayUrl])) {
                 continue;
             }
             $seen[$relayUrl] = true;
@@ -1703,7 +1703,7 @@ class NostrClient
         $this->logger->info('[longform_ingest] ingestLongform: start', [
             'address_count' => \count($addresses),
             'relays' => $relaysForLog,
-            'addresses_sample' => \array_values(\array_slice($addresses, 0, 15)),
+            'addresses_sample' => \array_slice($addresses, 0, 15),
         ]);
         $groups = [];
         foreach ($addresses as $c) {
@@ -1730,10 +1730,7 @@ class NostrClient
             'group_count' => \count($groups),
         ]);
         foreach ($groups as $gkey => $g) {
-            $dTags = array_values(array_unique($g['dTags'] ?? []));
-            if ($dTags === [] || !isset($g['pubkey'], $g['kind'])) {
-                continue;
-            }
+            $dTags = array_values(array_unique($g['dTags']));
             $kindEnum = KindsEnum::tryFrom((int) $g['kind']);
             if ($kindEnum === null) {
                 $this->logger->notice('[longform_ingest] skip group: unknown kind', ['kind' => $g['kind']]);
@@ -1881,9 +1878,6 @@ class NostrClient
                 $merged = $this->wireMerge->mergeNip33ParameterizedWireEvents($events);
                 $mergedDetail = [];
                 foreach ($merged as $ev) {
-                    if (!\is_object($ev)) {
-                        continue;
-                    }
                     $mergedDetail[] = $this->wireMerge->longformIngestEventWireSummary($ev);
                 }
                 $this->logger->info('[longform_ingest] ingestLongform: after mergeNip33ParameterizedWireEvents', [
@@ -1898,9 +1892,6 @@ class NostrClient
                 }
                 $seenAddresses = [];
                 foreach ($merged as $event) {
-                    if (!\is_object($event)) {
-                        continue;
-                    }
                     $addr = $this->wireMerge->nip33ParameterizedReplaceableAddress($event);
                     if ($addr !== null) {
                         $seenAddresses[$addr] = true;
@@ -1935,7 +1926,7 @@ class NostrClient
                     sprintf('[longform_ingest] ingestLongform: exception in group %s: %s', (string) $gkey, $e->getMessage()),
                     [
                         'message' => $e->getMessage(),
-                        'pubkey' => $g['pubkey'] ?? null,
+                        'pubkey' => $g['pubkey'],
                         'trace' => $e->getTraceAsString(),
                         'relays' => $relaysForLog,
                     ],

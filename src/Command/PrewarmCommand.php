@@ -105,29 +105,7 @@ final class PrewarmCommand extends Command
                         } elseif ($phase === 'after_root') {
                             $hb->silent = true;
                             $this->cancelPcntlAlarm();
-                            $planned = $p['slugs'] ?? null;
-                            if (!\is_array($planned)) {
-                                $planned = [];
-                            }
-                            if ($planned === []) {
-                                $io->writeln('   <comment>Magazine root has no child <info>a</info> tag categories; only the root index was stored.</comment>');
-                            } else {
-                                $n = \count($planned);
-                                $io->writeln(sprintf('   <comment>Magazine child categories in root</comment> <info>(%d)</info><comment>:</comment>', $n));
-                                foreach ($planned as $slug) {
-                                    $s = (string) $slug;
-                                    if (strlen($s) > 120) {
-                                        $s = substr($s, 0, 117).'…';
-                                    }
-                                    $io->writeln(sprintf('   · <info>%s</info>', $s));
-                                }
-                                $io->writeln(sprintf(
-                                    '   <comment>Progress bar: <info>%d</info> steps = <info>1</info> (root) + <info>%d</info> (categor%s).</comment>',
-                                    1 + $n,
-                                    $n,
-                                    $n === 1 ? 'y' : 'ies'
-                                ));
-                            }
+                            $io->writeln('   <comment>Magazine root has no child <info>a</info> tag categories; only the root index was stored.</comment>');
                             $bar = $this->createPrewarmProgressBar(
                                 $io,
                                 max(1, (int) ($p['total_steps'] ?? 1)),
@@ -245,7 +223,7 @@ final class PrewarmCommand extends Command
             $until = time();
             $deletionPubkeys = [];
             foreach ($this->articleRepository->findDistinctAuthorPubkeys() as $pk) {
-                if (\is_string($pk) && 64 === \strlen($pk)) {
+                if (64 === \strlen($pk)) {
                     $deletionPubkeys[] = $pk;
                 }
             }
@@ -289,7 +267,7 @@ final class PrewarmCommand extends Command
                         $st['articles_removed'],
                         $st['magazine_roots'],
                         $st['magazine_categories'],
-                        $st['magazine_curation_30004'] ?? 0
+                        $st['magazine_curation_30004']
                     ));
                 } catch (\Throwable $e) {
                     $this->logger->error('app:prewarm NIP-09 failed', ['exception' => $e]);
@@ -322,7 +300,7 @@ final class PrewarmCommand extends Command
             }
             $pubkeysSeen = [];
             foreach ($pubkeys as $pk) {
-                if (!\is_string($pk) || 64 !== \strlen($pk)) {
+                if (64 !== \strlen($pk)) {
                     continue;
                 }
                 $h = strtolower($pk);
@@ -357,7 +335,7 @@ final class PrewarmCommand extends Command
                         $fetched = $this->nostrClient->fetchProfilePrewarmWireBundlesForAuthors($chunk, $batchSize);
                         $n += $this->cacheService->putPrewarmMetadataBatch($chunk, $fetched);
                         $bar->advance(\count($chunk));
-                        $p0 = (string) ($chunk[0] ?? '');
+                        $p0 = $chunk[0];
                         $bar->setMessage('Batch up to · '.substr($p0, 0, 8).'…');
                     }
                 } catch (\Throwable $e) {
@@ -399,7 +377,7 @@ final class PrewarmCommand extends Command
                     $hex = strtolower($hex);
                     $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($hex);
                     $bundle = $this->cacheService->getMetadataBundle($npub);
-                    $rows = $this->profileIdentityLinks->buildNip05($bundle['content'], $bundle['kind0_tags'] ?? []);
+                    $rows = $this->profileIdentityLinks->buildNip05($bundle['content'], $bundle['kind0_tags']);
                     $fa = $this->featuredAuthorRepository->findOneByPubkeyHex($hex);
                     if ($fa !== null && $fa->isListed() && $domain !== '') {
                         $rows = $this->profileIdentityLinks->mergeSiteNip05IntoList(
@@ -409,7 +387,7 @@ final class PrewarmCommand extends Command
                     }
                     foreach ($rows as $r) {
                         ++$nt;
-                        $label = (string) ($r['label'] ?? '');
+                        $label = $r['label'];
                         if ($this->nip05Verification->verifyAndCache($hex, $label)) {
                             ++$nv;
                         }
@@ -466,7 +444,7 @@ final class PrewarmCommand extends Command
 
                             continue;
                         }
-                        $kind = $article->getKind()?->value ?? 30023;
+                        $kind = $article->getKind()->value;
                         $coordinate = $kind.':'.$pubkey.':'.$slug;
                         $msg = $slug;
                         if (strlen($msg) > 56) {
@@ -672,9 +650,6 @@ final class PrewarmCommand extends Command
     private function createPrewarmProgressBar(SymfonyStyle $io, int $max, string $message = ''): ProgressBar
     {
         $bar = $io->createProgressBar($max);
-        if (method_exists($bar, 'setMinSecondsBetweenRedraws')) {
-            $bar->setMinSecondsBetweenRedraws(5.0);
-        }
         $bar->setFormat(' %current%/%max% [%bar%] %percent:3s%%'."\n".'  <comment>%message%</comment> <info>%elapsed:6s%</info> ');
         $bar->setMessage($message);
 
@@ -711,9 +686,7 @@ final class PrewarmCommand extends Command
         $max = (int) $bar->getMaxSteps();
         $done = (int) $bar->getProgress();
         if ($max > 0 && $done < $max && $done === 0) {
-            if (method_exists($bar, 'clear')) {
-                $bar->clear();
-            }
+            $bar->clear();
         } else {
             if ($max > 0 && $done < $max && $done > 0) {
                 $bar->setMaxSteps($done);
@@ -787,33 +760,33 @@ final class PrewarmCommand extends Command
     private function printCategoryCoverageSummary(SymfonyStyle $io, array $report): void
     {
         $io->section('Category index -> DB coverage');
-        $tot = $report['totals'] ?? ['categories' => 0, 'listed' => 0, 'resolved' => 0, 'missing' => 0];
+        $tot = $report['totals'];
         $io->writeln(sprintf(
             'Categories: <info>%d</info> · listed coordinates: <info>%d</info> · in DB: <info>%d</info> · missing: <comment>%d</comment>',
-            (int) ($tot['categories'] ?? 0),
-            (int) ($tot['listed'] ?? 0),
-            (int) ($tot['resolved'] ?? 0),
-            (int) ($tot['missing'] ?? 0),
+            (int) $tot['categories'],
+            (int) $tot['listed'],
+            (int) $tot['resolved'],
+            (int) $tot['missing'],
         ));
-        foreach ($report['categories'] ?? [] as $cat) {
-            $title = trim((string) ($cat['title'] ?? ''));
-            $slug = (string) ($cat['slug'] ?? '');
-            $eventId = (string) ($cat['event_id'] ?? '');
+        foreach ($report['categories'] as $cat) {
+            $title = trim((string) $cat['title']);
+            $slug = (string) $cat['slug'];
+            $eventId = (string) $cat['event_id'];
             $io->writeln(sprintf(
                 ' - <info>%s</info> (%s) · event <comment>%s</comment> · listed <info>%d</info>, in DB <info>%d</info>, missing <comment>%d</comment>',
                 $title !== '' ? $title : $slug,
                 $slug,
                 $eventId !== '' ? $eventId : 'n/a',
-                (int) ($cat['listed_total'] ?? 0),
-                (int) ($cat['resolved_total'] ?? 0),
-                (int) ($cat['missing_total'] ?? 0),
+                (int) $cat['listed_total'],
+                (int) $cat['resolved_total'],
+                (int) $cat['missing_total'],
             ));
-            foreach ($cat['entries'] ?? [] as $entry) {
-                $coord = (string) ($entry['coordinate'] ?? '');
+            foreach ($cat['entries'] as $entry) {
+                $coord = (string) $entry['coordinate'];
                 if ($coord === '') {
                     continue;
                 }
-                $status = (string) ($entry['status'] ?? 'missing');
+                $status = (string) $entry['status'];
                 if ($status === 'resolved') {
                     $titleOut = trim((string) ($entry['article_title'] ?? ''));
                     $io->writeln(sprintf(
@@ -822,7 +795,7 @@ final class PrewarmCommand extends Command
                         $titleOut !== '' ? ' -> '.$titleOut : ''
                     ));
                 } else {
-                    $reason = (string) ($entry['reason'] ?? 'unknown');
+                    $reason = (string) $entry['reason'];
                     $io->writeln(sprintf('    - <comment>MISSING</comment> %s (%s)', $coord, $reason));
                 }
             }

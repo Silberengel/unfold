@@ -41,15 +41,12 @@ final class HighlightSyncService
             return 0;
         }
 
-        $kind = $article->getKind()?->value ?? 30023;
+        $kind = $article->getKind()->value;
         $coordinate = $kind.':'.$pubkey.':'.$slug;
 
         $events = $this->nostrClient->fetchHighlightEventsForArticle($coordinate);
         $n = 0;
         foreach ($events as $ev) {
-            if (!\is_object($ev)) {
-                continue;
-            }
             if ((int) ($ev->kind ?? 0) !== KindsEnum::HIGHLIGHTS->value) {
                 continue;
             }

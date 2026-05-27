@@ -26,9 +26,6 @@ final class ArticleHighlightCommonMarkPipelineTest extends KernelTestCase
     private function getConverter(): Converter
     {
         $container = static::getContainer();
-        if (!$container->has(Converter::class)) {
-            self::fail('Converter service must be registered in the test kernel.');
-        }
         /** @var Converter $c */
         $c = $container->get(Converter::class);
 

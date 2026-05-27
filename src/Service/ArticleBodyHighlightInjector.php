@@ -167,9 +167,6 @@ final class ArticleBodyHighlightInjector
         $stack[] = $this->dom->documentElement;
         while ($stack !== []) {
             $el = \array_pop($stack);
-            if (! $el instanceof DOMElement) {
-                continue;
-            }
             if ($el->getAttribute('id') === $id) {
                 return $el;
             }
@@ -260,9 +257,6 @@ final class ArticleBodyHighlightInjector
                 continue;
             }
             $span = $this->dom->createElement('span');
-            if (false === $span) {
-                continue;
-            }
             $span->setAttribute('id', 'highlight-'.$other);
             $span->setAttribute('class', 'user-highlight__fragment-target');
             $span->setAttribute('aria-hidden', 'true');
@@ -320,8 +314,8 @@ final class ArticleBodyHighlightInjector
         \usort(
             $groups,
             static function (array $a, array $b): int {
-                $ta = $a[0] instanceof ArticleHighlight ? $a[0]->getEventCreatedAt() : 0;
-                $tb = $b[0] instanceof ArticleHighlight ? $b[0]->getEventCreatedAt() : 0;
+                $ta = $a[0]->getEventCreatedAt();
+                $tb = $b[0]->getEventCreatedAt();
 
                 return $ta <=> $tb;
             }
@@ -708,9 +702,6 @@ final class ArticleBodyHighlightInjector
             $parent->insertBefore($this->dom->createTextNode($before), $ref);
         }
         $mark = $this->dom->createElement('mark');
-        if (! $mark) {
-            return false;
-        }
         $mark->setAttribute('class', 'user-highlight__marker');
         if ($firstInReadingOrder) {
             $mark->setAttribute('id', 'highlight-'.$eventId);

@@ -14,8 +14,6 @@ class IndexTabs
 {
     use DefaultActionTrait;
 
-    private $index;
-
     #[LiveProp(writable: true)]
     public int $activeTab = 1; // Default active tab
 
@@ -35,7 +33,6 @@ class IndexTabs
 
     public function mount(EventEntity $index): void
     {
-        $this->index = $index;
         foreach ($index->getTags() as $tag) {
             if (array_key_first($tag) === 'a') {
                 $ref = $tag[1];

@@ -32,7 +32,7 @@ final class Nip19Codec
         $out = new \stdClass();
 
         if ($hrp === 'npub' || $hrp === 'nsec') {
-            if (!\is_array($raw) || !isset($raw[1]) || !\is_array($raw[1])) {
+            if (!isset($raw[1]) || !\is_array($raw[1])) {
                 throw new \RuntimeException('Unexpected npub/nsec decode shape');
             }
             $out->type = $hrp;
@@ -48,7 +48,7 @@ final class Nip19Codec
         }
 
         if ($hrp === 'note') {
-            if (!\is_array($raw) || !isset($raw['event_id']) || !\is_string($raw['event_id'])) {
+            if (!isset($raw['event_id']) || !\is_string($raw['event_id'])) {
                 throw new \RuntimeException('Unexpected note decode shape');
             }
             $out->type = 'note';
@@ -58,10 +58,6 @@ final class Nip19Codec
             $out->data = $d;
 
             return $out;
-        }
-
-        if (!\is_array($raw)) {
-            throw new \RuntimeException('Unexpected NIP-19 decode shape');
         }
 
         $out->type = $hrp;

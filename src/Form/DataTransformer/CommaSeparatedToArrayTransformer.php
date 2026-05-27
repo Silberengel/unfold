@@ -3,7 +3,6 @@
 namespace App\Form\DataTransformer;
 
 use Symfony\Component\Form\DataTransformerInterface;
-use Symfony\Component\Form\Exception\TransformationFailedException;
 
 class CommaSeparatedToArrayTransformer implements DataTransformerInterface
 {
@@ -19,10 +18,6 @@ class CommaSeparatedToArrayTransformer implements DataTransformerInterface
             return '';
         }
 
-        if (!is_array($array)) {
-            throw new TransformationFailedException('Expected an array.');
-        }
-
         return implode(', ', $array);
     }
 
@@ -36,10 +31,6 @@ class CommaSeparatedToArrayTransformer implements DataTransformerInterface
     {
         if (null === $string || '' === trim($string)) {
             return [];
-        }
-
-        if (!is_string($string)) {
-            throw new TransformationFailedException('Expected a string.');
         }
 
         // Split by commas, trim whitespace, and filter out empty values

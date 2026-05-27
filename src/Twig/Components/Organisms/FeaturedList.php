@@ -44,7 +44,7 @@ final class FeaturedList
 
         $this->magazineContent->warmCategoryIndexIfMissing($slug);
         $catIndex = $this->store->getCategory($slug);
-        if (!\is_object($catIndex) || !\method_exists($catIndex, 'getTags')) {
+        if (!\is_object($catIndex)) {
             return;
         }
 

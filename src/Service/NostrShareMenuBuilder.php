@@ -184,7 +184,7 @@ final class NostrShareMenuBuilder
     private function fromArticle(Article $article): NostrShareMenuContext
     {
         $npub = $this->nostrKeyHelper->convertPublicKeyToBech32((string) $article->getPubkey());
-        $kind = (int) ($article->getKind()?->value ?? 30023);
+        $kind = $article->getKind()->value;
         $d = (string) ($article->getSlug() ?? '');
         if ($d === '') {
             return new NostrShareMenuContext(

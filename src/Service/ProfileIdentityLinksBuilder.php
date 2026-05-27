@@ -78,8 +78,8 @@ final class ProfileIdentityLinksBuilder
             }
             $seen[$id] = true;
             $parts = explode('@', $id, 2);
-            $local = $parts[0] ?? '';
-            $domain = $parts[1] ?? '';
+            $local = $parts[0];
+            $domain = $parts[1];
             if ($local === '' || $domain === '' || str_contains($domain, ' ')) {
                 continue;
             }
@@ -110,14 +110,14 @@ final class ProfileIdentityLinksBuilder
         }
         $seen = [];
         foreach ($rows as $r) {
-            $seen[strtolower((string) ($r['label'] ?? ''))] = true;
+            $seen[strtolower((string) $r['label'])] = true;
         }
         if (isset($seen[$siteNip05])) {
             return $rows;
         }
         $parts = explode('@', $siteNip05, 2);
-        $local = $parts[0] ?? '';
-        $domain = $parts[1] ?? '';
+        $local = $parts[0];
+        $domain = $parts[1];
         if ($local === '' || $domain === '' || str_contains($domain, ' ')) {
             return $rows;
         }

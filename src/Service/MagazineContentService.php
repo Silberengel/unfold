@@ -91,7 +91,7 @@ final class MagazineContentService
             if (\count($parts) < 3) {
                 continue;
             }
-            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
+            if ((int) $parts[0] !== KindsEnum::PUBLICATION_INDEX->value) {
                 continue;
             }
             $cats[] = ['a', $coord];
@@ -111,8 +111,8 @@ final class MagazineContentService
         $queue = [];
         $enqueued = [];
         foreach ($this->getHomeCategoryAIndexTagsFromStoreOnly() as $row) {
-            $coord = $row[1] ?? '';
-            if (!\is_string($coord) || $coord === '') {
+            $coord = $row[1];
+            if ($coord === '') {
                 continue;
             }
             $parts = explode(':', $coord, 3);
@@ -130,7 +130,7 @@ final class MagazineContentService
         $out = [];
         while ($queue !== []) {
             $slug = array_shift($queue);
-            if (!\is_string($slug) || $slug === '') {
+            if ($slug === '') {
                 continue;
             }
             $out[] = $slug;
@@ -446,7 +446,7 @@ final class MagazineContentService
 
                     continue;
                 }
-                $kind = (int) ($parts[0] ?? 0);
+                $kind = (int) $parts[0];
                 if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                     $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'unsupported_kind'];
                     $missing++;
@@ -521,15 +521,15 @@ final class MagazineContentService
     public function missingInDbCoordinatesFromCoverageReport(array $report): array
     {
         $out = [];
-        foreach ($report['categories'] ?? [] as $cat) {
-            foreach ($cat['entries'] ?? [] as $entry) {
-                if (($entry['status'] ?? '') !== 'missing') {
+        foreach ($report['categories'] as $cat) {
+            foreach ($cat['entries'] as $entry) {
+                if ($entry['status'] !== 'missing') {
                     continue;
                 }
-                if (($entry['reason'] ?? '') !== 'article_not_in_db') {
+                if ($entry['reason'] !== 'article_not_in_db') {
                     continue;
                 }
-                $coord = isset($entry['coordinate']) ? (string) $entry['coordinate'] : '';
+                $coord = (string) $entry['coordinate'];
                 if ($coord !== '') {
                     $out[] = $coord;
                 }
@@ -562,7 +562,7 @@ final class MagazineContentService
             if (\count($parts) < 3 || trim((string) $parts[2]) === '') {
                 continue;
             }
-            $kind = (int) ($parts[0] ?? 0);
+            $kind = (int) $parts[0];
             if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 continue;
             }
@@ -698,8 +698,8 @@ final class MagazineContentService
     {
         $out = [];
         foreach ($categoryATags as $row) {
-            $coord = $row[1] ?? '';
-            if (!\is_string($coord) || $coord === '') {
+            $coord = $row[1];
+            if ($coord === '') {
                 continue;
             }
             foreach ($this->buildFeaturedWallBlocksForCategoryTree($coord) as $b) {
@@ -751,7 +751,7 @@ final class MagazineContentService
             if (\count($parts) < 3) {
                 continue;
             }
-            $kind = (int) ($parts[0] ?? 0);
+            $kind = (int) $parts[0];
             if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 continue;
             }
@@ -827,8 +827,8 @@ final class MagazineContentService
     {
         $blocks = [];
         foreach ($categoryATags as $row) {
-            $coord = $row[1] ?? '';
-            if (!\is_string($coord) || $coord === '') {
+            $coord = $row[1];
+            if ($coord === '') {
                 continue;
             }
             foreach ($this->buildFeaturedWallBlocksForCategoryTree($coord) as $b) {
@@ -987,7 +987,7 @@ final class MagazineContentService
             if (\count($segs) < 3) {
                 continue;
             }
-            $kind = (int) ($segs[0] ?? 0);
+            $kind = (int) $segs[0];
             $identifier = trim((string) $segs[2]);
             if ($identifier === '') {
                 continue;
@@ -1030,7 +1030,7 @@ final class MagazineContentService
             if (\count($segs) < 3) {
                 continue;
             }
-            $kind = (int) ($segs[0] ?? 0);
+            $kind = (int) $segs[0];
             $identifier = trim((string) $segs[2]);
             if ($identifier === '') {
                 continue;
@@ -1139,7 +1139,7 @@ final class MagazineContentService
             if (\count($segs) < 3) {
                 continue;
             }
-            $kind = (int) ($segs[0] ?? 0);
+            $kind = (int) $segs[0];
             if ($kind !== KindsEnum::PUBLICATION_INDEX->value) {
                 continue;
             }

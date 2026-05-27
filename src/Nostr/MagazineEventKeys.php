@@ -81,6 +81,6 @@ final class MagazineEventKeys
             $h = '';
         }
 
-        return (\is_string($h) && 64 === \strlen($h) && ctype_xdigit($h)) ? strtolower($h) : '';
+        return (64 === \strlen($h) && ctype_xdigit($h)) ? strtolower($h) : '';
     }
 }

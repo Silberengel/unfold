@@ -47,7 +47,7 @@ final readonly class Nip05VerificationService
         $out = [];
         $coldDone = 0;
         foreach ($rows as $r) {
-            $label = (string) ($r['label'] ?? '');
+            $label = (string) $r['label'];
             $n = $this->normalizeNip05($label);
             if ($n === null) {
                 $out[] = [...$r, 'verified' => false];

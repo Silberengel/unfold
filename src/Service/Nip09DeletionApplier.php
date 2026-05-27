@@ -53,9 +53,6 @@ final class Nip09DeletionApplier
         $seenArticleIds = [];
 
         foreach ($deletionEvents as $ev) {
-            if (!\is_object($ev)) {
-                continue;
-            }
             if ((int) ($ev->kind ?? 0) !== KindsEnum::DELETION_REQUEST->value) {
                 continue;
             }

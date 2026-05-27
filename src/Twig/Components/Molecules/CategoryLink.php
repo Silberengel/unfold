@@ -36,7 +36,7 @@ final class CategoryLink
         $this->title = $this->slug;
         $this->magazineContent->warmCategoryIndexIfMissing($this->slug);
         $cat = $this->store->getCategory($this->slug);
-        if (!\is_object($cat) || !\method_exists($cat, 'getTags')) {
+        if (!\is_object($cat)) {
             return;
         }
 

@@ -76,7 +76,7 @@ final class ArticleHighlightsAuditCommand extends Command
         $io->title('Article highlights audit: '.$slug);
         $io->writeln('Author npub: <info>'.$expectedNpub.'</info>');
         $io->writeln('Article id: <info>'.(string) $article->getId().'</info> · kind: <info>'.
-            ($article->getKind()?->value ?? 'null').'</info>');
+            $article->getKind()->value.'</info>');
 
         $highlights = $this->articleHighlightRepository->findByArticle($article);
         $io->writeln('Rows from <comment>findByArticle</comment>: <info>'.\count($highlights).'</info>');
@@ -99,9 +99,6 @@ final class ArticleHighlightsAuditCommand extends Command
         $rows = [];
         $isolatedOk = 0;
         foreach ($highlights as $h) {
-            if (! $h instanceof ArticleHighlight) {
-                continue;
-            }
             $eid = \strtolower($h->getEventId());
             $one = $this->articleBodyHighlightInjector->inject($html, [$h]);
             $found = 1 === \preg_match(

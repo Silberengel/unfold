@@ -111,7 +111,7 @@ final class Nip10Kind1ArticleReplyTags
     {
         $want = strtolower($eventIdHex);
         foreach ($rawTags as $row) {
-            if (!\is_array($row) || \count($row) < 2) {
+            if (\count($row) < 2) {
                 continue;
             }
             if (strtolower((string) ($row[0] ?? '')) !== 'e') {
@@ -141,7 +141,7 @@ final class Nip10Kind1ArticleReplyTags
     {
         $out = [];
         foreach ($rawTags as $row) {
-            if (!\is_array($row) || \count($row) < 2) {
+            if (\count($row) < 2) {
                 continue;
             }
             if (strtolower((string) ($row[0] ?? '')) !== 'p') {
@@ -186,7 +186,7 @@ final class Nip10Kind1ArticleReplyTags
         };
 
         foreach ($rawTags as $row) {
-            if (!\is_array($row) || !$isE($row) || \count($row) < 2) {
+            if (!$isE($row) || \count($row) < 2) {
                 continue;
             }
             if (($row[3] ?? '') === 'root') {
@@ -199,7 +199,7 @@ final class Nip10Kind1ArticleReplyTags
 
         if ($articleHex !== null) {
             foreach ($rawTags as $row) {
-                if (!\is_array($row) || !$isE($row) || \count($row) < 2) {
+                if (!$isE($row) || \count($row) < 2) {
                     continue;
                 }
                 $id = self::normEventId($row[1] ?? null);
@@ -211,7 +211,7 @@ final class Nip10Kind1ArticleReplyTags
 
         $eIds = [];
         foreach ($rawTags as $row) {
-            if (!\is_array($row) || !$isE($row) || \count($row) < 2) {
+            if (!$isE($row) || \count($row) < 2) {
                 continue;
             }
             $id = self::normEventId($row[1] ?? null);

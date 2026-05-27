@@ -64,9 +64,6 @@ class DefaultController extends AbstractController
         try {
             $embed = new \Embed\Embed();
             $info = $embed->get($url);
-            if (!$info) {
-                throw new Exception('No OG data found');
-            }
 
             return $this->render('components/Molecules/OgPreview.html.twig', [
                 'og' => [

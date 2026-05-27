@@ -57,8 +57,8 @@ final class CommentReplyController extends AbstractController
             return $this->json([
                 'ok' => true,
                 'id' => $out['id'],
-                'ok_relays' => $out['ok_relays'] ?? null,
-                'total_relays' => $out['total_relays'] ?? null,
+                'ok_relays' => $out['ok_relays'],
+                'total_relays' => $out['total_relays'],
             ]);
         }
 

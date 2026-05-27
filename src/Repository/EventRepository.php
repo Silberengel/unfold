@@ -32,7 +32,7 @@ class EventRepository extends ServiceEntityRepository
     {
         $keys = array_values(array_unique(array_filter(
             $keys,
-            static fn (mixed $k): bool => \is_string($k) && $k !== '',
+            static fn (mixed $k): bool => $k !== '',
         )));
         if ($keys === []) {
             return [];

@@ -203,7 +203,7 @@ final class MagazineRefresher
             if (\count($parts) < 3) {
                 continue;
             }
-            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
+            if ((int) $parts[0] !== KindsEnum::PUBLICATION_INDEX->value) {
                 continue;
             }
             $s = trim((string) $parts[2]);
@@ -244,7 +244,7 @@ final class MagazineRefresher
         $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
         while ($queue !== [] && microtime(true) < $deadline) {
             $slug = array_shift($queue);
-            if (!\is_string($slug) || trim($slug) === '') {
+            if (trim($slug) === '') {
                 continue;
             }
             try {

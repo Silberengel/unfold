@@ -140,12 +140,12 @@ final class SeoController extends AbstractController
     private function buildRelaysByPubkey(array $names): array
     {
         $raw = $this->params->get('profile_relays');
-        if (!\is_array($raw) || $raw === []) {
+        if ($raw === []) {
             return [];
         }
         $urls = [];
         foreach ($raw as $u) {
-            if (\is_string($u) && (str_starts_with($u, 'wss://') || str_starts_with($u, 'ws://'))) {
+            if (str_starts_with($u, 'wss://') || str_starts_with($u, 'ws://')) {
                 $urls[] = $u;
             }
         }
@@ -193,9 +193,9 @@ final class SeoController extends AbstractController
         }
         $site = (string) $this->params->get('name');
         $data = $this->magazineContent->getCategoryPageData($slug);
-        $rawList = $data['list'] ?? [];
-        $catTitle = (string) ($data['category']['title'] ?? $this->magazineContent->getCategoryDisplayTitle($slug));
-        $summary = (string) ($data['category']['summary'] ?? '');
+        $rawList = $data['list'];
+        $catTitle = (string) ($data['category']['title']);
+        $summary = (string) ($data['category']['summary']);
 
         $list = array_values(
             array_filter(

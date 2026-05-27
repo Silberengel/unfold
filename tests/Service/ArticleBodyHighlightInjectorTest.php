@@ -147,7 +147,7 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
     }
 
     /**
-     * @param list<string> $eventIdsLowerOrMixed 64-char hex event ids
+     * @param list<string> $eventIds 64-char hex event ids
      */
     private function assertHighlightFragmentsPresent(string $html, array $eventIds): void
     {

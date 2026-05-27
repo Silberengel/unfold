@@ -38,9 +38,21 @@ function formatHighlightDateUtc(d) {
  */
 export default class extends Controller {
     connect() {
-        this.tip = el('div', 'user-highlight__tip-popover', document.body);
-        this.tip.setAttribute('role', 'tooltip');
-        this.tip.setAttribute('hidden', '');
+        // Guard against duplicate elements if connect() fires more than once without an
+        // intervening disconnect() (e.g. direct invocation in tests or unusual Stimulus edge
+        // cases). Nulled out in disconnect() so the next normal connect() creates a fresh node.
+        if (!this.tip) {
+            this.tip = el('div', 'user-highlight__tip-popover', document.body);
+            this.tip.setAttribute('role', 'tooltip');
+            this.tip.setAttribute('hidden', '');
+
+            // Store named references so disconnect() can remove them explicitly and the
+            // anonymous-function-on-element pattern does not make cleanup impossible.
+            this._onTipEnter ??= () => { this._inTip = true; this._cancelHide(); };
+            this._onTipLeave ??= () => { this._inTip = false; this._scheduleHide(); };
+            this.tip.addEventListener('mouseenter', this._onTipEnter);
+            this.tip.addEventListener('mouseleave', this._onTipLeave);
+        }
 
         this.activeMark = null;
         this._hideT = 0;
@@ -83,15 +95,6 @@ export default class extends Controller {
             }
             this._scheduleHide();
         };
-
-        this.tip.addEventListener('mouseenter', () => {
-            this._inTip = true;
-            this._cancelHide();
-        });
-        this.tip.addEventListener('mouseleave', () => {
-            this._inTip = false;
-            this._scheduleHide();
-        });
 
         this._onFocus = (e) => {
             const t = e.target;
@@ -182,7 +185,12 @@ export default class extends Controller {
             window.removeEventListener('hashchange', this._onHashChange);
         }
         this._cancelHide();
-        this.tip.remove();
+        if (this.tip) {
+            this.tip.removeEventListener('mouseenter', this._onTipEnter);
+            this.tip.removeEventListener('mouseleave', this._onTipLeave);
+            this.tip.remove();
+            this.tip = null;
+        }
     }
 
     _cancelHide() {

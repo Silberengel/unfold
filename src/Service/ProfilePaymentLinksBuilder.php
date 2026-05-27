@@ -48,16 +48,14 @@ final class ProfilePaymentLinksBuilder
         if ($resolved['lightning_address'] !== null) {
             $addr = $resolved['lightning_address'];
             $norm = 'la:'.strtolower($addr);
-            if (!isset($seen[$norm])) {
-                $seen[$norm] = true;
-                $rows[] = [
-                    'type' => self::TYPE_LIGHTNING_ADDRESS,
-                    'type_label' => 'Lightning',
-                    'label' => $addr,
-                    'href' => 'lightning:'.$addr,
-                    'sort' => 0,
-                ];
-            }
+            $seen[$norm] = true;
+            $rows[] = [
+                'type' => self::TYPE_LIGHTNING_ADDRESS,
+                'type_label' => 'Lightning',
+                'label' => $addr,
+                'href' => 'lightning:'.$addr,
+                'sort' => 0,
+            ];
         }
 
         if ($resolved['lnurl_pay'] !== null) {
@@ -207,7 +205,7 @@ final class ProfilePaymentLinksBuilder
     {
         $out = [];
         foreach ($kind10133Events as $ev) {
-            if (!\is_object($ev) || (int) ($ev->kind ?? 0) !== KindsEnum::PAYMENT_TARGETS->value) {
+            if ((int) ($ev->kind ?? 0) !== KindsEnum::PAYMENT_TARGETS->value) {
                 continue;
             }
             $tags = self::normalizeTagsArray($ev->tags ?? null);
@@ -296,12 +294,10 @@ final class ProfilePaymentLinksBuilder
             $r = array_values(
                 array_map(
                     static fn (mixed $v): string => (string) $v,
-                    array_values($seq)
+                    $seq
                 )
             );
-            if ($r !== []) {
-                $out[] = $r;
-            }
+            $out[] = $r;
         }
 
         return $out;

@@ -111,8 +111,8 @@ final readonly class ArticleCommentThreadLoader
                 $item->expiresAfter($partial ? self::PARTIAL_THREAD_CACHE_TTL_SEC : 86400);
                 $this->logger->info('comments.loader.nostr_ok', [
                     'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
-                    'thread' => \count($out['thread'] ?? []),
-                    'quotes' => \count($out['quotes'] ?? []),
+                    'thread' => \count($out['thread']),
+                    'quotes' => \count($out['quotes']),
                     'partial' => $partial,
                 ]);
 
@@ -151,7 +151,7 @@ final readonly class ArticleCommentThreadLoader
     }
 
     /**
-     * @param array{thread: array<int, object>, quotes: array<int, object>, superchats?: list<array<string,mixed>>} $discussion
+     * @param array{thread: array<int, object>, quotes: array<int, object>, superchats?: list<array<string,mixed>>, partial?: bool} $discussion
      *
      * @return array{
      *     list: array<int, object>,
@@ -164,8 +164,8 @@ final readonly class ArticleCommentThreadLoader
      */
     private function expandFromDiscussion(array $discussion, float $t0, ?string $articleEventHexId = null): array
     {
-        $list = $discussion['thread'] ?? [];
-        $quotes = $discussion['quotes'] ?? [];
+        $list = $discussion['thread'];
+        $quotes = $discussion['quotes'];
         $superchats = $discussion['superchats'] ?? [];
         $this->logger->info('comments.loader.cache_resolved', [
             'elapsed_since_start_ms' => (int) round((microtime(true) - $t0) * 1000),
@@ -232,14 +232,10 @@ final readonly class ArticleCommentThreadLoader
             }
         };
         foreach ($list as $ev) {
-            if (\is_object($ev)) {
-                $strip($ev);
-            }
+            $strip($ev);
         }
         foreach ($quotes as $ev) {
-            if (\is_object($ev)) {
-                $strip($ev);
-            }
+            $strip($ev);
         }
     }
 
@@ -368,7 +364,7 @@ final readonly class ArticleCommentThreadLoader
             return ['blurb' => null, 'body' => $content];
         }
         $parts = explode("\n\n", $content, 2);
-        $first = trim((string) ($parts[0] ?? ''));
+        $first = trim($parts[0]);
         $rest = (string) ($parts[1] ?? '');
         if ($first === '' || !str_starts_with($first, '>')) {
             return ['blurb' => null, 'body' => $content];

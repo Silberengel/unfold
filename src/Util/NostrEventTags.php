@@ -42,7 +42,7 @@ final class NostrEventTags
             return false;
         }
 
-        return strtolower($seq[0] ?? '') === strtolower($name);
+        return strtolower($seq[0]) === strtolower($name);
     }
 
     /**
@@ -69,7 +69,7 @@ final class NostrEventTags
             if (\count($parts) < 3) {
                 continue;
             }
-            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
+            if ((int) $parts[0] !== KindsEnum::PUBLICATION_INDEX->value) {
                 continue;
             }
             $d = trim((string) $parts[2]);
@@ -108,7 +108,7 @@ final class NostrEventTags
             if (\count($parts) < 3) {
                 continue;
             }
-            if ((int) ($parts[0] ?? 0) !== KindsEnum::PUBLICATION_INDEX->value) {
+            if ((int) $parts[0] !== KindsEnum::PUBLICATION_INDEX->value) {
                 continue;
             }
             $pk = strtolower(trim((string) $parts[1]));

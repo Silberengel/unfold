@@ -19,7 +19,7 @@ final class Nip22CommentTags
     public static function forReplyToArticle(string $coordinate, string $articleAuthorPubkeyHex): array
     {
         $parts = explode(':', $coordinate, 2);
-        $k = \count($parts) >= 1 && ctype_digit((string) $parts[0]) ? (string) (int) $parts[0] : '30023';
+        $k = ctype_digit((string) $parts[0]) ? (string) (int) $parts[0] : '30023';
 
         return [
             ['A', $coordinate, ''],
@@ -90,7 +90,7 @@ final class Nip22CommentTags
     {
         foreach ([$upper, $lower] as $n) {
             foreach ($rawTags as $row) {
-                if (!\is_array($row) || ($row[0] ?? null) === null) {
+                if (($row[0] ?? null) === null) {
                     continue;
                 }
                 if ((string) $row[0] === $n) {
