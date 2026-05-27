@@ -35,6 +35,11 @@ final readonly class NostrRelayFanoutTransport
     ) {
     }
 
+    public function getRelayRequestTimeoutSec(): int
+    {
+        return $this->relayRequestFactory->getRelayRequestTimeoutSec();
+    }
+
     /**
      * @param list<string> $relayUrls
      *
@@ -58,9 +63,9 @@ final readonly class NostrRelayFanoutTransport
      *
      * @return array<string, mixed> Same shape as {@see Request::send()}
      */
-    public function sendSequential(RelaySet $relaySet, RequestMessage $requestMessage): array
+    public function sendSequential(RelaySet $relaySet, RequestMessage $requestMessage, ?int $overrideTimeoutSec = null): array
     {
-        $request = $this->relayRequestFactory->createTimedRequest($relaySet, $requestMessage);
+        $request = $this->relayRequestFactory->createTimedRequest($relaySet, $requestMessage, $overrideTimeoutSec);
 
         return $request->send();
     }
@@ -167,6 +172,7 @@ final readonly class NostrRelayFanoutTransport
      * One line per relay after {@see Request::send()}: errors vs message-type counts (EVENT, EOSE, …).
      *
      * @param array<string, mixed> $response
+     * @param int|null $overrideTimeoutSec when set, overrides the configured per-relay WebSocket timeout
      */
     public function logWireResponseSummary(string $context, array $response): void
     {

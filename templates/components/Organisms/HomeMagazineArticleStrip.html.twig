@@ -14,7 +14,8 @@
                 {% set article_href = (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) %}
                 <article class="curation-article-display">
                     <div class="curation-article-display__pane">
-                        <div class="curation-article-display__media">
+                        {% set _no_cover = item.image|default('')|trim == '' %}
+                        <div class="curation-article-display__media{{ _no_cover ? ' card-header--no-cover' : '' }}">
                             <a href="{{ article_href }}" tabindex="-1" aria-hidden="true">
                                 <img
                                     src="{{ article_card_cover(item.image, item.pubkey) }}"

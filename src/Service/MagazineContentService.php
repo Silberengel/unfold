@@ -200,7 +200,11 @@ final class MagazineContentService
                     continue;
                 }
                 $parts = explode(':', (string) $seq[1], 3);
-                if (\count($parts) < 2) {
+                if (\count($parts) < 3) {
+                    continue;
+                }
+                // Only longform article authors are featured authors; skip sub-index (30040) references.
+                if (!\in_array((int) $parts[0], KindsEnum::longformKindValues(), true)) {
                     continue;
                 }
                 $pk = strtolower((string) $parts[1]);
@@ -370,7 +374,7 @@ final class MagazineContentService
      *     missing_total: int,
      *     entries: list<array{
      *       coordinate: string,
-     *       status: 'resolved'|'missing',
+     *       status: 'resolved'|'missing'|'skipped',
      *       reason: string,
      *       article_title?: string,
      *       article_slug?: string

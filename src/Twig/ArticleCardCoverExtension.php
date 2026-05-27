@@ -19,9 +19,9 @@ final class ArticleCardCoverExtension extends AbstractExtension
 {
     /**
      * Used when the article has no image and the author has no (or no usable) NIP-01 {@see picture} URL.
-     * Same asset as the header mark so empty hero slots read as the site, not a blank gray field.
+     * The portrait painting is shown at low opacity with a CSS pattern overlay (see `.card-header--no-cover`).
      */
-    private const DEFAULT_PACKAGE_IMAGE = 'icons/favicon-96x96.png';
+    private const DEFAULT_PACKAGE_IMAGE = 'laeserin_logo.png';
 
     private const OG_FALLBACK_PACKAGE_IMAGE = 'og-image.jpg';
 

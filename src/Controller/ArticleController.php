@@ -61,15 +61,35 @@ class ArticleController  extends AbstractController
             $articleTitle = substr($articleTitle, 0, 200);
         }
 
+        $headers = [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'private, no-store',
+        ];
+
+        // Phase-1 fast path: return whatever is in the filesystem cache without touching relays.
+        // The JS fires this in parallel with the full relay request so readers see cached comments
+        // immediately (< 100 ms) while the relay fetch continues in the background.
+        if ($request->query->getBoolean('cached')) {
+            $cached = $loader->tryLoadFromCacheOnly($coordinate, $articleEventId);
+            if ($cached === null) {
+                // Cache miss — return an empty shell; the full relay fetch is already in flight.
+                // The article template already shows "Loading comments…" as the initial DOM state,
+                // so there is no need to repeat it here.
+                return new Response('<div class="comments" data-comments-partial="1"></div>', Response::HTTP_OK, $headers);
+            }
+            try {
+                $data = $this->enrichCommentDataWithReplyContext($cached, $coordinate, $articleEventId, $articleTitle);
+
+                return $this->render('components/Organisms/Comments.html.twig', $data, new Response('', Response::HTTP_OK, $headers));
+            } catch (\Throwable) {
+                return new Response('<div class="comments"></div>', Response::HTTP_OK, $headers);
+            }
+        }
+
         $logger->info('http.fragment.comments_start', [
             'coordinate' => $coordinate,
             'article_event_hex' => $articleEventId,
         ]);
-
-        $headers = [
-            'Content-Type' => 'text/html; charset=UTF-8',
-            'Cache-Control' => 'private, max-age=60',
-        ];
 
         try {
             $data = $loader->load($coordinate, $articleEventId);

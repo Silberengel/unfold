@@ -26,12 +26,14 @@ final readonly class NostrRelayRequestFactory
 
     /**
      * {@see Request::setTimeout()} drives per-relay WebSocket I/O for {@see Request::send()}.
+     *
+     * @param int|null $overrideTimeoutSec when set, uses this instead of the configured default
      */
-    public function createTimedRequest(RelaySet $relaySet, RequestMessage $requestMessage): Request
+    public function createTimedRequest(RelaySet $relaySet, RequestMessage $requestMessage, ?int $overrideTimeoutSec = null): Request
     {
         $request = new Request($relaySet, $requestMessage);
 
-        return $request->setTimeout($this->relayRequestTimeoutSec);
+        return $request->setTimeout($overrideTimeoutSec ?? $this->relayRequestTimeoutSec);
     }
 
     /**

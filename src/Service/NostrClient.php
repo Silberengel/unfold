@@ -833,9 +833,14 @@ class NostrClient
                     $this->logger->warning('nostr.article_discussion.sequential_fallback', [
                         'relays' => $forSeq,
                     ]);
+                    // Use a shorter per-relay timeout for the web sequential fallback so one slow
+                    // relay does not hold up the HTTP response for 3 × 12 s = 36 s.
+                    // CLI prewarm still uses the full configured timeout via the normal path.
+                    $seqTimeoutSec = min(6, $this->relayFanout->getRelayRequestTimeoutSec());
                     $response = $this->relayFanout->sendSequential(
                         $this->relayListFactory->relaySetFromDistinctUrlList($forSeq),
-                        $requestMessage
+                        $requestMessage,
+                        $seqTimeoutSec
                     );
                 }
             }

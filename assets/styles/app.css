@@ -451,17 +451,17 @@ svg.icon {
     transform: scale(1.06);
 }
 
-.featured-list--picture-grid .featured-tile__picture-img[src*="favicon-96x96"] {
-    object-fit: contain;
-    padding: 2rem;
-    box-sizing: border-box;
+/* Suppress hover zoom when using the branded fallback — the faded portrait shouldn't animate */
+.featured-list--picture-grid .featured-tile--picture-block:has(.card-header--no-cover) .featured-tile__picture-img {
     transform: none;
+    transition: none;
 }
 
 .featured-list--picture-grid .featured-tile__picture-scrim {
     position: absolute;
     inset: 0;
     pointer-events: none;
+    z-index: 2;
     background: linear-gradient(
         to top,
         color-mix(in srgb, #0a0a0a 88%, transparent) 0%,
@@ -476,7 +476,7 @@ svg.icon {
     right: 0;
     bottom: 0;
     padding: 0.65rem 0.85rem 0.75rem;
-    z-index: 1;
+    z-index: 3;
     display: flex;
     flex-direction: column;
     gap: 0.28rem;
@@ -736,12 +736,36 @@ svg.icon {
     text-underline-offset: 2px;
 }
 
-/* List cards: same site-logo treatment when the hero is the default mark */
-.article-list .card-header img[src*="favicon-96x96"] {
-    object-fit: contain;
-    padding: 1.25rem;
-    box-sizing: border-box;
-    background: var(--color-bg-light);
+/* Fallback hero: portrait painting at low opacity with a diagonal stripe overlay.
+   Applied to any card container (.card-header, .featured-tile__media, etc.) when
+   the article has no cover image. The painting is cropped to the face — same
+   object-position as .header__logo-banner. */
+.card-header--no-cover {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-bg-light);
+}
+
+.card-header--no-cover img {
+    opacity: 0.18;
+    object-fit: cover;
+    object-position: 50% 14%;
+}
+
+.card-header--no-cover::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        repeating-linear-gradient(
+            -45deg,
+            transparent 0,
+            transparent 5px,
+            rgba(0, 0, 0, 0.028) 5px,
+            rgba(0, 0, 0, 0.028) 6px
+        );
+    pointer-events: none;
+    z-index: 1;
 }
 
 /* Optional category label above cover (see Molecules/Card) */

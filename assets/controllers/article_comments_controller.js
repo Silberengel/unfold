@@ -1,7 +1,16 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * Fetches the comment thread HTML after the article shell has rendered (no relay I/O on first paint).
+ * Two-phase comment loading:
+ *
+ * Phase 1 — fires ?cached=1 immediately, shows whatever is in the server-side cache
+ *            without touching any Nostr relays (< 100 ms on a warm cache).
+ *
+ * Phase 2 — fires the full URL in parallel, which does relay I/O.  When it resolves
+ *            it replaces the Phase-1 content.  If Phase 2 finishes first (e.g. the
+ *            cached response was held up by DNS), Phase 1 is silently discarded.
+ *
+ * Result: readers always see something quickly; fresh relay data appears when ready.
  */
 export default class extends Controller {
     static values = {
@@ -13,8 +22,7 @@ export default class extends Controller {
 
     connect() {
         this.partialReloads = 0;
-        // Stable reference across reconnects: rebinding each connect() would strand old listeners
-        // because removeEventListener must use the same function reference that was passed to add.
+        // Stable reference across reconnects: rebinding each connect() would strand old listeners.
         this.boundOnAuth ??= this.onAuthChanged.bind(this);
         window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
         window.addEventListener('unfold:auth-changed', this.boundOnAuth);
@@ -22,9 +30,8 @@ export default class extends Controller {
             return;
         }
         if (this.preloadedValue) {
-            // Article SSR already included comments. Do not re-fetch: a slow or dropped
-            // request would replace working HTML with a generic error. Re-fetch on auth
-            // only (reply UI may need fresh permission state).
+            // Article SSR already included comments (cache hit at render time).  Do not re-fetch;
+            // a slow relay request would only replace working HTML.  Auth changes may still reload.
             return;
         }
         void this.load();
@@ -43,13 +50,23 @@ export default class extends Controller {
         void this.load();
     }
 
-    buildFetchUrl() {
+    /** Append ?cb=<timestamp> (and optional extras) to bust HTTP caches. */
+    buildFetchUrl(extra = '') {
         const u = this.urlValue;
-        const bust = `cb=${Date.now()}`;
-        return u.includes('?') ? `${u}&${bust}` : `${u}?${bust}`;
+        const parts = [`cb=${Date.now()}`, extra].filter(Boolean);
+        const qs = parts.join('&');
+        return u.includes('?') ? `${u}&${qs}` : `${u}?${qs}`;
     }
 
     async load() {
+        // Track whether Phase 2 has already written to the DOM so Phase 1 never clobbers it.
+        this._fullFetchDone = false;
+        this.partialReloads = 0;
+
+        // Phase 1: fire a cache-only request in the background — completes in < 100 ms.
+        void this._showCachedVersion();
+
+        // Phase 2: full relay fetch — replaces Phase 1 output when it resolves.
         const t0 = performance.now();
         const perAttemptMs = 45_000;
         const maxAttempts = 3;
@@ -57,7 +74,6 @@ export default class extends Controller {
             const controller = new AbortController();
             const timer = window.setTimeout(() => controller.abort(), perAttemptMs);
             try {
-                // Avoid a stale 60s-cached "guest" fragment right after login (see comments fragment headers).
                 const res = await fetch(this.buildFetchUrl(), {
                     signal: controller.signal,
                     cache: 'no-store',
@@ -68,10 +84,11 @@ export default class extends Controller {
                     throw new Error(`HTTP ${res.status}`);
                 }
                 const html = await res.text();
+                window.clearTimeout(timer);
                 if (!this.hasContainerTarget) {
-                    window.clearTimeout(timer);
                     return;
                 }
+                this._fullFetchDone = true;
                 this.containerTarget.innerHTML = html;
                 const isPartial = /data-comments-partial="1"/.test(html);
                 if (isPartial && this.partialReloads < 2) {
@@ -83,12 +100,10 @@ export default class extends Controller {
                     }, 1200);
                 }
                 const ms = Math.round(performance.now() - t0);
-                if (attempt > 1) {
-                    console.debug(`[article-comments] fragment OK in ${ms}ms (after ${attempt} attempts)`, this.urlValue);
-                } else {
-                    console.debug(`[article-comments] fragment OK in ${ms}ms`, this.urlValue);
-                }
-                window.clearTimeout(timer);
+                console.debug(
+                    `[article-comments] relay fetch OK in ${ms}ms${attempt > 1 ? ` (attempt ${attempt})` : ''}`,
+                    this.urlValue,
+                );
                 return;
             } catch (err) {
                 window.clearTimeout(timer);
@@ -101,12 +116,35 @@ export default class extends Controller {
                     continue;
                 }
                 const ms = Math.round(performance.now() - t0);
-                console.warn(`[article-comments] fragment failed after ${ms}ms`, this.urlValue, err);
-                if (this.hasContainerTarget) {
+                console.warn(`[article-comments] relay fetch failed after ${ms}ms`, this.urlValue, err);
+                // Only show the error if Phase 1 hasn't already displayed something useful.
+                if (this.hasContainerTarget && !this._fullFetchDone) {
                     this.containerTarget.innerHTML =
                         '<p class="text-subtle">Comments could not be loaded.</p>';
                 }
             }
+        }
+    }
+
+    /** Phase 1: return the server's cached copy immediately, without doing any relay I/O. */
+    async _showCachedVersion() {
+        try {
+            const res = await fetch(this.buildFetchUrl('cached=1'), {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!res.ok || !this.hasContainerTarget || this._fullFetchDone) {
+                return;
+            }
+            const html = await res.text();
+            // Re-check: Phase 2 may have landed while we were awaiting the body.
+            if (!this.hasContainerTarget || this._fullFetchDone) {
+                return;
+            }
+            this.containerTarget.innerHTML = html;
+        } catch {
+            // Ignore; Phase 2 will fill the container regardless.
         }
     }
 }

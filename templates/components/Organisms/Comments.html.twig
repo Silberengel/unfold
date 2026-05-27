@@ -48,6 +48,9 @@
 {% endif %}
 
 <div class="comments" data-comments-partial="{{ comments_partial|default(false) ? '1' : '0' }}">
+    {% if list|default([])|length == 0 and not comments_partial|default(false) %}
+        <p class="text-subtle comments__empty">No comments yet.</p>
+    {% endif %}
     {% for item in list %}
         {% set cid = item.id|default('')|lower %}
         {% set cpk = item.pubkey|default('') %}
