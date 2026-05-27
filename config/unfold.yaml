@@ -13,11 +13,11 @@ parameters:
     og_headline: 'Nostr, Curated Thoughtfully'
     og_subheading: 'Imwald Blog by Laeserin'
 
-    default_relay: 'wss://theforest.nostr1.com'
+    default_relay: 'wss://thecitadel.nostr1.com'
     # Extra wss:// URLs for article sync (articles:get), comment threads (NIP-22 / getArticleDiscussion),
     # and any request that merges the default set with author-specific relays. default_relay is first; duplicates ignored.
     article_relays: [
-      'wss://thecitadel.nostr1.com'
+      'wss://theforest.nostr1.com'
       ]
     # Kind-0 / profile fetches (author metadata, prewarm). Tried first, then default + article_relays (deduped).
     # Also used as a second pass for kind 30040 (magazine category indices) and category long-form ingest
