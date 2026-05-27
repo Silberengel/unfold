@@ -702,6 +702,7 @@ final class MagazineContentService
      */
     public function collectFeaturedArticleSlugsForHome(array $categoryATags): array
     {
+        $seen = [];
         $out = [];
         foreach ($categoryATags as $row) {
             $coord = $row[1];
@@ -711,14 +712,16 @@ final class MagazineContentService
             foreach ($this->buildFeaturedWallBlocksForCategoryTree($coord) as $b) {
                 foreach ($b['cards'] as $card) {
                     $s = \trim((string) $card->getSlug());
-                    if ($s !== '') {
-                        $out[$s] = true;
+                    if ($s !== '' && !isset($seen[$s])) {
+                        // Use a list, not slug-keyed map: PHP casts numeric-string keys to int.
+                        $seen[$s] = true;
+                        $out[] = $s;
                     }
                 }
             }
         }
 
-        return array_keys($out);
+        return $out;
     }
 
     /**

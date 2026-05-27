@@ -32,7 +32,7 @@ final class TopicIndexService
         );
         $featured = [];
         foreach ($slugs as $s) {
-            $s = \strtolower(\trim($s));
+            $s = \strtolower(\trim((string) $s));
             if ($s !== '') {
                 $featured[$s] = true;
             }
