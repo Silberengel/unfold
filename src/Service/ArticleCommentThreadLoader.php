@@ -397,7 +397,7 @@ final readonly class ArticleCommentThreadLoader
                 continue;
             }
             $kind = ctype_digit((string) $parts[0]) ? (int) $parts[0] : 0;
-            if (!\in_array($kind, [30023, 30024], true)) {
+            if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 continue;
             }
             $dTag = trim((string) $parts[2]);

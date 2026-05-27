@@ -278,8 +278,7 @@ class ArticleController  extends AbstractController
         $author = $data->pubkey;
         $kind = (int) $data->kind;
 
-        $allowedKinds = [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value];
-        if (!\in_array($kind, $allowedKinds, true)) {
+        if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
             throw new \Exception('Not a long form article');
         }
 

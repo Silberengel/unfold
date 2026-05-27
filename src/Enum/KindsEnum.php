@@ -17,7 +17,26 @@ enum KindsEnum: int
     case CURATION_SET = 30004; // NIP-51
     case LONGFORM = 30023; // NIP-23
     case LONGFORM_DRAFT = 30024; // NIP-23
+    case WIKI = 30817; // NIP-54 wiki pages
     case PUBLICATION_INDEX = 30040;
+
+    /**
+     * All kinds stored as long-form articles in the `article` table: 30023, 30024, 30817.
+     *
+     * @return list<self>
+     */
+    public static function longformKinds(): array
+    {
+        return [self::LONGFORM, self::LONGFORM_DRAFT, self::WIKI];
+    }
+
+    /**
+     * @return list<int>
+     */
+    public static function longformKindValues(): array
+    {
+        return [self::LONGFORM->value, self::LONGFORM_DRAFT->value, self::WIKI->value];
+    }
     case ZAP = 9735; // NIP-57, Zaps
     case HIGHLIGHTS = 9802;
     case RELAY_LIST = 10002; // NIP-65, Relay list metadata

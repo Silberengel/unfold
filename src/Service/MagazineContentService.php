@@ -447,7 +447,7 @@ final class MagazineContentService
                     continue;
                 }
                 $kind = (int) ($parts[0] ?? 0);
-                if (!\in_array($kind, [30023, 30024], true)) {
+                if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                     $entries[] = ['coordinate' => $coordinate, 'status' => 'missing', 'reason' => 'unsupported_kind'];
                     $missing++;
 
@@ -563,7 +563,7 @@ final class MagazineContentService
                 continue;
             }
             $kind = (int) ($parts[0] ?? 0);
-            if (!\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+            if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 continue;
             }
             $out[] = $coordinate;
@@ -717,7 +717,7 @@ final class MagazineContentService
 
     /**
      * Home headline strip: kind **30040** magazine root (`npub` + `d_tag`), walking `a` tags **top to bottom**.
-     * Only kind **30023** / **30024** addresses become tiles; nested **30040** category `a` tags are skipped.
+     * Only kind **30023** / **30024** / **30817** addresses become tiles; nested **30040** category `a` tags are skipped.
      * No strip-level heading — each article’s own title in the template is enough.
      *
      * @return array{tiles: list<array{article: FeaturedArticleCard, body_html: string}>}
@@ -752,7 +752,7 @@ final class MagazineContentService
                 continue;
             }
             $kind = (int) ($parts[0] ?? 0);
-            if (!\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+            if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 continue;
             }
             $pk = strtolower(trim((string) $parts[1]));
@@ -947,7 +947,7 @@ final class MagazineContentService
     }
 
     /**
-     * @return list<string> Article `#d` slugs from kind 30023/30024 `a` tags in index order; follows nested
+     * @return list<string> Article `#d` slugs from kind 30023/30024/30817 `a` tags in index order; follows nested
      *                       kind-30040 section indices up to {@see $maxDepth} when the store has them.
      */
     private function slugsFromCategoryCoord(string $categoryCoord, int $maxA): array
@@ -1035,7 +1035,7 @@ final class MagazineContentService
             if ($identifier === '') {
                 continue;
             }
-            if (\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+            if (\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 $slugs[] = $identifier;
                 if (\count($slugs) >= $maxA) {
                     return $slugs;

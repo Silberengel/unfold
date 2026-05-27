@@ -3,6 +3,10 @@ import { Controller } from '@hotwired/stimulus';
 const KIND_PUBLICATION_INDEX = 30040;
 const KIND_LONGFORM = 30023;
 const KIND_LONGFORM_DRAFT = 30024;
+const KIND_WIKI = 30817;
+
+/** All kinds allowed as article `a` tags inside a kind-30040 category index. */
+const LONGFORM_KINDS = new Set([KIND_LONGFORM, KIND_LONGFORM_DRAFT, KIND_WIKI]);
 
 /**
  * Owner-only magazine hierarchy: build kind-30040 tags from fieldsets, NIP-07 sign each, POST batch.
@@ -795,7 +799,7 @@ export default class MagazineHierarchyEditorController extends Controller {
             }
             if (Number.isFinite(n) && Number.isFinite(ingested) && ingested > 0) {
                 this.setStatus(
-                    `Published and stored ${n} index event(s); synced ${ingested} long-form address(es) from relays.`,
+                    `Published and stored ${n} index event(s); synced ${ingested} article/wiki address(es) from relays.`,
                     { tone: 'success', scroll: true },
                 );
             } else {
@@ -894,8 +898,8 @@ export default class MagazineHierarchyEditorController extends Controller {
         if (kind === KIND_PUBLICATION_INDEX && pk !== ownerHex) {
             throw new Error(`Nested 30040 address must use magazine owner pubkey: ${coord}`);
         }
-        if (kind !== KIND_PUBLICATION_INDEX && kind !== KIND_LONGFORM && kind !== KIND_LONGFORM_DRAFT) {
-            throw new Error(`Only kinds 30040, 30023, 30024 allowed in a tag: ${coord}`);
+        if (kind !== KIND_PUBLICATION_INDEX && !LONGFORM_KINDS.has(kind)) {
+            throw new Error(`Only kinds 30040, 30023, 30024, 30817 allowed in a tag: ${coord}`);
         }
     }
 

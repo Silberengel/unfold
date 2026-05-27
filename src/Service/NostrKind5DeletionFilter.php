@@ -43,14 +43,12 @@ final class NostrKind5DeletionFilter
      */
     private function storedKindValues(): array
     {
-        return [
+        return array_merge(KindsEnum::longformKindValues(), [
             KindsEnum::METADATA->value,
             KindsEnum::RELAY_LIST->value,
             KindsEnum::PAYMENT_TARGETS->value,
-            KindsEnum::LONGFORM->value,
-            KindsEnum::LONGFORM_DRAFT->value,
             KindsEnum::PUBLICATION_INDEX->value,
             KindsEnum::CURATION_SET->value,
-        ];
+        ]);
     }
 }

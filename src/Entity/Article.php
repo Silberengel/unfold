@@ -9,10 +9,9 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Entity storing long-form articles
- * Needed beyond the Event entity, because of the local functionalities built on top of the original events
- * - editor
- * NIP-23, kinds 30023, 30024
+ * Entity storing long-form articles and wiki pages.
+ * NIP-23 long-form: kinds 30023, 30024.
+ * NIP-54 wiki: kind 30817 (same Markdown format; adds `k` tags listing affected kinds).
  */
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
 class Article
@@ -63,6 +62,13 @@ class Article
 
     #[ORM\Column(nullable: true, enumType: EventStatusEnum::class)]
     private ?EventStatusEnum $eventStatus = EventStatusEnum::PREVIEW;
+
+    /**
+     * NIP-54 wiki: `k` tags listing the Nostr kinds this spec affects (e.g. [9740, 9741]).
+     * Null for non-wiki articles; empty array when none were listed.
+     */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $wikiKinds = null;
 
     // Local properties
     #[ORM\Column(type: Types::JSON, nullable: true)]
@@ -304,6 +310,21 @@ class Article
     public function setRatingPositive(?int $ratingPositive): static
     {
         $this->ratingPositive = $ratingPositive;
+
+        return $this;
+    }
+
+    /**
+     * @return list<int>|null  null = not a wiki page; [] = wiki page with no `k` tags
+     */
+    public function getWikiKinds(): ?array
+    {
+        return $this->wikiKinds;
+    }
+
+    public function setWikiKinds(?array $wikiKinds): static
+    {
+        $this->wikiKinds = $wikiKinds;
 
         return $this;
     }

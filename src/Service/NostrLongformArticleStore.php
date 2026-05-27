@@ -87,6 +87,7 @@ final class NostrLongformArticleStore
             $target->setPublishedAt($source->getPublishedAt());
         }
         $target->setTopics($source->getTopics());
+        $target->setWikiKinds($source->getWikiKinds());
         if ($source->getKind() !== null) {
             $target->setKind($source->getKind());
         }

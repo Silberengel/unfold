@@ -8,14 +8,14 @@ use App\Enum\KindsEnum;
 use InvalidArgumentException;
 
 /**
- * Map nostr events of kind 30023 to local article entity
+ * Map long-form (30023/30024) and wiki (30817) Nostr events to the Article entity.
  */
 class ArticleFactory
 {
     public function createFromLongFormContentEvent($source): Article
     {
-        if ($source->kind !== KindsEnum::LONGFORM->value) {
-            throw new InvalidArgumentException('Source event kind should be 30023');
+        if (!\in_array($source->kind, KindsEnum::longformKindValues(), true)) {
+            throw new InvalidArgumentException('Source event kind must be a longform kind (30023, 30024, 30817), got '.$source->kind);
         }
         $entity = new Article();
         $entity->setRaw($source);
@@ -33,19 +33,23 @@ class ArticleFactory
         $entity->setRatingNegative(0);
         $entity->setRatingPositive(0);
         // process tags
+        $wikiKinds = $source->kind === KindsEnum::WIKI->value ? [] : null;
         foreach ($source->tags as $tag) {
+            if (!\is_array($tag) || !isset($tag[0])) {
+                continue;
+            }
             switch ($tag[0]) {
                 case 'd':
-                    $entity->setSlug($tag[1]);
+                    $entity->setSlug($tag[1] ?? null);
                     break;
                 case 'title':
-                    $entity->setTitle($tag[1]);
+                    $entity->setTitle($tag[1] ?? null);
                     break;
                 case 'summary':
-                    $entity->setSummary($tag[1]);
+                    $entity->setSummary($tag[1] ?? null);
                     break;
                 case 'image':
-                    $entity->setImage($tag[1]);
+                    $entity->setImage($tag[1] ?? null);
                     break;
                 case 'published_at':
                     $parsed = $this->parseEventTimeValue($tag[1] ?? null);
@@ -54,13 +58,22 @@ class ArticleFactory
                     }
                     break;
                 case 't':
-                    $entity->addTopic($tag[1]);
+                    if (isset($tag[1])) {
+                        $entity->addTopic($tag[1]);
+                    }
+                    break;
+                case 'k':
+                    // NIP-54: `k` tags list the Nostr kinds this wiki page specifies
+                    if ($wikiKinds !== null && isset($tag[1]) && ctype_digit((string) $tag[1])) {
+                        $wikiKinds[] = (int) $tag[1];
+                    }
                     break;
                 case 'client':
-                    // used to signal where it was created, ignored for now
                     break;
             }
         }
+        $entity->setWikiKinds($wikiKinds);
+
         return $entity;
     }
 

@@ -185,12 +185,9 @@ final class MagazineHierarchyPublishService
             if ($kind === KindsEnum::PUBLICATION_INDEX->value && !hash_equals($ownerHex, $pk)) {
                 return 'Nested 30040 `a` tags must use the magazine owner pubkey';
             }
-            if (!\in_array($kind, [
-                KindsEnum::PUBLICATION_INDEX->value,
-                KindsEnum::LONGFORM->value,
-                KindsEnum::LONGFORM_DRAFT->value,
-            ], true)) {
-                return 'Unsupported kind in `a` tag (only 30040, 30023, 30024)';
+            $allowedKinds = array_merge([KindsEnum::PUBLICATION_INDEX->value], KindsEnum::longformKindValues());
+            if (!\in_array($kind, $allowedKinds, true)) {
+                return 'Unsupported kind in `a` tag (only 30040, 30023, 30024, 30817)';
             }
         }
 
@@ -198,7 +195,7 @@ final class MagazineHierarchyPublishService
     }
 
     /**
-     * Long-form `a` coordinates from this publish batch (30023 / 30024) for immediate DB sync.
+     * Long-form `a` coordinates from this publish batch (30023 / 30024 / 30817) for immediate DB sync.
      *
      * @param array<string, NostrWireEvent> $byD
      *
@@ -222,7 +219,7 @@ final class MagazineHierarchyPublishService
                     continue;
                 }
                 $kind = (int) $parts[0];
-                if (!\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+                if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
                     continue;
                 }
                 $pk = strtolower(trim((string) $parts[1]));

@@ -85,6 +85,14 @@
                 </span>
             </div>
         {% endif %}
+        {% if article.wikiKinds is not null and article.wikiKinds|length > 0 %}
+            <div class="wiki-kinds">
+                <span class="wiki-kinds__label">Specifies:</span>
+                {% for k in article.wikiKinds %}
+                    <span class="wiki-kinds__badge">kind {{ k }}</span>
+                {% endfor %}
+            </div>
+        {% endif %}
     </div>
     <div class="card-body">
         <div class="lede">

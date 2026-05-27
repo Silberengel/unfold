@@ -73,15 +73,13 @@ final class Nip09DeletionApplier
                 }
                 $declared = $eKinds[$i] ?? null;
                 if ($declared !== null
-                    && !\in_array($declared, [
-                        KindsEnum::LONGFORM->value,
-                        KindsEnum::LONGFORM_DRAFT->value,
+                    && !\in_array($declared, array_merge(KindsEnum::longformKindValues(), [
                         KindsEnum::PUBLICATION_INDEX->value,
                         KindsEnum::METADATA->value,
                         KindsEnum::RELAY_LIST->value,
                         KindsEnum::PAYMENT_TARGETS->value,
                         KindsEnum::CURATION_SET->value,
-                    ], true)) {
+                    ]), true)) {
                     continue;
                 }
                 if ($this->removeArticleByEventIdIfValid($eId, $deletionPubkey, $declared, $seenArticleIds)) {
@@ -92,12 +90,10 @@ final class Nip09DeletionApplier
                 if ($this->tryRemoveCoreEventRowByEventId($eId, $deletionPubkey, $declared)) {
                     continue;
                 }
-                if ($declared === null || \in_array($declared, [
-                    KindsEnum::LONGFORM->value,
-                    KindsEnum::LONGFORM_DRAFT->value,
+                if ($declared === null || \in_array($declared, array_merge(KindsEnum::longformKindValues(), [
                     KindsEnum::PUBLICATION_INDEX->value,
                     KindsEnum::CURATION_SET->value,
-                ], true)) {
+                ]), true)) {
                     $mag = $this->tryRemoveMagazine30040ByEventId($eId, $deletionPubkey);
                     if ($mag === 1) {
                         ++$roots;
@@ -273,7 +269,7 @@ final class Nip09DeletionApplier
         if ($declaredKind !== null && $k !== null && $declaredKind !== $k) {
             return false;
         }
-        if ($k !== null && !\in_array($k, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+        if ($k !== null && !\in_array($k, KindsEnum::longformKindValues(), true)) {
             return false;
         }
         $this->entityManager->remove($article);
@@ -343,7 +339,7 @@ final class Nip09DeletionApplier
             return $out;
         }
 
-        if ($kind === KindsEnum::LONGFORM->value || $kind === KindsEnum::LONGFORM_DRAFT->value) {
+        if (\in_array($kind, KindsEnum::longformKindValues(), true)) {
             if ($d === '') {
                 return $out;
             }
