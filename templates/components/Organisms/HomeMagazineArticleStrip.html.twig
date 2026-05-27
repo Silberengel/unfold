@@ -8,6 +8,7 @@
         aria-label="{{ (website_name ~ ' — featured articles')|e('html_attr') }}"
     >
         <div class="home-curation-landmark__articles">
+            {% do prefetch_article_card_covers(tiles) %}
             {% for tile in tiles %}
                 {% set item = tile.article %}
                 {% set article_href = (item.pubkey and npub_from_hex(item.pubkey) != '') ? path('article', { npub: npub_from_hex(item.pubkey), slug: item.slug }) : path('article-legacy-redirect', { slug: item.slug }) %}

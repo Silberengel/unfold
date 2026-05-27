@@ -375,16 +375,18 @@ final readonly class NostrWireEventMerge
         if ($raw instanceof PublicationEventEntity) {
             return $raw;
         }
-        if (!\is_object($raw)) {
-            return null;
-        }
-
-        try {
-            $data = json_decode(json_encode($raw, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-        if (!\is_array($data)) {
+        if (\is_array($raw)) {
+            $data = $raw;
+        } elseif (\is_object($raw)) {
+            try {
+                $data = json_decode(json_encode($raw, \JSON_THROW_ON_ERROR), true, 512, \JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                return null;
+            }
+            if (!\is_array($data)) {
+                return null;
+            }
+        } else {
             return null;
         }
         $entity = new PublicationEventEntity();

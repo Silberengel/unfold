@@ -104,6 +104,7 @@ final class ArticleHighlightCommonMarkPipelineTest extends KernelTestCase
     private function createInjector(): ArticleBodyHighlightInjector
     {
         $meta = $this->createMock(HighlightAuthorMetadataProvider::class);
+        $meta->method('prefetchMetadataForNpubs');
         $meta->method('getMetadata')->willReturn(
             (object) ['display_name' => 'Test', 'name' => 'Test', 'picture' => ''],
         );

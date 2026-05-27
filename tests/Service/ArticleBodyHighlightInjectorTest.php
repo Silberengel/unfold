@@ -134,6 +134,7 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
     private function createInjector(): ArticleBodyHighlightInjector
     {
         $meta = $this->createMock(HighlightAuthorMetadataProvider::class);
+        $meta->method('prefetchMetadataForNpubs');
         $meta->method('getMetadata')->willReturn(
             (object) [
                 'display_name' => 'Test',

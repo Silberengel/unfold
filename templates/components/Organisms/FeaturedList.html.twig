@@ -6,6 +6,7 @@
             role="region"
             aria-label="{{ title|e('html_attr') }}"
         >
+            {% do prefetch_article_card_covers(list) %}
             {% for item in list %}
                 <article class="featured-tile" style="--tile-hue: {{ _hue }};">
                     <a

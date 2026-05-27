@@ -379,6 +379,17 @@ final class PrewarmCommand extends Command
                     $this->waitForSiteWellKnownBeforeVerification($io, $domain);
                 }
                 $io->writeln('Verifying <comment>NIP-05</comment> (HTTPS <comment>/.well-known/nostr.json</comment>, per identifier)…');
+                $npubsForVerify = [];
+                foreach ($toWarm as $hex) {
+                    if (64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+                        continue;
+                    }
+                    try {
+                        $npubsForVerify[] = $this->nostrKeyHelper->convertPublicKeyToBech32(strtolower($hex));
+                    } catch (\Throwable) {
+                    }
+                }
+                $this->cacheService->prefetchMetadataForNpubs($npubsForVerify);
                 $nt = 0;
                 $nv = 0;
                 foreach ($toWarm as $hex) {

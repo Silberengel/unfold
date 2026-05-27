@@ -338,6 +338,19 @@ final class ArticleBodyHighlightInjector
      */
     private function buildHighlightAuthorsJson(array $group): string
     {
+        $npubsForPrefetch = [];
+        foreach ($group as $h) {
+            $pk = $h->getAuthorPubkey();
+            if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
+                continue;
+            }
+            try {
+                $npubsForPrefetch[] = $this->nostrKeyHelper->convertPublicKeyToBech32($pk);
+            } catch (\Throwable) {
+            }
+        }
+        $this->highlightAuthorMetadata->prefetchMetadataForNpubs($npubsForPrefetch);
+
         $byNpub = [];
         foreach ($group as $h) {
             $eidH = $h->getEventId();

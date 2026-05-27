@@ -22,4 +22,35 @@ class EventRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['coreRowKey' => $key]);
     }
+
+    /**
+     * @param list<string> $keys
+     *
+     * @return array<string, Event> keyed by coreRowKey
+     */
+    public function findByCoreRowKeys(array $keys): array
+    {
+        $keys = array_values(array_unique(array_filter(
+            $keys,
+            static fn (mixed $k): bool => \is_string($k) && $k !== '',
+        )));
+        if ($keys === []) {
+            return [];
+        }
+        /** @var list<Event> $rows */
+        $rows = $this->createQueryBuilder('e')
+            ->andWhere('e.coreRowKey IN (:keys)')
+            ->setParameter('keys', $keys)
+            ->getQuery()
+            ->getResult();
+        $out = [];
+        foreach ($rows as $row) {
+            $k = $row->getCoreRowKey();
+            if ($k !== null && $k !== '') {
+                $out[$k] = $row;
+            }
+        }
+
+        return $out;
+    }
 }

@@ -94,4 +94,28 @@ final class NostrWireEventMergeTest extends TestCase
         $this->assertFalse($this->m->isNip33ParameterizedKind(29_999));
         $this->assertFalse($this->m->isNip33ParameterizedKind(40_000));
     }
+
+    public function testMagazineEventToPublicationEntityAcceptsDecodedWireArray(): void
+    {
+        $pk = str_repeat('e', 64);
+        $id = str_repeat('f', 64);
+        $data = [
+            'kind' => 30_040,
+            'id' => $id,
+            'pubkey' => $pk,
+            'content' => 'summary',
+            'created_at' => 1_700_000_000,
+            'tags' => [['d', 'newsroom-magazine-on-imwald-by-laeserin-category-bitcoin']],
+            'sig' => str_repeat('a', 128),
+        ];
+
+        $entity = $this->m->magazineEventToPublicationEntity($data);
+        $this->assertNotNull($entity);
+        $this->assertSame($id, $entity->getId());
+        $this->assertSame(30_040, $entity->getKind());
+        $this->assertSame($pk, $entity->getPubkey());
+        $this->assertSame('summary', $entity->getContent());
+        $this->assertSame(1_700_000_000, $entity->getCreatedAt());
+        $this->assertSame($data['tags'], $entity->getTags());
+    }
 }

@@ -386,6 +386,10 @@ class NostrClient
      */
     public function getNpubMetadata($npub): \stdClass
     {
+        $authorHex = $this->wireMerge->authorIdentToHexLower($npub);
+        if ($authorHex === null) {
+            throw new \Exception('Invalid npub for metadata: '.$npub);
+        }
         $relaysTried = $this->relayListFactory->capSequentialRelaysForProfileFetches($this->relayListFactory->getProfileMetadataQueryRelayUrlList());
         $relaysTriedStr = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relaysTried));
         $relaySet = $this->relayListFactory->relaySetFromDistinctUrlList($relaysTried);
@@ -393,7 +397,7 @@ class NostrClient
         $request = $this->nostrRelayQuery->createNostrRequest(
             defaultRelaySet: $this->defaultRelaySet,
             kinds: [KindsEnum::METADATA],
-            filters: ['authors' => [$npub]],
+            filters: ['authors' => [$authorHex]],
             relaySet: $relaySet
         );
 
@@ -410,10 +414,6 @@ class NostrClient
             throw new \Exception('No metadata for npub '.$npub.' (relays: '.$relaysTriedStr.')');
         }
         $byAddr = $this->wireMerge->mergeKind0EventsByReplaceableAddress($events);
-        $authorHex = $this->wireMerge->npubToHexPubkey($npub);
-        if ($authorHex === null) {
-            throw new \Exception('Invalid npub for metadata: '.$npub);
-        }
         $key = '0:'.$authorHex;
         if (!isset($byAddr[$key])) {
             throw new \Exception('No kind-0 metadata for npub '.$npub.' (relays: '.$relaysTriedStr.')');
@@ -431,6 +431,10 @@ class NostrClient
      */
     public function getKind10133PaymentTargetEventsForNpub(string $npub, int $limit = 20): array
     {
+        $authorHex = $this->wireMerge->authorIdentToHexLower($npub);
+        if ($authorHex === null) {
+            return [];
+        }
         $relaysTried = $this->relayListFactory->capSequentialRelaysForProfileFetches($this->relayListFactory->getProfileMetadataQueryRelayUrlList());
         $relaysTriedStr = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relaysTried));
         $relaySet = $this->relayListFactory->relaySetFromDistinctUrlList($relaysTried);
@@ -438,7 +442,7 @@ class NostrClient
             $request = $this->nostrRelayQuery->createNostrRequest(
                 defaultRelaySet: $this->defaultRelaySet,
                 kinds: [KindsEnum::PAYMENT_TARGETS],
-                filters: ['authors' => [$npub], 'limit' => max(1, min(50, $limit))],
+                filters: ['authors' => [$authorHex], 'limit' => max(1, min(50, $limit))],
                 relaySet: $relaySet
             );
             $events = $this->nostrRelayQuery->processResponse(
@@ -463,11 +467,17 @@ class NostrClient
 
     public function getNpubLongForm($npub): void
     {
+        $authorHex = $this->wireMerge->authorIdentToHexLower($npub);
+        if ($authorHex === null) {
+            $this->logger->warning('nostr.longform_by_author.invalid_npub', ['npub' => $npub]);
+
+            return;
+        }
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $filter = new Filter();
         $filter->setKinds([KindsEnum::LONGFORM]);
-        $filter->setAuthors([$npub]);
+        $filter->setAuthors([$authorHex]);
         $filter->setSince(strtotime('-6 months')); // too much?
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
@@ -843,10 +853,14 @@ class NostrClient
      */
     public function getNpubRelayList10002Wire($npub): ?object
     {
+        $authorHex = $this->wireMerge->authorIdentToHexLower($npub);
+        if ($authorHex === null) {
+            return null;
+        }
         $request = $this->nostrRelayQuery->createNostrRequest(
             defaultRelaySet: $this->defaultRelaySet,
             kinds: [KindsEnum::RELAY_LIST],
-            filters: ['authors' => [$npub]],
+            filters: ['authors' => [$authorHex]],
             relaySet: $this->defaultRelaySet
         );
         $response = $this->nostrRelayQuery->processResponse($request->send(), function ($received) {
@@ -1713,7 +1727,7 @@ class NostrClient
             defaultRelaySet: $this->defaultRelaySet,
             relaySet: $relaySet,
             kinds: [KindsEnum::PUBLICATION_INDEX],
-            filters: ['authors' => [(string) $npub], 'tag' => ['#d', [(string) $dTag]]],
+            filters: ['authors' => [$authorHex], 'tag' => ['#d', [(string) $dTag]]],
         );
         $this->logger->info(sprintf('Magazine index query (relays: %s)', $relaysForLog), [
             'npub' => $npub,

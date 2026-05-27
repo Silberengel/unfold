@@ -9,9 +9,20 @@ use App\Nostr\MagazineEventKeys;
 use App\Repository\EventRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
-readonly class CacheService implements HighlightAuthorMetadataProvider
+final class CacheService implements HighlightAuthorMetadataProvider, ResetInterface
 {
+    /**
+     * @var array<string, array{content: \stdClass, kind0_tags: list<list<string>>, nip30_custom_emojis: list<array{shortcode: string, url: string, set?: string}>}>
+     */
+    private array $requestBundlesByHex = [];
+
+    /** @var array<string, string> lowercase hex pubkey => npub */
+    private array $pendingHexToNpub = [];
+
+    private int $metadataBatchDepth = 0;
+
     public function __construct(
         private NostrClient $nostrClient,
         private EntityManagerInterface $entityManager,
@@ -21,6 +32,13 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         private NostrNip65RelayUrls $nip65RelayUrls,
         private Nip30EmojiCatalogBuilder $nip30EmojiCatalogBuilder,
     ) {
+    }
+
+    public function reset(): void
+    {
+        $this->requestBundlesByHex = [];
+        $this->pendingHexToNpub = [];
+        $this->metadataBatchDepth = 0;
     }
 
     public function getMetadata(string $npub): \stdClass
@@ -37,41 +55,129 @@ readonly class CacheService implements HighlightAuthorMetadataProvider
         if ($authorHex === null) {
             return $this->placeholderMetadataBundle($npub);
         }
+        if (isset($this->requestBundlesByHex[$authorHex])) {
+            return $this->requestBundlesByHex[$authorHex];
+        }
         $row = $this->eventRepository->findOneByCoreRowKey(MagazineEventKeys::profileKind0($authorHex));
         if ($row !== null) {
-            return $this->bundleFromKind0EventRow($row, $npub);
-        }
-        try {
-            $ev = $this->nostrClient->getNpubMetadata($npub);
-            if (!\is_object($ev)) {
-                return $this->placeholderMetadataBundle($npub);
-            }
-            $nip30 = $this->nip30EmojiCatalogBuilder->buildMergedCatalog($ev, null, []);
-            $this->replaceByCoreKey(
-                MagazineEventKeys::profileKind0($authorHex),
-                Event::STORAGE_PROFILE_KIND0,
-                $ev,
-                $nip30,
-            );
-            $tags = self::normalizeEventTagsList($ev->tags ?? null);
-            $content = $this->decodeKind0ContentObject($ev);
-            if ($this->isPlaceholderContent($content, $npub)) {
-                $content = $this->namePlaceholderNpubObject($npub);
-            }
+            $bundle = $this->bundleFromKind0EventRow($row, $npub);
+            $this->requestBundlesByHex[$authorHex] = $bundle;
 
-            return [
-                'content' => $content,
-                'kind0_tags' => $tags,
-                'nip30_custom_emojis' => $nip30,
-            ];
-        } catch (\Exception $e) {
-            $this->logger->warning('Profile metadata fetch failed; using npub placeholder.', [
-                'npub' => $npub,
-                'exception' => $e->getPrevious() ?? $e,
+            return $bundle;
+        }
+        $this->pendingHexToNpub[$authorHex] = $npub;
+        $this->runPendingMetadataBatch();
+
+        return $this->requestBundlesByHex[$authorHex] ?? $this->placeholderMetadataBundle($npub);
+    }
+
+    /**
+     * @param list<string> $npubs
+     */
+    public function prefetchMetadataForNpubs(array $npubs): void
+    {
+        foreach ($npubs as $npub) {
+            if (!\is_string($npub) || $npub === '') {
+                continue;
+            }
+            $authorHex = $this->npubToAuthorHex64($npub);
+            if ($authorHex === null || isset($this->requestBundlesByHex[$authorHex])) {
+                continue;
+            }
+            $this->pendingHexToNpub[$authorHex] = $npub;
+        }
+        $this->runPendingMetadataBatch();
+    }
+
+    /**
+     * @param list<string> $pubkeyHex 64-char hex pubkeys (any case)
+     */
+    public function prefetchMetadataForPubkeyHexes(array $pubkeyHex): void
+    {
+        $npubs = [];
+        foreach ($pubkeyHex as $hex) {
+            if (!\is_string($hex) || 64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+                continue;
+            }
+            try {
+                $npubs[] = $this->nostrKeyHelper->convertPublicKeyToBech32(strtolower($hex));
+            } catch (\Throwable) {
+            }
+        }
+        $this->prefetchMetadataForNpubs($npubs);
+    }
+
+    private function runPendingMetadataBatch(): void
+    {
+        if ($this->pendingHexToNpub === []) {
+            return;
+        }
+        ++$this->metadataBatchDepth;
+        try {
+            do {
+                if ($this->pendingHexToNpub === []) {
+                    break;
+                }
+                $this->flushPendingMetadataFetches();
+            } while ($this->pendingHexToNpub !== []);
+        } finally {
+            --$this->metadataBatchDepth;
+        }
+    }
+
+    private function flushPendingMetadataFetches(): void
+    {
+        if ($this->pendingHexToNpub === []) {
+            return;
+        }
+        $pending = $this->pendingHexToNpub;
+        $this->pendingHexToNpub = [];
+
+        $keys = [];
+        foreach (array_keys($pending) as $hex) {
+            $keys[] = MagazineEventKeys::profileKind0($hex);
+        }
+        $rowsByKey = $this->eventRepository->findByCoreRowKeys($keys);
+
+        $relayHex = [];
+        foreach ($pending as $hex => $npub) {
+            $key = MagazineEventKeys::profileKind0($hex);
+            if (isset($rowsByKey[$key])) {
+                $this->requestBundlesByHex[$hex] = $this->bundleFromKind0EventRow($rowsByKey[$key], $npub);
+                continue;
+            }
+            $relayHex[] = $hex;
+        }
+        if ($relayHex === []) {
+            return;
+        }
+
+        try {
+            $fetched = $this->nostrClient->fetchProfilePrewarmWireBundlesForAuthors($relayHex);
+            $this->putPrewarmMetadataBatch($relayHex, $fetched);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Profile metadata batch fetch failed.', [
+                'authors' => \count($relayHex),
+                'exception' => $e,
             ]);
         }
 
-        return $this->placeholderMetadataBundle($npub);
+        $rowsAfterRelay = $this->eventRepository->findByCoreRowKeys(array_map(
+            static fn (string $hex): string => MagazineEventKeys::profileKind0($hex),
+            $relayHex,
+        ));
+        foreach ($relayHex as $hex) {
+            $npub = $pending[$hex];
+            $key = MagazineEventKeys::profileKind0($hex);
+            if (isset($rowsAfterRelay[$key])) {
+                $this->requestBundlesByHex[$hex] = $this->bundleFromKind0EventRow($rowsAfterRelay[$key], $npub);
+                continue;
+            }
+            $this->logger->warning('Profile metadata fetch failed; using npub placeholder.', [
+                'npub' => $npub,
+            ]);
+            $this->requestBundlesByHex[$hex] = $this->placeholderMetadataBundle($npub);
+        }
     }
 
     /**

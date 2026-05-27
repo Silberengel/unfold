@@ -33,9 +33,11 @@ final class FeaturedAuthorListedRows
             return $fromDb;
         }
 
+        $hexes = \array_slice($this->magazineContent->getAllDistinctCategoryAuthorPubkeyHexes(), 0, $limit);
+        $this->cacheService->prefetchMetadataForPubkeyHexes($hexes);
+
         $authors = [];
-        $hexes = $this->magazineContent->getAllDistinctCategoryAuthorPubkeyHexes();
-        foreach (\array_slice($hexes, 0, $limit) as $hex) {
+        foreach ($hexes as $hex) {
             try {
                 $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($hex);
             } catch (\Throwable) {
@@ -52,8 +54,14 @@ final class FeaturedAuthorListedRows
      */
     public function buildListedByLocalPartPage(int $limit, int $offset = 0): array
     {
+        $listed = $this->featuredAuthorRepository->findListedOrderByLocalPartPaginated($limit, $offset);
+        $this->cacheService->prefetchMetadataForPubkeyHexes(array_map(
+            static fn ($fa) => $fa->getPubkeyHex(),
+            $listed,
+        ));
+
         $authors = [];
-        foreach ($this->featuredAuthorRepository->findListedOrderByLocalPartPaginated($limit, $offset) as $fa) {
+        foreach ($listed as $fa) {
             try {
                 $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($fa->getPubkeyHex());
             } catch (\Throwable) {

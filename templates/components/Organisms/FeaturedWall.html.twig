@@ -7,6 +7,7 @@
         role="region"
         aria-label="{{ (region_aria_label|default(website_name ~ ' — featured articles'))|e('html_attr') }}"
     >
+        {% do prefetch_article_card_covers(tiles) %}
         {% for tile in tiles %}
             {% set _hue = (tile.categoryTitle|default('x')|length * 47) % 360 %}
             {% set item = tile.article %}

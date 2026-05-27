@@ -42,9 +42,32 @@ final class ArticleCardCoverExtension extends AbstractExtension
     {
         return [
             new TwigFunction('article_card_cover', $this->articleCardCover(...)),
+            new TwigFunction('prefetch_article_card_covers', $this->prefetchArticleCardCovers(...)),
             new TwigFunction('article_og_image', $this->articleOgImage(...)),
             new TwigFunction('site_og_image', $this->siteOgImage(...)),
         ];
+    }
+
+    /**
+     * Batch kind-0 profile lookups before a list of cards (one relay REQ per chunk, not per tile).
+     *
+     * @param iterable<mixed> $items Rows with optional `pubkey` (64-char hex)
+     */
+    public function prefetchArticleCardCovers(iterable $items): void
+    {
+        $hexes = [];
+        foreach ($items as $item) {
+            if (\is_object($item) && isset($item->article)) {
+                $item = $item->article;
+            } elseif (\is_array($item) && isset($item['article'])) {
+                $item = $item['article'];
+            }
+            $hex = $this->pubkeyHexFromItem($item);
+            if ($hex !== null) {
+                $hexes[] = $hex;
+            }
+        }
+        $this->cacheService->prefetchMetadataForPubkeyHexes($hexes);
     }
 
     /**
@@ -166,5 +189,24 @@ final class ArticleCardCoverExtension extends AbstractExtension
     private function defaultSiteImageUrl(): string
     {
         return $this->packages->getUrl(self::DEFAULT_PACKAGE_IMAGE);
+    }
+
+    private function pubkeyHexFromItem(mixed $item): ?string
+    {
+        $raw = null;
+        if (\is_object($item) && isset($item->pubkey)) {
+            $raw = $item->pubkey;
+        } elseif (\is_array($item) && isset($item['pubkey'])) {
+            $raw = $item['pubkey'];
+        }
+        if (!\is_string($raw)) {
+            return null;
+        }
+        $hex = strtolower(trim($raw));
+        if (64 !== \strlen($hex) || !ctype_xdigit($hex)) {
+            return null;
+        }
+
+        return $hex;
     }
 }

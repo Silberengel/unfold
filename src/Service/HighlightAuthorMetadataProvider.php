@@ -10,4 +10,9 @@ namespace App\Service;
 interface HighlightAuthorMetadataProvider
 {
     public function getMetadata(string $npub): \stdClass;
+
+    /**
+     * @param list<string> $npubs
+     */
+    public function prefetchMetadataForNpubs(array $npubs): void;
 }
