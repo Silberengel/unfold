@@ -7,7 +7,6 @@ export default class extends Controller {
 
     connect() {
         this.link = document.getElementById('theme-magazine-stylesheet');
-        this._syncFromDom();
         this._refreshIcons();
     }
 
@@ -47,11 +46,6 @@ export default class extends Controller {
                 this.link.setAttribute('href', href);
             }
         }
-        this._refreshIcons();
-    }
-
-    _syncFromDom() {
-        /* Link href was set by inline script; icons follow current scheme. */
         this._refreshIcons();
     }
 

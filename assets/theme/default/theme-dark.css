@@ -60,3 +60,16 @@ html[data-color-scheme="dark"] .home-aside-highlights__item-inner:hover,
 html[data-color-scheme="dark"] .home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) {
     background: #2f2b27;
 }
+
+/* Reply toasts: base article.css uses hardcoded light greens/reds; override for dark. */
+html[data-color-scheme="dark"] .reply-toast--success {
+    border-color: #3a8a55;
+    background: color-mix(in srgb, var(--color-bg) 70%, #2f7a4b 30%);
+    color: var(--color-text);
+}
+
+html[data-color-scheme="dark"] .reply-toast--error {
+    border-color: #b03030;
+    background: color-mix(in srgb, var(--color-bg) 70%, #a12b2b 30%);
+    color: var(--color-text);
+}

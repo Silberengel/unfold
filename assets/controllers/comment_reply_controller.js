@@ -11,7 +11,6 @@ export default class extends Controller {
         csrf: String,
         expectedCoordinate: String,
         articleEventId: String,
-        fragmentUrl: String,
         refreshAfter: { type: Boolean, default: true },
         expectedTags: Array,
         parentKind: Number,

@@ -29,13 +29,4 @@ final readonly class NostrKeyHelper
         return $this->key->convertPublicKeyToBech32($key);
     }
 
-    public function convertPrivateKeyToBech32(string $key): string
-    {
-        return $this->key->convertPrivateKeyToBech32($key);
-    }
-
-    public function generatePrivateKey(): string
-    {
-        return $this->key->generatePrivateKey();
-    }
 }

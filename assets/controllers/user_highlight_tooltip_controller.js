@@ -74,7 +74,7 @@ export default class extends Controller {
             const m =
                 t.nodeType === 1
                     ? /** @type {Element} */ (t).closest('mark.user-highlight__marker[data-hl]')
-                    : null;
+                    : t.parentElement?.closest('mark.user-highlight__marker[data-hl]') ?? null;
             if (m) {
                 const to = e.relatedTarget;
                 if (to && (m.contains(to) || (to instanceof Node && this.tip.contains(/** @type {Node} */(to))))) {

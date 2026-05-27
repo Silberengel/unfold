@@ -15,7 +15,7 @@ const LONGFORM_KINDS = new Set([KIND_LONGFORM, KIND_LONGFORM_DRAFT, KIND_WIKI]);
 const DTAG_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export default class MagazineHierarchyEditorController extends Controller {
-    static targets = ['status', 'publishBtn', 'node', 'nodes', 'newNodeTemplate', 'aRowTemplate'];
+    static targets = ['status', 'publishBtn', 'nodes', 'newNodeTemplate', 'aRowTemplate'];
 
     static values = {
         publishUrl: String,
@@ -1239,29 +1239,6 @@ function lineMatches30040Child(line, ownerHexLower, childD) {
     }
 
     return parts.identifier.trim() === childD;
-}
-
-/**
- * @param {HTMLElement} el
- * @returns {{ dTag: string, title: string, summary: string, content: string, aText: string, preserved: unknown[] }}
- */
-function readFieldsForBuild(el) {
-    const dTag = readDTag(el);
-    const title = el.querySelector('[data-magazine-hierarchy-editor-target="title"]')?.value ?? '';
-    const summary = el.querySelector('[data-magazine-hierarchy-editor-target="summary"]')?.value ?? '';
-    const content = el.querySelector('[data-magazine-hierarchy-editor-target="content"]')?.value ?? '';
-    const aText = readJoinedALinesFromNode(el);
-    const preservedRaw = el.querySelector('[data-magazine-hierarchy-editor-target="preservedJson"]')?.value ?? '[]';
-    let preserved;
-    try {
-        preserved = JSON.parse(preservedRaw);
-    } catch {
-        throw new Error(`Invalid preserved-tags JSON for #d ${dTag}.`);
-    }
-    if (!Array.isArray(preserved)) {
-        throw new Error(`Preserved tags must be a JSON array for #d ${dTag}.`);
-    }
-    return { dTag, title, summary, content, aText, preserved };
 }
 
 /**

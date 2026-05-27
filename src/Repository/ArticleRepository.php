@@ -212,20 +212,6 @@ class ArticleRepository extends ServiceEntityRepository
             ->getOneOrNullResult();
     }
 
-    /**
-     * Find articles by author's public key
-     */
-    public function findByPubkey(string $pubkey, int $limit = 25): array
-    {
-        return $this->createQueryBuilder('a')
-            ->where('a.pubkey = :pubkey')
-            ->setParameter('pubkey', $pubkey)
-            ->orderBy('a.createdAt', 'DESC')
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
-    }
-
     public function findByPubkeyPaginated(string $pubkey, int $limit, int $offset): array
     {
         return $this->createQueryBuilder('a')
