@@ -7,6 +7,7 @@
 # Optional: copy Makefile.hub into the same directory, then: make -f Makefile.hub help
 #
 # Services: `php` (web), `database` (MySQL), `prewarm` (same image; `app:prewarm` every 10 min — see README).
+# The database container is named `unfold-mysql` so the gitcitadel hub stack can attach to this network.
 # Optional: PREWARM_FLAGS in .env (same as dev `cron` service), then `docker compose up -d --force-recreate prewarm`.
 #
 # Required in .env: APP_SECRET. Set MYSQL_* (or replace DATABASE_URL after editing this file) if you
@@ -93,6 +94,7 @@ services:
 
   database:
     image: mysql:${MYSQL_VERSION:-8.0.36}
+    container_name: unfold-mysql
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}
