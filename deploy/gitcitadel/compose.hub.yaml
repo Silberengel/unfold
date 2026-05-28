@@ -1,5 +1,4 @@
-# GitCitadel hub — copy this directory (compose.hub.yaml + .env) to the server.
-# No bundled MySQL: uses imwald hub DB (unfold-mysql on network unfold_default). Start imwald first.
+# GitCitadel hub app stack (php + prewarm). Shared MySQL: deploy/unfold-db/ (unfold-mysql).
 #
 # Build image (from repo root):
 #   ./scripts/build-hub-image.sh gitcitadel
@@ -25,7 +24,7 @@ services:
       - "${HTTP_PUBLISH:-127.0.0.1:9085}:80/tcp"
     networks:
       - default
-      - imwald_db
+      - unfold_db
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
       interval: 10s
@@ -64,13 +63,13 @@ services:
       PREWARM_FLAGS: ${PREWARM_FLAGS:-}
     networks:
       - default
-      - imwald_db
+      - unfold_db
     depends_on:
       php:
         condition: service_started
 
 networks:
-  imwald_db:
+  unfold_db:
     external: true
     name: unfold_default
 

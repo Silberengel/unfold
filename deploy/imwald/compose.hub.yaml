@@ -1,5 +1,4 @@
-# Imwald hub — copy this directory (compose.hub.yaml + .env) to the server.
-# MySQL owner stack: container unfold-mysql on network unfold_default.
+# Imwald hub app stack (php + prewarm). Shared MySQL: deploy/unfold-db/ (unfold-mysql).
 #
 # Build image (from repo root):
 #   ./scripts/build-hub-image.sh imwald
@@ -17,21 +16,21 @@ services:
       APP_SECRET: ${APP_SECRET}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
       SERVER_NAME: ${SERVER_NAME:-:80}
-      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@${DATABASE_HOST:-unfold-mysql}:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
     ports:
       - "${HTTP_PUBLISH:-9080}:80/tcp"
+    networks:
+      - default
+      - unfold_db
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 180s
-    depends_on:
-      database:
-        condition: service_healthy
 
   prewarm:
     image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:imwald}
@@ -60,32 +59,20 @@ services:
       APP_SECRET: ${APP_SECRET}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
       SERVER_NAME: ${SERVER_NAME:-:80}
-      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@database:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@${DATABASE_HOST:-unfold-mysql}:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
       PREWARM_FLAGS: ${PREWARM_FLAGS:-}
+    networks:
+      - default
+      - unfold_db
     depends_on:
-      database:
-        condition: service_healthy
       php:
         condition: service_started
 
-  database:
-    image: mysql:${MYSQL_VERSION:-8.0.36}
-    container_name: unfold-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}
-      MYSQL_USER: ${MYSQL_USER:-unfold_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    volumes:
-      - database_data:/var/lib/mysql:rw
+networks:
+  unfold_db:
+    external: true
+    name: unfold_default
 
 volumes:
   caddy_data:
   caddy_config:
-  database_data:

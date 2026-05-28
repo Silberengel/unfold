@@ -1,0 +1,33 @@
+# Shared MySQL for all hub sites (imwald, gitcitadel, …).
+# Start this stack first; app stacks join network unfold_default and use host unfold-mysql.
+#
+# On server: copy this directory + .env from .env.dist, then:
+#   make -f Makefile.hub up
+
+name: unfold-db
+
+services:
+  database:
+    image: mysql:${MYSQL_VERSION:-8.0.36}
+    container_name: unfold-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}
+      MYSQL_USER: ${MYSQL_USER:-unfold_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - database_data:/var/lib/mysql:rw
+
+networks:
+  default:
+    name: unfold_default
+
+volumes:
+  database_data:
+    name: unfold_database_data

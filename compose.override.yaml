@@ -17,9 +17,9 @@ services:
       UNFOLD_SITE: "${UNFOLD_SITE:-imwald}"
       # Set to 1 to run `app:prewarm` after migrations on php container start (see README).
       # PREWARM_ON_START: "0"
-      # develop: xdebug_info(), better stack traces, etc. Use debug,develop for step debugging (IDE).
+      # Opt in via .env when needed: develop (xdebug_info), debug,develop (step debugging). Default off for performance.
       # See https://xdebug.org/docs/all_settings#mode
-      XDEBUG_MODE: "${XDEBUG_MODE:-develop}"
+      XDEBUG_MODE: "${XDEBUG_MODE:-off}"
     ports:
       # Defaults avoid crowded 8080/8443; override with HTTP_PORT / HTTPS_PORT in .env
       - "127.0.0.1:${HTTP_PORT:-9080}:80/tcp"

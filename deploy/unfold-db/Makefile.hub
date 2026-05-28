@@ -1,0 +1,42 @@
+# Shared MySQL stack (unfold-mysql on network unfold_default).
+# Copy next to compose.hub.yaml and .env on the server.
+
+HUB_COMPOSE ?= compose.hub.yaml
+COMPOSE := docker compose -f $(HUB_COMPOSE)
+
+.DEFAULT_GOAL := help
+
+.PHONY: help up down ps restart pull logs-db shell-db
+
+help:
+	@echo "Unfold hub database (make -f Makefile.hub <target>)"
+	@echo "  up        - start unfold-mysql (detached)"
+	@echo "  down      - stop MySQL (affects all sites using this DB)"
+	@echo "  restart   - restart MySQL only"
+	@echo "  ps        - service status"
+	@echo "  pull      - pull mysql image"
+	@echo "  logs-db   - follow MySQL logs"
+	@echo "  shell-db  - mysql CLI as app user"
+	@echo ""
+	@echo "Start this stack before imwald / gitcitadel app stacks."
+
+pull:
+	$(COMPOSE) pull
+
+up:
+	$(COMPOSE) up -d
+
+down:
+	$(COMPOSE) down
+
+restart:
+	$(COMPOSE) restart database
+
+ps:
+	$(COMPOSE) ps
+
+logs-db:
+	$(COMPOSE) logs -f database
+
+shell-db:
+	$(COMPOSE) exec database sh -c 'mysql -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE"'
