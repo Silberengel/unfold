@@ -76,5 +76,5 @@ html[data-color-scheme="dark"] .reply-toast--error {
 
 html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active,
 html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active:hover {
-    color: #1e1e1e;
+    color: #121212;
 }

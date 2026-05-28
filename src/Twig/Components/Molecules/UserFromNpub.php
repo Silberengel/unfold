@@ -18,14 +18,18 @@ final class UserFromNpub
 
     public string $fallbackSvg = '';
 
+    /** When true (publication cards), missing/broken avatars use the site favicon instead of the generated SVG. */
+    public bool $faviconFallback = false;
+
     public function __construct(
         private readonly CacheService $cacheService,
         private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
-    public function mount(string $ident): void
+    public function mount(string $ident, bool $faviconFallback = false): void
     {
+        $this->faviconFallback = $faviconFallback;
         if (!str_starts_with($ident, 'npub')) {
             $this->pubkey = $ident;
             $this->npub = $this->nostrKeyHelper->convertPublicKeyToBech32($ident);
@@ -36,9 +40,11 @@ final class UserFromNpub
 
         $this->user = $this->cacheService->getMetadata($this->npub);
 
-        $seed = (\strlen($this->pubkey) === 64 && ctype_xdigit($this->pubkey))
-            ? $this->pubkey
-            : hash('sha256', $this->npub, false);
-        $this->fallbackSvg = PubkeyAvatarSvg::generate($seed);
+        if (!$this->faviconFallback) {
+            $seed = (\strlen($this->pubkey) === 64 && ctype_xdigit($this->pubkey))
+                ? $this->pubkey
+                : hash('sha256', $this->npub, false);
+            $this->fallbackSvg = PubkeyAvatarSvg::generate($seed);
+        }
     }
 }

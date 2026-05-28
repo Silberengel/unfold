@@ -752,6 +752,20 @@ svg.icon {
     object-position: 50% 14%;
 }
 
+.card-header--no-cover img[src*='favicon-96x96'] {
+    opacity: 1;
+    object-fit: contain;
+    object-position: center;
+    padding: 2rem;
+    box-sizing: border-box;
+}
+
+.card-header img[src*='favicon-96x96'] {
+    object-fit: contain;
+    padding: 2rem;
+    box-sizing: border-box;
+}
+
 .card-header--no-cover::after {
     content: '';
     position: absolute;
@@ -924,7 +938,7 @@ svg.icon {
 /* Dark scheme: primary fill is a light accent — keep ink dark (text-contrast can stay light from site theme). */
 html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active,
 html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active:hover {
-    color: #1e1e1e;
+    color: #121212;
     background: var(--color-primary);
     border-color: var(--color-primary-strong, var(--color-primary));
 }

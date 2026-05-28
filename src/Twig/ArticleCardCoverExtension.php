@@ -23,6 +23,9 @@ final class ArticleCardCoverExtension extends AbstractExtension
      */
     private const DEFAULT_PACKAGE_IMAGE = 'laeserin_logo.png';
 
+    /** Publication index cards only (kind 30040 lists). */
+    private const PUBLICATION_FALLBACK_PACKAGE_IMAGE = 'icons/favicon-96x96.png';
+
     private const OG_FALLBACK_PACKAGE_IMAGE = 'og-image.jpg';
 
     /**
@@ -42,6 +45,7 @@ final class ArticleCardCoverExtension extends AbstractExtension
     {
         return [
             new TwigFunction('article_card_cover', $this->articleCardCover(...)),
+            new TwigFunction('publication_card_cover', $this->publicationCardCover(...)),
             new TwigFunction('prefetch_article_card_covers', $this->prefetchArticleCardCovers(...)),
             new TwigFunction('article_og_image', $this->articleOgImage(...)),
             new TwigFunction('site_og_image', $this->siteOgImage(...)),
@@ -144,24 +148,35 @@ final class ArticleCardCoverExtension extends AbstractExtension
      */
     public function articleCardCover(?string $articleImage, ?string $pubkeyHex): string
     {
+        return $this->resolveCardCover($articleImage, $pubkeyHex, self::DEFAULT_PACKAGE_IMAGE);
+    }
+
+    public function publicationCardCover(?string $articleImage, ?string $pubkeyHex): string
+    {
+        return $this->resolveCardCover($articleImage, $pubkeyHex, self::PUBLICATION_FALLBACK_PACKAGE_IMAGE);
+    }
+
+    private function resolveCardCover(?string $articleImage, ?string $pubkeyHex, string $fallbackPackageImage): string
+    {
         if ($articleImage !== null && trim($articleImage) !== '') {
             return trim($articleImage);
         }
 
         $pubkeyHex = $pubkeyHex !== null ? strtolower(trim($pubkeyHex)) : '';
         if (64 !== strlen($pubkeyHex) || !ctype_xdigit($pubkeyHex)) {
-            return $this->defaultSiteImageUrl();
+            return $this->packageImageUrl($fallbackPackageImage);
         }
 
-        if (\array_key_exists($pubkeyHex, $this->authorCoverMemo)) {
-            return $this->authorCoverMemo[$pubkeyHex];
+        $memoKey = $fallbackPackageImage.'|'.$pubkeyHex;
+        if (\array_key_exists($memoKey, $this->authorCoverMemo)) {
+            return $this->authorCoverMemo[$memoKey];
         }
 
         try {
             $npub = $this->nostrPathHelper->npubFromPubkeyHex($pubkeyHex);
             if ($npub === '') {
-                $url = $this->defaultSiteImageUrl();
-                $this->authorCoverMemo[$pubkeyHex] = $url;
+                $url = $this->packageImageUrl($fallbackPackageImage);
+                $this->authorCoverMemo[$memoKey] = $url;
 
                 return $url;
             }
@@ -169,26 +184,31 @@ final class ArticleCardCoverExtension extends AbstractExtension
             $meta = $this->cacheService->getMetadata($npub);
             $pic = isset($meta->picture) ? trim((string) $meta->picture) : '';
             if ($pic !== '') {
-                $this->authorCoverMemo[$pubkeyHex] = $pic;
+                $this->authorCoverMemo[$memoKey] = $pic;
 
                 return $pic;
             }
         } catch (Throwable) {
-            $out = $this->defaultSiteImageUrl();
-            $this->authorCoverMemo[$pubkeyHex] = $out;
+            $out = $this->packageImageUrl($fallbackPackageImage);
+            $this->authorCoverMemo[$memoKey] = $out;
 
             return $out;
         }
 
-        $out = $this->defaultSiteImageUrl();
-        $this->authorCoverMemo[$pubkeyHex] = $out;
+        $out = $this->packageImageUrl($fallbackPackageImage);
+        $this->authorCoverMemo[$memoKey] = $out;
 
         return $out;
     }
 
     private function defaultSiteImageUrl(): string
     {
-        return $this->packages->getUrl(self::DEFAULT_PACKAGE_IMAGE);
+        return $this->packageImageUrl(self::DEFAULT_PACKAGE_IMAGE);
+    }
+
+    private function packageImageUrl(string $packageImage): string
+    {
+        return $this->packages->getUrl($packageImage);
     }
 
     private function pubkeyHexFromItem(mixed $item): ?string
