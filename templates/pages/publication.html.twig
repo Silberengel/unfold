@@ -8,10 +8,13 @@
     data-nostr-page-publication-pubkey-hex="{{ index.pubkey|lower|e('html_attr') }}"
     data-nostr-page-publication-npub="{{ npub|e('html_attr') }}"
     data-nostr-page-publication-d="{{ slug|e('html_attr') }}">
-    <header class="publication-reader__header card">
+    <header class="publication-reader__header card publication-reader__header-card">
+        <div class="card-header card-header--article">
+            <h1 class="card-title">{{ title }}</h1>
+            {% set _pub_share = nostr_share_menu() %}
+            {% if _pub_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _pub_share, event_menu: true } only %}{% endif %}
+        </div>
         <div class="card-body">
-            <span class="ui-badge ui-badge--brand">Publication</span>
-            <h1>{{ title }}</h1>
             {% if summary|trim != '' %}
                 <p class="lede">{{ summary }}</p>
             {% endif %}
@@ -32,7 +35,7 @@
                     <p class="alert alert-warning">Section could not be loaded from relays.</p>
                 {% endif %}
             {% else %}
-                <p class="text-subtle">Select a section from the table of contents.</p>
+                <p class="text-subtle">Select a section from the table of contents above.</p>
             {% endif %}
         </main>
     </div>

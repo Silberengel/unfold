@@ -24,10 +24,17 @@
         <small>{{ index.createdAt|date('F j Y') }}</small>
     </div>
     <a href="{{ href }}">
-        <div class="card-header{{ card_image|trim == '' ? ' card-header--no-cover' : '' }}">
-            {% if card_image|trim != '' %}
-                <img src="{{ card_image }}" alt="" loading="lazy" width="800" height="450">
-            {% endif %}
+        {% set _no_cover = card_image|trim == '' %}
+        <div class="card-header{{ _no_cover ? ' card-header--no-cover' : '' }}">
+            <img
+                src="{{ article_card_cover(card_image, pk) }}"
+                alt="{{ ('Illustration for ' ~ (card_title != '' ? card_title : d|replace({'-': ' '})|title))|e('html_attr') }}"
+                width="800"
+                height="450"
+                loading="lazy"
+                decoding="async"
+                onerror="this.onerror=null;this.style.display='none';"
+            >
         </div>
         <div class="card-body">
             <h2 class="card-title">{{ card_title != '' ? card_title : d }}</h2>

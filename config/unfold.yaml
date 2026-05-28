@@ -59,6 +59,8 @@ parameters:
     jumble_profile_users_base: 'https://jumble.imwald.eu/users'
     # Base for event threads: {base}/{nevent1...} (NIP-19 nevent, not raw hex id).
     jumble_feed_notes_base: 'https://jumble.imwald.eu/feed/notes'
+    # Base for NKBIP-01 publications in the ⋯ menu: {base}/publication/naddr/{naddr1…}. Empty = Jumble fallback.
+    alexandria_publication_base: 'https://next-alexandria.gitcitadel.eu'
     # Comma-separated category #d slugs to fetch first in app:prewarm after the root (see MagazineRefresher).
     magazine_prewarm_prefer_slugs_empty: ''
     magazine_prewarm_prefer_slugs: '%env(default:magazine_prewarm_prefer_slugs_empty:MAGAZINE_PREWARM_PREFER_SLUGS)%'

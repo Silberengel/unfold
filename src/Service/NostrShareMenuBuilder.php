@@ -125,6 +125,7 @@ final class NostrShareMenuBuilder
 
     public function __construct(
         private readonly MagazineIndexStore $magazineIndexStore,
+        private readonly PublicationIndexStore $publicationIndexStore,
         private readonly ArticleRepository $articleRepository,
         private readonly NostrKeyHelper $nostrKeyHelper,
         private readonly Nip19Codec $nip19,
@@ -136,6 +137,8 @@ final class NostrShareMenuBuilder
         private readonly string $jumbleProfileUsersBase,
         #[Autowire('%jumble_feed_notes_base%')]
         private readonly string $jumbleFeedNotesBase,
+        #[Autowire('%alexandria_publication_base%')]
+        private readonly string $alexandriaPublicationBase,
     ) {
     }
 
@@ -159,6 +162,10 @@ final class NostrShareMenuBuilder
             'author-profile' => $this->forAuthorProfile($request->attributes->get('npub', '')),
             'nevent' => $this->forNevent($request, (string) $request->attributes->get('nevent', '')),
             'magazine-category' => $this->forCategory($request->attributes->get('slug', '')),
+            'publication' => $this->forPublication(
+                (string) $request->attributes->get('npub', ''),
+                (string) $request->attributes->get('slug', ''),
+            ),
             'articles', 'featured_authors', 'search', 'article-preview', 'article-preview-event', 'editor-create', 'editor-edit' => $this->siteWithRootMenu(),
             default => $this->siteWithRootMenu(),
         };
@@ -304,6 +311,19 @@ final class NostrShareMenuBuilder
         return $this->fromNostrEvent($cat) ?? $this->siteWithRootMenu();
     }
 
+    private function forPublication(string $npub, string $slug): NostrShareMenuContext
+    {
+        if ($npub === '' || $slug === '' || !str_starts_with($npub, 'npub1')) {
+            return $this->siteWithRootMenu();
+        }
+        $index = $this->publicationIndexStore->getByNpubAndD($npub, $slug);
+        if ($index === null) {
+            return $this->siteWithRootMenu();
+        }
+
+        return $this->fromNostrEventForPublication($index) ?? $this->siteWithRootMenu();
+    }
+
     private function fromNostrEvent(Event $e): ?NostrShareMenuContext
     {
         $id = strtolower($e->getId());
@@ -338,6 +358,27 @@ final class NostrShareMenuBuilder
         );
     }
 
+    private function fromNostrEventForPublication(Event $e): ?NostrShareMenuContext
+    {
+        $ctx = $this->fromNostrEvent($e);
+        if ($ctx === null || $ctx->naddrBech32 === null || $ctx->naddrBech32 === '') {
+            return $ctx;
+        }
+        $alexandria = $this->alexandriaPublicationUrl($ctx->naddrBech32);
+        if ($alexandria === null) {
+            return $ctx;
+        }
+
+        return new NostrShareMenuContext(
+            $ctx->npub,
+            $ctx->neventBech32,
+            $ctx->naddrBech32,
+            $ctx->jumbleHref,
+            $alexandria,
+            'View on Alexandria',
+        );
+    }
+
     private function siteWithRootMenu(): NostrShareMenuContext
     {
         $root = $this->magazineIndexStore->getRoot($this->siteNpub, $this->rootDTag);
@@ -365,5 +406,15 @@ final class NostrShareMenuBuilder
         $b = rtrim($this->jumbleFeedNotesBase, '/');
 
         return $b === '' ? $naddrOrNeventOrNoteBech32 : $b.'/'.$naddrOrNeventOrNoteBech32;
+    }
+
+    private function alexandriaPublicationUrl(string $naddrBech32): ?string
+    {
+        $base = rtrim($this->alexandriaPublicationBase, '/');
+        if ($base === '' || !str_starts_with($naddrBech32, 'naddr1')) {
+            return null;
+        }
+
+        return $base.'/publication/naddr/'.$naddrBech32;
     }
 }

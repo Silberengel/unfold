@@ -19,6 +19,7 @@
 
         {% if publication_results|default([]) is not empty %}
             <h2 class="h5 mt-4">Publications</h2>
+            {% do prefetch_article_card_covers(publication_results) %}
             <div class="publications-grid article-list">
                 {% for index in publication_results %}
                     {% include 'components/Molecules/PublicationCard.html.twig' with { index: index } only %}

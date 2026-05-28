@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Dto;
 
 /**
- * Nostr "⋯" share menu: copy npub; copy naddr and/or nevent (Jumble /feed/notes/… uses the naddr when present, else nevent).
+ * Nostr "⋯" share menu: copy npub; copy naddr and/or nevent; external viewer link (Alexandria or Jumble).
  * For NIP-33 replaceable events, both can be set: naddr is the coordinate, nevent is the specific revision.
  */
 final class NostrShareMenuContext
@@ -16,6 +16,9 @@ final class NostrShareMenuContext
         public ?string $neventBech32,
         public ?string $naddrBech32,
         public string $jumbleHref,
+        /** When set, used instead of {@see $jumbleHref} for the "View on …" menu item. */
+        public ?string $externalViewHref = null,
+        public string $externalViewLabel = 'View on Jumble',
     ) {
     }
 }

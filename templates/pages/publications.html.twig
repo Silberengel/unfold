@@ -8,6 +8,7 @@
         <p class="text-subtle">Publications from the network (recent indices).</p>
 
         {% if indices is not empty %}
+            {% do prefetch_article_card_covers(indices) %}
             <div class="publications-grid article-list">
                 {% for index in indices %}
                     {% include 'components/Molecules/PublicationCard.html.twig' with { index: index } only %}

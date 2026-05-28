@@ -36,8 +36,10 @@
                     <button type="button" class="nostr-share-menu__action" data-action="click->copy-text#copy" data-copy-text-target="button" role="menuitem">Copy nevent</button>
                 </li>
             {% endif %}
+            {% set _view_href = share.externalViewHref|default(share.jumbleHref) %}
+            {% set _view_label = share.externalViewLabel|default('View on Jumble') %}
             <li class="nostr-share-menu__item" role="none">
-                <a class="nostr-share-menu__action" role="menuitem" href="{{ share.jumbleHref|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">View on Jumble</a>
+                <a class="nostr-share-menu__action" role="menuitem" href="{{ _view_href|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">{{ _view_label }}</a>
             </li>
         </ul>
     </details>
