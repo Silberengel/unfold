@@ -69,6 +69,9 @@ class NostrClient
         private readonly NostrKind5DeletionFilter $kind5DeletionFilter,
         private readonly NostrNip65RelayUrls $nip65RelayUrls,
         private readonly NostrLongformArticleStore $longformArticleStore,
+        private readonly PublicationFeature $publicationFeature,
+        private readonly PublicationIndexStore $publicationIndexStore,
+        private readonly PublicationMagazineFilter $publicationMagazineFilter,
     ) {
         $this->defaultRelaySet = $this->relayListFactory->getDefaultArticleRelaySet();
     }
@@ -415,17 +418,30 @@ class NostrClient
         $chunk = self::LONGFORM_BACKFILL_CHUNK_SECONDS;
         for ($windowFrom = $fromTs; $windowFrom < $toTs; $windowFrom += $chunk) {
             $windowTo = min($windowFrom + $chunk, $toTs);
-            $this->getLongFormContentForTimeWindow($windowFrom, $windowTo);
+            $this->ingestArticleBodiesForTimeWindow($windowFrom, $windowTo, KindsEnum::longformKindValues());
+            if ($this->publicationFeature->isEnabled()) {
+                $this->ingestPublicationIndicesForTimeWindow($windowFrom, $windowTo);
+                $this->ingestArticleBodiesForTimeWindow($windowFrom, $windowTo, [
+                    KindsEnum::PUBLICATION_CONTENT->value,
+                    KindsEnum::WIKI_ARTICLE->value,
+                ]);
+            }
             $this->entityManager->clear();
         }
     }
 
-    private function getLongFormContentForTimeWindow(int $since, int $until): void
+    /**
+     * @param list<int> $kinds
+     */
+    private function ingestArticleBodiesForTimeWindow(int $since, int $until, array $kinds): void
     {
+        if ($kinds === []) {
+            return;
+        }
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $filter = new Filter();
-        $filter->setKinds(KindsEnum::longformKindValues());
+        $filter->setKinds($kinds);
         $filter->setSince($since);
         $filter->setUntil($until);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
@@ -441,6 +457,54 @@ class NostrClient
         if ($wrappers !== []) {
             $this->saveLongFormContent($wrappers);
         }
+    }
+
+    public function ingestPublicationIndicesForTimeWindow(int $since, int $until): int
+    {
+        if (!$this->publicationFeature->isEnabled()) {
+            return 0;
+        }
+        $subscription = new Subscription();
+        $subscriptionId = $subscription->setId();
+        $filter = new Filter();
+        $filter->setKinds([KindsEnum::PUBLICATION_INDEX->value]);
+        $filter->setSince($since);
+        $filter->setUntil($until);
+        $requestMessage = new RequestMessage($subscriptionId, [$filter]);
+        $request = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
+        $events = $this->nostrRelayQuery->processResponse($request->send(), static fn (object $event) => $event);
+        $stored = 0;
+        foreach ($this->wireMerge->mergeNip33ParameterizedWireEvents($events) as $wire) {
+            if ($this->publicationMagazineFilter->isSiteMagazineWire($wire)) {
+                continue;
+            }
+            $entity = $this->wireMerge->magazineEventToPublicationEntity($wire);
+            if ($entity === null) {
+                continue;
+            }
+            $d = $entity->getSlug();
+            if ($d === null || $d === '') {
+                continue;
+            }
+            $this->publicationIndexStore->put($entity->getPubkey(), $d, $entity);
+            ++$stored;
+        }
+
+        return $stored;
+    }
+
+    public function fetchAndStorePublicationIndex(string $npub, string $dTag): ?PublicationEventEntity
+    {
+        $entity = $this->getMagazineIndex($npub, $dTag);
+        if ($entity === null) {
+            return null;
+        }
+        if ($this->publicationMagazineFilter->isSiteMagazineIndex($entity)) {
+            return null;
+        }
+        $this->publicationIndexStore->put($npub, $dTag, $entity);
+
+        return $entity;
     }
 
     /**

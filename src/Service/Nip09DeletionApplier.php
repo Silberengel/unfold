@@ -31,6 +31,7 @@ final class Nip09DeletionApplier
         private readonly EntityManagerInterface $entityManager,
         private readonly ArticleRepository $articleRepository,
         private readonly MagazineIndexStore $magazineIndexStore,
+        private readonly PublicationIndexStore $publicationIndexStore,
         private readonly EventRepository $eventRepository,
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
@@ -71,7 +72,7 @@ final class Nip09DeletionApplier
                 }
                 $declared = $eKinds[$i] ?? null;
                 if ($declared !== null
-                    && !\in_array($declared, array_merge(KindsEnum::longformKindValues(), [
+                    && !\in_array($declared, array_merge(KindsEnum::articleBodyKindValues(), [
                         KindsEnum::PUBLICATION_INDEX->value,
                         KindsEnum::METADATA->value,
                         KindsEnum::RELAY_LIST->value,
@@ -88,7 +89,7 @@ final class Nip09DeletionApplier
                 if ($this->tryRemoveCoreEventRowByEventId($eId, $deletionPubkey, $declared)) {
                     continue;
                 }
-                if ($declared === null || \in_array($declared, array_merge(KindsEnum::longformKindValues(), [
+                if ($declared === null || \in_array($declared, array_merge(KindsEnum::articleBodyKindValues(), [
                     KindsEnum::PUBLICATION_INDEX->value,
                     KindsEnum::CURATION_SET->value,
                 ]), true)) {
@@ -97,6 +98,8 @@ final class Nip09DeletionApplier
                         ++$roots;
                     } elseif ($mag === 2) {
                         ++$cats;
+                    } elseif ($mag === 3) {
+                        // community publication_index row removed
                     } elseif ($this->tryRemoveStoredCuration30004ByEventId($eId, $deletionPubkey)) {
                         ++$curation30004;
                     }
@@ -203,6 +206,14 @@ final class Nip09DeletionApplier
 
             return 2;
         }
+        if ($e->getStorageRole() === MagazineNostrEvent::STORAGE_PUBLICATION_INDEX) {
+            $this->entityManager->remove($e);
+            $this->logger->notice('NIP-09: removed community publication index (event table)', [
+                'event_id' => $eid,
+            ]);
+
+            return 3;
+        }
 
         return 0;
     }
@@ -267,7 +278,7 @@ final class Nip09DeletionApplier
         if ($declaredKind !== null && $k !== null && $declaredKind !== $k) {
             return false;
         }
-        if ($k !== null && !\in_array($k, KindsEnum::longformKindValues(), true)) {
+        if ($k !== null && !\in_array($k, KindsEnum::articleBodyKindValues(), true)) {
             return false;
         }
         $this->entityManager->remove($article);
@@ -337,7 +348,7 @@ final class Nip09DeletionApplier
             return $out;
         }
 
-        if (\in_array($kind, KindsEnum::longformKindValues(), true)) {
+        if (\in_array($kind, KindsEnum::articleBodyKindValues(), true)) {
             if ($d === '') {
                 return $out;
             }
@@ -375,7 +386,15 @@ final class Nip09DeletionApplier
                 $this->magazineIndexStore->deleteRoot($npub, $siteD);
                 ++$out['roots'];
                 $this->logger->notice('NIP-09: removed magazine root (a tag)', ['address' => $addr]);
-            } else {
+            } elseif ($d !== '') {
+                $cachedPub = $this->publicationIndexStore->getByPubkeyHexAndD($pk, $d);
+                if ($cachedPub !== null && $this->pubkeyEquals($cachedPub->getPubkey(), $deletionPubkey)) {
+                    $this->publicationIndexStore->deleteByPubkeyHexAndD($pk, $d);
+                    $this->logger->notice('NIP-09: removed community publication index (a tag)', [
+                        'address' => $addr,
+                        'd' => $d,
+                    ]);
+                }
                 // Category cache is keyed by `d` only; the same d string can appear for different
                 // authors' 30040 events. Only remove if the cached event was authored by this deletion.
                 $cachedCat = $this->magazineIndexStore->getCategory($d);

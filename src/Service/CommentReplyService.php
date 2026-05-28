@@ -205,7 +205,7 @@ final readonly class CommentReplyService
         int $parentKind,
         string $parentIdHex
     ): bool {
-        if (\in_array($parentKind, KindsEnum::longformKindValues(), true)) {
+        if (\in_array($parentKind, KindsEnum::articleBodyKindValues(), true)) {
             foreach ($tags as $row) {
                 if (!\is_array($row) || ($row[0] ?? null) === null) {
                     continue;

@@ -662,3 +662,102 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* Community publication reader + cards */
+.publication-reader__layout {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .publication-reader__layout {
+        grid-template-columns: minmax(12rem, 16rem) 1fr;
+        align-items: start;
+    }
+}
+
+.publication-reader__toc {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 0.35rem;
+    background: var(--article-reading-pane-bg, var(--color-bg));
+}
+
+.publication-toc__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.publication-toc__item {
+    margin: 0.25rem 0;
+}
+
+.publication-toc__link {
+    display: block;
+    font-size: 0.9rem;
+    text-decoration: none;
+    color: var(--color-text, #111);
+}
+
+.publication-toc__link:hover,
+.publication-toc__link--active {
+    text-decoration: underline;
+}
+
+.publications-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+@media (min-width: 640px) {
+    .publications-grid {
+        grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    }
+}
+
+.publication-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    height: 100%;
+}
+
+.publication-card:hover {
+    text-decoration: none;
+}
+
+.nostr-preview-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.nostr-preview-card-link:hover {
+    text-decoration: none;
+}
+
+.nostr-preview-card-link .card {
+    transition: box-shadow 0.15s ease;
+}
+
+.nostr-preview-card-link:hover .card {
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.article-main .sect1,
+.article-main .sect2 {
+    margin-top: 1.5rem;
+}
+
+.article-main .admonitionblock {
+    border-left: 3px solid var(--color-brand, #333);
+    padding: 0.5rem 1rem;
+    margin: 1rem 0;
+    background: color-mix(in srgb, var(--color-bg) 85%, var(--color-text-mid) 15%);
+}

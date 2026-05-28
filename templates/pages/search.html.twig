@@ -17,9 +17,18 @@
             </label>
         </form>
 
+        {% if publication_results|default([]) is not empty %}
+            <h2 class="h5 mt-4">Publications</h2>
+            <div class="publications-grid article-list">
+                {% for index in publication_results %}
+                    {% include 'components/Molecules/PublicationCard.html.twig' with { index: index } only %}
+                {% endfor %}
+            </div>
+        {% endif %}
         {% if results|default([]) is not empty %}
+            {% if publication_results|default([]) is not empty %}<h2 class="h5 mt-4">Articles</h2>{% endif %}
             <twig:Organisms:CardList :list="results" class="article-list" />
-        {% elseif query|default('') is not empty %}
+        {% elseif publication_results|default([]) is empty and query|default('') is not empty %}
             <p><small>{{ 'text.noResults'|trans }}</small></p>
         {% endif %}
 

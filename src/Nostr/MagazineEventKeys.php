@@ -63,6 +63,29 @@ final class MagazineEventKeys
         return self::tenantPrefix($magazineSlug).'mc:'.trim($categoryDTag, " \0\x0B\t\n\r");
     }
 
+    /**
+     * Community publication kind-30040 (NKBIP), keyed by author + #d.
+     */
+    public static function publicationIndex(string $magazineSlug, string $pubkeyHex64, string $dTag): string
+    {
+        $pk = strtolower(trim($pubkeyHex64));
+        if (64 !== \strlen($pk) || !ctype_xdigit($pk)) {
+            return '';
+        }
+
+        return self::tenantPrefix($magazineSlug).'pub:'.$pk.':'.trim($dTag, " \0\x0B\t\n\r");
+    }
+
+    public static function publicationIndexFromNpub(string $magazineSlug, string $npub, string $dTag): string
+    {
+        $hex = self::npubToHex($npub);
+        if ($hex === '') {
+            return '';
+        }
+
+        return self::publicationIndex($magazineSlug, $hex, $dTag);
+    }
+
     public static function profileKind0(string $authorPubkeyHex64): string
     {
         return 'pr:'.strtolower($authorPubkeyHex64);

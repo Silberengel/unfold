@@ -25,6 +25,8 @@ class Event
 
     public const STORAGE_PAYTO_10133 = 'payto_10133';
 
+    public const STORAGE_PUBLICATION_INDEX = 'publication_index';
+
     #[ORM\Id]
     #[ORM\Column(length: 225)]
     private string $id;

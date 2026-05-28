@@ -25,6 +25,16 @@
                     >Latest Articles</a>
                 </li>
             {% endif %}
+            {% if magazine_community_publications|default(false) %}
+                {% set publications_nav_active = app.request.attributes.get('_route') in ['publications', 'publication', 'publication-naddr'] %}
+                <li>
+                    <a
+                        class="header__cat-link header__cat-link--cta{{ publications_nav_active ? ' header__cat-link--active' : '' }}"
+                        href="{{ path('publications') }}"
+                        {% if publications_nav_active %}aria-current="page"{% endif %}
+                    >Latest Publications</a>
+                </li>
+            {% endif %}
         </ul>
         <div class="header__mobile-account">
             <twig:UserMenu :inline="true" />

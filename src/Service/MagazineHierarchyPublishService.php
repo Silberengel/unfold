@@ -185,7 +185,7 @@ final class MagazineHierarchyPublishService
             if ($kind === KindsEnum::PUBLICATION_INDEX->value && !hash_equals($ownerHex, $pk)) {
                 return 'Nested 30040 `a` tags must use the magazine owner pubkey';
             }
-            $allowedKinds = array_merge([KindsEnum::PUBLICATION_INDEX->value], KindsEnum::longformKindValues());
+            $allowedKinds = array_merge([KindsEnum::PUBLICATION_INDEX->value], KindsEnum::magazineCategoryKindValues());
             if (!\in_array($kind, $allowedKinds, true)) {
                 return 'Unsupported kind in `a` tag (only 30040, 30023, 30024, 30817)';
             }

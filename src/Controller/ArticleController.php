@@ -295,14 +295,18 @@ class ArticleController  extends AbstractController
         $author = $data->pubkey;
         $kind = (int) $data->kind;
 
-        if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
-            throw new \Exception('Not a long form article');
+        $npub = $nostrKeyHelper->convertPublicKeyToBech32((string) $author);
+
+        if ($kind === KindsEnum::PUBLICATION_INDEX->value) {
+            return $this->redirectToRoute('publication', ['npub' => $npub, 'slug' => $slug], Response::HTTP_MOVED_PERMANENTLY);
+        }
+
+        if (!\in_array($kind, KindsEnum::articleBodyKindValues(), true)) {
+            throw new \Exception('Unsupported naddr kind');
         }
 
         $nostrClient->getLongFormFromNaddr($slug, $relays, $author, $kind);
         if ($slug) {
-            $npub = $nostrKeyHelper->convertPublicKeyToBech32((string) $author);
-
             return $this->redirectToRoute('article', ['npub' => $npub, 'slug' => $slug], Response::HTTP_MOVED_PERMANENTLY);
         }
 
@@ -505,6 +509,9 @@ class ArticleController  extends AbstractController
                     $html = '<span class="text-subtle">No event found on the default relay for this preview.</span>';
                 } elseif ($html === '') {
                     $previewData->type = $descriptor->type;
+                    if (isset($descriptor->identifier) && \is_string($descriptor->identifier)) {
+                        $previewData->identifier = $descriptor->identifier;
+                    }
                     $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
                         'preview' => $previewData,
                     ]);

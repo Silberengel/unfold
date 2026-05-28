@@ -19,3 +19,7 @@
 .phpunit.result.cache
 /phpunit.xml
 ###< symfony/phpunit-bridge ###
+
+###> npm (Asciidoctor render script) ###
+/node_modules/
+###< npm (Asciidoctor render script) ###

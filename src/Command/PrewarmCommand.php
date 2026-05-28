@@ -15,6 +15,8 @@ use App\Service\Nip05VerificationService;
 use App\Service\HighlightSyncService;
 use App\Service\MagazineRefresher;
 use App\Service\Nip09DeletionApplier;
+use App\Service\PublicationFeature;
+use App\Service\PublicationIndexRefresher;
 use App\Service\NostrClient;
 use App\Service\NostrKeyHelper;
 use App\Service\ProfileIdentityLinksBuilder;
@@ -56,6 +58,8 @@ final class PrewarmCommand extends Command
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
         private readonly HighlightSyncService $highlightSyncService,
         private readonly NostrKeyHelper $nostrKeyHelper,
+        private readonly PublicationFeature $publicationFeature,
+        private readonly PublicationIndexRefresher $publicationIndexRefresher,
     ) {
         parent::__construct();
     }
@@ -75,7 +79,10 @@ final class PrewarmCommand extends Command
             ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the whole comments phase (Nostr fetches are slow; a single long thread can exceed a short budget; use 1200+ if prewarming many articles)', '600')
             ->addOption('no-highlights', null, InputOption::VALUE_NONE, 'Skip kind-9802 highlight fetch → MySQL')
             ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to sync highlights for (0 = all; each Nostr fetch is slow — default 25 keeps prewarm bounded)', '25')
-            ->addOption('highlights-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the highlight sync phase', '600');
+            ->addOption('highlights-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the highlight sync phase', '600')
+            ->addOption('no-publication-indices', null, InputOption::VALUE_NONE, 'Skip mass community kind-30040 publication index ingest')
+            ->addOption('publication-index-budget', null, InputOption::VALUE_REQUIRED, 'Seconds for BFS nested publication 30040 after mass REQ', '120')
+            ->addOption('publication-since', null, InputOption::VALUE_REQUIRED, 'strtotime() start for publication 30040 mass REQ', '-2 month');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -162,6 +169,30 @@ final class PrewarmCommand extends Command
             }
         } else {
             $io->note('Skipping magazine (--no-magazine).');
+        }
+
+        if ($this->publicationFeature->isEnabled() && !$input->getOption('no-publication-indices')) {
+            $pubBudget = max(1, (int) $input->getOption('publication-index-budget'));
+            $sinceStr = (string) $input->getOption('publication-since');
+            $since = strtotime($sinceStr);
+            if ($since === false) {
+                $since = strtotime('-2 month');
+            }
+            $until = time();
+            $io->section('Community publication indices (kind 30040 mass ingest)');
+            try {
+                $result = $this->publicationIndexRefresher->refreshFromRelays($pubBudget, $since, $until);
+                $io->writeln(sprintf(
+                    'Stored <info>%d</info> publication index event(s) from time window; nested fetches: <info>%d</info>.',
+                    $result['stored_window'],
+                    $result['nested_fetched'],
+                ));
+            } catch (\Throwable $e) {
+                $this->logger->error('app:prewarm publication indices failed', ['e' => $e->getMessage()]);
+                $io->warning('Publication index refresh failed: '.$e->getMessage());
+            }
+        } elseif ($this->publicationFeature->isEnabled()) {
+            $io->note('Skipping publication indices (--no-publication-indices).');
         }
 
         // MagazineRefresher used to set max_execution_time (~2×budget); re-assert unlimited before

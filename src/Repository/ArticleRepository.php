@@ -5,6 +5,8 @@ namespace App\Repository;
 use App\Dto\FeaturedArticleCard;
 use App\Entity\Article;
 use App\Enum\EventStatusEnum;
+use App\Enum\KindsEnum;
+use App\Service\PublicationFeature;
 use App\Service\TenantContext;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ArrayParameterType;
@@ -16,6 +18,7 @@ class ArticleRepository extends ServiceEntityRepository
     public function __construct(
         ManagerRegistry $registry,
         private readonly TenantContext $tenant,
+        private readonly PublicationFeature $publicationFeature,
     ) {
         parent::__construct($registry, Article::class);
     }
@@ -80,7 +83,12 @@ class ArticleRepository extends ServiceEntityRepository
             return null;
         }
 
-        return $qb->where($conditions);
+        $kinds = KindsEnum::searchableArticleKindValues($this->publicationFeature->isEnabled());
+        $qb->where($conditions)
+            ->andWhere('a.kind IN (:searchKinds)')
+            ->setParameter('searchKinds', $kinds);
+
+        return $qb;
     }
 
     /**

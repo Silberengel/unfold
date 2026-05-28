@@ -84,6 +84,78 @@ final class NostrEventTags
     }
 
     /**
+     * Full kind:pubkey:#d coordinates for nested kind-30040 {@code a} tags, in tag order.
+     *
+     * @param iterable<mixed> $tagRows
+     *
+     * @return list<string>
+     */
+    public static function publicationIndexNestedACoordinates(iterable $tagRows): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($tagRows as $tag) {
+            if (!self::tagNameMatches($tag, 'a')) {
+                continue;
+            }
+            $seq = self::rowToStringList($tag);
+            if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $coord = trim((string) $seq[1]);
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) < 3 || (int) $parts[0] !== KindsEnum::PUBLICATION_INDEX->value) {
+                continue;
+            }
+            if (isset($seen[$coord])) {
+                continue;
+            }
+            $seen[$coord] = true;
+            $out[] = $coord;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Leaf publication section coordinates (30023, 30817, 30041, 30818) from {@code a} tags.
+     *
+     * @param iterable<mixed> $tagRows
+     *
+     * @return list<string>
+     */
+    public static function publicationSectionACoordinates(iterable $tagRows): array
+    {
+        $allowed = array_flip(KindsEnum::publicationSectionKindValues());
+        $out = [];
+        $seen = [];
+        foreach ($tagRows as $tag) {
+            if (!self::tagNameMatches($tag, 'a')) {
+                continue;
+            }
+            $seq = self::rowToStringList($tag);
+            if ($seq === null || !isset($seq[1]) || (string) $seq[1] === '') {
+                continue;
+            }
+            $coord = trim((string) $seq[1]);
+            $parts = explode(':', $coord, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            if (!isset($allowed[(int) $parts[0]])) {
+                continue;
+            }
+            if (isset($seen[$coord])) {
+                continue;
+            }
+            $seen[$coord] = true;
+            $out[] = $coord;
+        }
+
+        return $out;
+    }
+
+    /**
      * Like {@see publicationIndexNestedDSlugs} but only {@code a} coordinates whose pubkey matches
      * {@code $ownerHexLower} (hex).
      *

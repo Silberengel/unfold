@@ -1,0 +1,40 @@
+{% set d = index.slug %}
+{% set pk = index.pubkey %}
+{% set npub = npub_from_hex(pk) %}
+{% set href = path('publication', { npub: npub, slug: d }) %}
+{% set card_title = '' %}
+{% for tag in index.tags %}
+    {% if tag[0] == 'title' and card_title == '' %}
+        {% set card_title = tag[1]|default('') %}
+    {% endif %}
+{% endfor %}
+{% set card_summary = '' %}
+{% set card_image = '' %}
+{% for tag in index.tags %}
+    {% if tag[0] == 'summary' and card_summary == '' %}
+        {% set card_summary = tag[1]|default('') %}
+    {% elseif tag[0] == 'image' and card_image == '' %}
+        {% set card_image = tag[1]|default('') %}
+    {% endif %}
+{% endfor %}
+
+<div class="card publication-card">
+    <div class="metadata">
+        <p>by <twig:Molecules:UserFromNpub ident="{{ pk }}" /></p>
+        <small>{{ index.createdAt|date('F j Y') }}</small>
+    </div>
+    <a href="{{ href }}">
+        <div class="card-header{{ card_image|trim == '' ? ' card-header--no-cover' : '' }}">
+            <span class="ui-badge ui-badge--brand">Publication</span>
+            {% if card_image|trim != '' %}
+                <img src="{{ card_image }}" alt="" loading="lazy" width="800" height="450">
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">{{ card_title != '' ? card_title : d }}</h2>
+            {% if card_summary|trim != '' %}
+                <p class="lede">{{ card_summary }}</p>
+            {% endif %}
+        </div>
+    </a>
+</div>

@@ -43,6 +43,8 @@ parameters:
     d_tag: '%d_tag_magazine%'
     # Whether to show community articles on the home page
     community_articles: false
+    # Whether to show community publications on the home page
+    community_publications: true
     # Domain for site-assigned NIP-05 for featured (magazine category) authors; must match the host serving /.well-known/nostr.json
     nip05_domain: 'gitcitadel.imwald.eu'
     # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).

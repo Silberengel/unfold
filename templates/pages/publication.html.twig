@@ -1,0 +1,40 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ title|e('html_attr') }} — {{ website_name }}{% endblock %}
+
+{% block body %}
+<div class="publication-reader"
+    data-nostr-page-publication-coordinate="{{ ('30040:' ~ index.pubkey|lower ~ ':' ~ slug)|e('html_attr') }}"
+    data-nostr-page-publication-pubkey-hex="{{ index.pubkey|lower|e('html_attr') }}"
+    data-nostr-page-publication-npub="{{ npub|e('html_attr') }}"
+    data-nostr-page-publication-d="{{ slug|e('html_attr') }}">
+    <header class="publication-reader__header card">
+        <div class="card-body">
+            <span class="ui-badge ui-badge--brand">Publication</span>
+            <h1>{{ title }}</h1>
+            {% if summary|trim != '' %}
+                <p class="lede">{{ summary }}</p>
+            {% endif %}
+            <p class="text-subtle">by <twig:Molecules:UserFromNpub ident="{{ index.pubkey }}" /></p>
+        </div>
+    </header>
+
+    <div class="publication-reader__layout">
+        <nav class="publication-reader__toc" aria-label="Table of contents">
+            <h2 class="h6">Contents</h2>
+            {% include 'components/Organisms/PublicationToc.html.twig' with { items: toc, npub: npub, publication_slug: slug } only %}
+        </nav>
+        <main class="publication-reader__main article-main">
+            {% if section_coordinate|default('') != '' %}
+                {% if section_html %}
+                    {{ section_html|raw }}
+                {% else %}
+                    <p class="alert alert-warning">Section could not be loaded from relays.</p>
+                {% endif %}
+            {% else %}
+                <p class="text-subtle">Select a section from the table of contents.</p>
+            {% endif %}
+        </main>
+    </div>
+</div>
+{% endblock %}

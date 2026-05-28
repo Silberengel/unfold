@@ -11,6 +11,10 @@
         {% endfor %}
     {% endif %}
     {% set _na_share = nostr_event_share(preview) %}
+    {% set _naddr_href = preview.identifier is defined ? naddr_internal_url(preview.identifier) : null %}
+    {% if _naddr_href %}
+    <a href="{{ _naddr_href }}" class="nostr-preview-card-link">
+    {% endif %}
     <div class="card nostr-address-preview{% if _na_share %} nostr-address-preview--with-menu{% endif %}">
         {% if _na_share %}
             <div class="nostr-preview-card__menu">
@@ -30,8 +34,14 @@
                     <span class="text-subtle">—</span>
                 {% endif %}
             </p>
+            {% if preview.kind is defined and preview.kind == 30040 %}
+                <span class="ui-badge ui-badge--brand">Publication</span>
+            {% endif %}
         </div>
     </div>
+    {% if _naddr_href %}
+    </a>
+    {% endif %}
 {% elseif preview.type == 'nevent' %}
     {% if preview.kind == 9802 %}
         <div class="card nostr-highlight-preview">
@@ -64,7 +74,9 @@
             </div>
         </div>
     {% else %}
-        {% set is_longform = preview.kind == 30023 or preview.kind == 30024 %}
+        {% set is_longform = preview.kind == 30023 or preview.kind == 30024 or preview.kind == 30817 %}
+        {% set is_publication = preview.kind == 30040 %}
+        {% set is_asciidoc_section = preview.kind == 30041 or preview.kind == 30818 %}
         {% set article_title = null %}
         {% set article_summary = null %}
         {% if preview.tags is defined %}
@@ -82,8 +94,12 @@
                     <twig:Molecules:UserFromNpub ident="{{ preview.pubkey }}" />
                 </div>
                 <div class="nostr-card-header__actions">
-                    {% if is_longform %}
+                    {% if is_publication %}
+                        <span class="ui-badge ui-badge--brand">Publication</span>
+                    {% elseif is_longform %}
                         <span class="ui-badge ui-badge--secondary">Article</span>
+                    {% elseif is_asciidoc_section %}
+                        <span class="ui-badge ui-badge--secondary">Section</span>
                     {% else %}
                         <span class="ui-badge ui-badge--primary">Note</span>
                     {% endif %}

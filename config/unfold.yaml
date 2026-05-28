@@ -49,6 +49,8 @@ parameters:
     d_tag: '%d_tag_magazine%'
     # Whether to show community articles on the home page
     community_articles: true
+    # Whether to enable NKBIP publications (Latest Publications, ingest 30040/30041/30818, search)
+    community_publications: false
     # Domain for site-assigned NIP-05 for featured (magazine category) authors; must match the host serving /.well-known/nostr.json
     nip05_domain: 'blog.imwald.eu'
     # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).

@@ -1,0 +1,20 @@
+<ul class="publication-toc">
+    {% for item in items %}
+        <li class="publication-toc__item">
+            {% if item.coordinate %}
+                <a href="{{ path('publication', { npub: npub, slug: publication_slug }) ~ '?section=' ~ item.coordinate|url_encode }}">{{ item.label }}</a>
+            {% elseif item.nested_d and item.nested_npub %}
+                <a href="{{ path('publication', { npub: item.nested_npub, slug: item.nested_d }) }}">{{ item.label }}</a>
+            {% else %}
+                <span>{{ item.label }}</span>
+            {% endif %}
+            {% if item.children|default([]) is not empty %}
+                {% include 'components/Organisms/PublicationToc.html.twig' with {
+                    items: item.children,
+                    npub: item.nested_npub|default(npub),
+                    publication_slug: item.nested_d|default(publication_slug),
+                } only %}
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>

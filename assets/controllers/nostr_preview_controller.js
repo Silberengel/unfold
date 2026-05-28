@@ -10,14 +10,26 @@ const UNAVAILABLE_HTML = `<div class="alert alert-warning my-2" role="status">Pr
  * @returns {boolean}
  */
 function isPreviewForSameArticleOnPage(el, type, decodedStr) {
-    const root = el.closest('[data-nostr-page-article-coordinate]');
+    const root =
+        el.closest('[data-nostr-page-article-coordinate]') ||
+        el.closest('[data-nostr-page-publication-coordinate]');
     if (!root) {
         return false;
     }
-    const pageCoord = root.getAttribute('data-nostr-page-article-coordinate') || '';
+    const pageCoord =
+        root.getAttribute('data-nostr-page-article-coordinate') ||
+        root.getAttribute('data-nostr-page-publication-coordinate') ||
+        '';
     const pageEid = (root.getAttribute('data-nostr-page-article-event-id') || '').toLowerCase();
-    const pagePubHex = (root.getAttribute('data-nostr-page-article-pubkey-hex') || '').toLowerCase();
-    const pageNpub = root.getAttribute('data-nostr-page-article-npub') || '';
+    const pagePubHex = (
+        root.getAttribute('data-nostr-page-article-pubkey-hex') ||
+        root.getAttribute('data-nostr-page-publication-pubkey-hex') ||
+        ''
+    ).toLowerCase();
+    const pageNpub =
+        root.getAttribute('data-nostr-page-article-npub') ||
+        root.getAttribute('data-nostr-page-publication-npub') ||
+        '';
     if (!pageCoord) {
         return false;
     }

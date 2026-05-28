@@ -8,15 +8,15 @@ use App\Enum\KindsEnum;
 use InvalidArgumentException;
 
 /**
- * Map long-form (30023/30024) and wiki (30817) Nostr events to the Article entity.
+ * Map Nostr article-body events (30023/30024/30817/30041/30818) to the Article entity.
  */
 class ArticleFactory
 {
     public function createFromLongFormContentEvent($source): Article
     {
         $kind = (int) ($source->kind ?? 0);
-        if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
-            throw new InvalidArgumentException('Source event kind must be a longform kind (30023, 30024, 30817), got '.$kind);
+        if (!\in_array($kind, KindsEnum::articleBodyKindValues(), true)) {
+            throw new InvalidArgumentException('Source event kind must be an article-body kind, got '.$kind);
         }
         $entity = new Article();
         $entity->setRaw($source);

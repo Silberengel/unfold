@@ -53,6 +53,9 @@ services:
     App\Service\NostrClient:
         arguments:
             $projectDir: '%kernel.project_dir%'
+    App\Service\ArticleBodyAsciidocRenderer:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
     App\Service\ArticleCommentThreadLoader:
         arguments:
             $appCachePool: '@cache.replies'
@@ -63,6 +66,8 @@ services:
     App\Twig\NostrShareMenuExtension:
         tags: [ 'twig.extension' ]
     App\Twig\MagazineJumbleExtension:
+        tags: [ 'twig.extension' ]
+    App\Twig\NaddrUrlExtension:
         tags: [ 'twig.extension' ]
     App\Twig\TopTopicsExtension:
         tags: [ 'twig.extension' ]
