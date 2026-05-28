@@ -260,6 +260,53 @@ final readonly class NostrRelayListFactory
     /**
      * @return list<string> Deduplicated profile relay URLs from config
      */
+    /**
+     * Union of default_relay, article_relays, and profile_relays (config only).
+     *
+     * @return list<string>
+     */
+    public function getTenantConfiguredRelayUrlList(): array
+    {
+        $seen = [];
+        $out = [];
+        foreach (array_merge(
+            $this->getConfiguredArticleRelayUrlList(),
+            $this->getProfileRelayUrlList(),
+        ) as $url) {
+            $norm = $this->normalizeRelayUrl($url);
+            if ($norm === '' || isset($seen[$norm])) {
+                continue;
+            }
+            $seen[$norm] = true;
+            $out[] = $url;
+        }
+
+        return $out;
+    }
+
+    public function isTenantConfiguredRelay(string $relayUrl): bool
+    {
+        $norm = $this->normalizeRelayUrl($relayUrl);
+        if ($norm === '') {
+            return false;
+        }
+        foreach ($this->getTenantConfiguredRelayUrlList() as $configured) {
+            if ($this->normalizeRelayUrl($configured) === $norm) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeRelayUrl(string $url): string
+    {
+        return rtrim(trim($url), '/');
+    }
+
+    /**
+     * @return list<string>
+     */
     public function getProfileRelayUrlList(): array
     {
         $seen = [];

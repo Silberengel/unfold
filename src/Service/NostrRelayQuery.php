@@ -20,6 +20,7 @@ final readonly class NostrRelayQuery
     public function __construct(
         private LoggerInterface $logger,
         private NostrRelayRequestFactory $relayRequestFactory,
+        private RelayFetchedEventPersister $relayFetchedEventPersister,
     ) {
     }
 
@@ -79,6 +80,7 @@ final readonly class NostrRelayQuery
      */
     public function processResponse(array $response, callable $eventHandler): array
     {
+        $this->relayFetchedEventPersister->beginResponse();
         $results = [];
         foreach ($response as $relayUrl => $relayRes) {
             if ($relayRes instanceof \Throwable) {
@@ -121,6 +123,7 @@ final readonly class NostrRelayQuery
                                 'relay' => $relayUrl,
                                 'event_id' => $item->event->id ?? 'unknown',
                             ]);
+                            $this->relayFetchedEventPersister->persistFromTenantRelay($item->event, $relayUrl);
                             $result = $eventHandler($item->event);
                             if ($result !== null) {
                                 $results[] = $result;

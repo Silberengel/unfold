@@ -7,6 +7,7 @@ namespace App\Tests\Service;
 use App\Enum\KindsEnum;
 use App\Service\NostrRelayRequestFactory;
 use App\Service\NostrRelayQuery;
+use App\Service\RelayFetchedEventPersister;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use swentel\nostr\Relay\Relay;
@@ -25,7 +26,8 @@ final class NostrRelayQueryTest extends TestCase
     public function testCreateNostrRequestAcceptsBackedEnumKinds(): void
     {
         $factory = new NostrRelayRequestFactory(12);
-        $q = new NostrRelayQuery(new NullLogger(), $factory);
+        $persister = $this->createMock(RelayFetchedEventPersister::class);
+        $q = new NostrRelayQuery(new NullLogger(), $factory, $persister);
         $set = new RelaySet();
         $set->addRelay(new Relay('wss://127.0.0.1:0'));
         $req = $q->createNostrRequest(

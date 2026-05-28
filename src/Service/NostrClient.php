@@ -31,7 +31,8 @@ use swentel\nostr\Subscription\Subscription;
  * {@see NostrArticleDiscussionSupport} (article thread REQ filters and tag classifiers),
  * {@see NostrKind5DeletionFilter} (NIP-09 kind-5 relevance for stored row kinds),
  * {@see NostrNip65RelayUrls} (NIP-65 `r` → wss list from kind-10002 wire),
- * {@see NostrLongformArticleStore} (DB upsert for long-form / NIP-23 article rows).
+ * {@see NostrLongformArticleStore} (DB upsert for long-form / NIP-23 article rows),
+ * {@see RelayFetchedEventPersister} (cache wire events from tenant-configured relays into MySQL).
  */
 class NostrClient
 {
@@ -72,6 +73,7 @@ class NostrClient
         private readonly PublicationFeature $publicationFeature,
         private readonly PublicationIndexStore $publicationIndexStore,
         private readonly PublicationMagazineFilter $publicationMagazineFilter,
+        private readonly LongformArticleIngest $longformArticleIngest,
     ) {
         $this->defaultRelaySet = $this->relayListFactory->getDefaultArticleRelaySet();
     }
@@ -1415,103 +1417,7 @@ class NostrClient
      */
     public function saveEachArticleToTheDatabase(Article $article): void
     {
-        $newId = (string) ($article->getEventId() ?? '');
-        if ($newId === '') {
-            $this->logger->info('[longform_ingest] saveEachArticle: skip, empty eventId on Article', [
-                'title' => $article->getTitle(),
-            ]);
-
-            return;
-        }
-        if ($this->longformArticleStore->isEventIdAlreadyStored($newId)) {
-            $existing = $this->longformArticleStore->findByEventId($newId);
-            if ($existing !== null) {
-                $this->longformArticleStore->linkExistingArticle($existing);
-            }
-            $this->logger->info('[longform_ingest] saveEachArticle: skip, DB already has this exact event id (no work)', [
-                'eventId' => $newId,
-                'slug' => $article->getSlug(),
-            ]);
-
-            return;
-        }
-        $pubkey = strtolower((string) ($article->getPubkey() ?? ''));
-        $slug = trim((string) ($article->getSlug() ?? ''));
-        if ($pubkey === '' || $slug === '') {
-            $this->logger->info('[longform_ingest] saveEachArticle: persist new (missing pubkey or slug on entity)', [
-                'eventId' => $newId,
-                'pubkey_empty' => $pubkey === '',
-                'slug' => $slug,
-            ]);
-            $this->longformArticleStore->persistNew($article, 'missing_pubkey_or_slug_on_entity');
-
-            return;
-        }
-        $incumbent = $this->longformArticleStore->findLatestByAuthorAndSlug($pubkey, $slug);
-        if ($incumbent === null) {
-            $this->logger->info('[longform_ingest] saveEachArticle: persist new row (no DB row for author+slug)', [
-                'eventId' => $newId,
-                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
-            ]);
-            $this->longformArticleStore->persistNew($article, 'no_db_row_for_nip33_address');
-
-            return;
-        }
-        $candidate = $article->getRaw();
-        if (!\is_object($candidate)) {
-            $this->logger->warning('[longform_ingest] saveEachArticle: new Article has no raw wire; trying insert as new', [
-                'eventId' => $newId,
-            ]);
-            $this->longformArticleStore->persistNew($article, 'no_raw_on_incoming_article');
-
-            return;
-        }
-        $iWire = $this->longformArticleStore->longFormWireStubFromArticle($incumbent);
-        $cTs = $this->wireMerge->magazineEventCreatedAt($candidate);
-        $iTs = $this->wireMerge->magazineEventCreatedAt($iWire);
-        if ($this->wireMerge->wireEventSupersedes($candidate, $iWire)) {
-            $this->logger->info('[longform_ingest] saveEachArticle: NIP-33 update — candidate wins, flushing DB row', [
-                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
-                'from_event_id' => $incumbent->getEventId(),
-                'to_event_id' => $newId,
-                'db_row_id' => $incumbent->getId(),
-                'incumbent_created_at' => $iTs,
-                'candidate_created_at' => $cTs,
-            ]);
-            $this->longformArticleStore->applySourceOntoTarget($article, $incumbent);
-            if ($incumbent->getPubkey() !== $pubkey) {
-                $incumbent->setPubkey($pubkey);
-            }
-            try {
-                $this->entityManager->flush();
-                $this->longformArticleStore->linkExistingArticle($incumbent);
-            } catch (\Exception $e) {
-                $this->logger->error('[longform_ingest] saveEachArticle: flush after update failed: '.$e->getMessage());
-                $this->managerRegistry->resetManager();
-            }
-
-            return;
-        }
-        if ($this->wireMerge->wireEventSupersedes($iWire, $candidate)) {
-            $this->logger->info('[longform_ingest] saveEachArticle: keep DB — merged relay result is not newer (incumbent wins)', [
-                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
-                'dbEventId' => $incumbent->getEventId(),
-                'seenEventId' => $newId,
-                'db_row_id' => $incumbent->getId(),
-                'dbCreatedAt' => $iTs,
-                'seenCreatedAt' => $cTs,
-            ]);
-            $this->longformArticleStore->linkExistingArticle($incumbent);
-        } elseif ((string) $incumbent->getEventId() !== $newId) {
-            $this->logger->notice('[longform_ingest] saveEachArticle: inconclusive supersedes (different ids) — check relays / d-tag match', [
-                'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),
-                'dbEventId' => $incumbent->getEventId(),
-                'seenEventId' => $newId,
-                'db_row_id' => $incumbent->getId(),
-                'dbCreatedAt' => $iTs,
-                'seenCreatedAt' => $cTs,
-            ]);
-        }
+        $this->longformArticleIngest->ingest($article);
     }
 
     /**

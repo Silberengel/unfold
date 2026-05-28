@@ -32,4 +32,20 @@ final class NostrRelayListFactoryTest extends TestCase
         $f = new NostrRelayListFactory('wss://d', [], [], $ts, new NullLogger());
         $this->assertSame('wss://d', $f->getDefaultRelayUrl());
     }
+
+    public function testIsTenantConfiguredRelay(): void
+    {
+        $ts = $this->createMock(TokenStorageInterface::class);
+        $ts->method('getToken')->willReturn(null);
+        $f = new NostrRelayListFactory(
+            'wss://main',
+            ['wss://article'],
+            ['wss://profile'],
+            $ts,
+            new NullLogger(),
+        );
+        $this->assertTrue($f->isTenantConfiguredRelay('wss://main/'));
+        $this->assertTrue($f->isTenantConfiguredRelay('wss://profile'));
+        $this->assertFalse($f->isTenantConfiguredRelay('wss://other'));
+    }
 }
