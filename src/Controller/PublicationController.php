@@ -33,7 +33,8 @@ final class PublicationController extends AbstractController
             throw $this->createNotFoundException();
         }
 
-        $perPage = 25;
+        // Even count so the two-column publications grid never leaves a lone card on the last row.
+        $perPage = 24;
         $page = max(1, $request->query->getInt('page', 1));
         $total = $this->publicationIndexStore->countPublicationIndices();
         $lastPage = max(1, (int) ceil($total / $perPage));
