@@ -95,6 +95,9 @@ services:
     App\Service\PublicationRelayResolver:
         arguments:
             $publicationRelayTimeoutSec: '%publication_relay_timeout_sec%'
+    App\Service\AsciiDoctorServerClient:
+        arguments:
+            $serverUrl: '%asciidoctor_server_url%'
     App\Service\PublicationIndexRefresher:
         arguments:
             $prewarmMinIndexCount: '%publication_prewarm_min_count%'

@@ -47,6 +47,17 @@ final class PublicationTreeWarmer
         );
     }
 
+    /** Longer relay budget before assembling a full book for EPUB/PDF export. */
+    public function warmForExport(Event $rootIndex): void
+    {
+        $this->warmTree(
+            [$rootIndex],
+            microtime(true) + 120,
+            30,
+            warmProfiles: false,
+        );
+    }
+
     /**
      * Prewarm sections and profiles for the newest stored publication indices.
      *

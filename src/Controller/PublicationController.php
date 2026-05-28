@@ -9,11 +9,16 @@ use App\Nostr\Nip19Codec;
 use App\Service\NostrKeyHelper;
 use App\Service\PublicationFeature;
 use App\Service\PublicationIndexStore;
+use App\Service\PublicationExportService;
+use App\Service\PublicationExportException;
 use App\Service\PublicationReaderService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class PublicationController extends AbstractController
@@ -22,6 +27,7 @@ final class PublicationController extends AbstractController
         private readonly PublicationFeature $publicationFeature,
         private readonly PublicationReaderService $reader,
         private readonly PublicationIndexStore $publicationIndexStore,
+        private readonly PublicationExportService $export,
         private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
@@ -112,6 +118,51 @@ final class PublicationController extends AbstractController
             'toc' => $this->reader->buildToc($index),
             'section_coordinate' => $sectionCoord,
             'section_html' => $sectionHtml,
+            'export_available' => $this->export->isAvailable(),
+            'export_formats' => $this->export->supportedFormats(),
         ]);
+    }
+
+    #[Route(
+        '/publication/p/{npub}/d/{slug}/download',
+        name: 'publication-download',
+        requirements: ['npub' => '^npub1.*', 'slug' => '.+'],
+        options: ['utf8' => true],
+        methods: ['GET'],
+    )]
+    public function download(Request $request, string $npub, string $slug): Response
+    {
+        if (!$this->publicationFeature->isEnabled()) {
+            throw $this->createNotFoundException();
+        }
+        if (!$this->export->isAvailable()) {
+            throw new ServiceUnavailableHttpException(null, 'Publication export is not configured.');
+        }
+
+        $format = $request->query->getString('format', 'epub3');
+
+        @set_time_limit(120);
+        @ini_set('max_execution_time', '120');
+
+        try {
+            $file = $this->export->export($npub, $slug, $format);
+        } catch (PublicationExportException $e) {
+            throw new NotFoundHttpException($e->getMessage(), $e);
+        } catch (\InvalidArgumentException $e) {
+            throw new BadRequestHttpException($e->getMessage(), $e);
+        } catch (\RuntimeException $e) {
+            throw new ServiceUnavailableHttpException(null, $e->getMessage(), $e);
+        }
+
+        $response = new Response($file['body']);
+        $disposition = $response->headers->makeDisposition(
+            ResponseHeaderBag::DISPOSITION_ATTACHMENT,
+            $file['filename'],
+        );
+        $response->headers->set('Content-Type', $file['mimeType']);
+        $response->headers->set('Content-Disposition', $disposition);
+        $response->headers->set('Content-Length', (string) \strlen($file['body']));
+
+        return $response;
     }
 }

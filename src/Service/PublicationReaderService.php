@@ -38,6 +38,11 @@ final class PublicationReaderService
         $this->publicationTreeWarmer->warmForReader($rootIndex, $npub, $slug);
     }
 
+    public function ensurePublicationTreeWarmForExport(Event $rootIndex): void
+    {
+        $this->publicationTreeWarmer->warmForExport($rootIndex);
+    }
+
     /**
      * @return list<array{label: string, coordinate: ?string, nested_d: ?string, kind: ?int, children: list<mixed>}>
      */

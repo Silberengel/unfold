@@ -742,6 +742,41 @@
     text-decoration: none;
 }
 
+.publication-download {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border-soft, var(--color-border));
+}
+
+.publication-download label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.publication-download select,
+.publication-download button {
+    font: inherit;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+.publication-download button {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.publication-download button:hover,
+.publication-download button:focus-visible {
+    border-color: var(--color-primary);
+}
+
 .nostr-preview-card-link {
     display: block;
     text-decoration: none;

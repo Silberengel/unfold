@@ -19,6 +19,17 @@
                 <p class="lede">{{ summary }}</p>
             {% endif %}
             <p class="text-subtle">by <twig:Molecules:UserFromNpub ident="{{ index.pubkey }}" /></p>
+            {% if export_available|default(false) %}
+                <form class="publication-download" method="get" action="{{ path('publication-download', { npub: npub, slug: slug }) }}">
+                    <label for="publication-download-format">Download as</label>
+                    <select id="publication-download-format" name="format">
+                        <option value="epub3">EPUB</option>
+                        <option value="pdf">PDF</option>
+                        <option value="html5">HTML</option>
+                    </select>
+                    <button type="submit">Download</button>
+                </form>
+            {% endif %}
         </div>
     </header>
 
