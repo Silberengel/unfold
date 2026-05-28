@@ -4,8 +4,10 @@ namespace App\Controller;
 
 use App\Entity\Article;
 use App\Http\PhpExecutionTime;
+use App\Repository\ArticleHighlightRepository;
 use App\Repository\ArticleRepository;
 use App\Service\ArticleBodyHtmlRenderer;
+use App\Service\MagazineContentService;
 use App\Enum\KindsEnum;
 use App\Nostr\Nip10Kind1ArticleReplyTags;
 use App\Nostr\Nip22CommentTags;
@@ -28,8 +30,14 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\Workflow\WorkflowInterface;
 
-class ArticleController  extends AbstractController
+class ArticleController extends AbstractController
 {
+    public function __construct(
+        private readonly MagazineContentService $magazineContent,
+        private readonly ArticleHighlightRepository $articleHighlightRepository,
+    ) {
+    }
+
     /**
      * Lazy-loaded comment thread (HTML fragment for Stimulus). Must not live under /article/{naddr}.
      */
@@ -416,15 +424,34 @@ class ArticleController  extends AbstractController
             $commentsPreloaded = true;
         }
 
-        return $this->render('pages/article.html.twig', [
-            'article' => $article,
-            'author' => $author,
-            'npub' => $npub,
-            'content' => $html,
-            'comments_data' => $commentsData,
-            'comments_preloaded' => $commentsPreloaded,
-            'comment_reply_context' => $commentReplyContext,
-        ]);
+        return $this->render('pages/article.html.twig', \array_merge(
+            $this->sidebarLayoutData(),
+            [
+                'article' => $article,
+                'author' => $author,
+                'npub' => $npub,
+                'content' => $html,
+                'comments_data' => $commentsData,
+                'comments_preloaded' => $commentsPreloaded,
+                'comment_reply_context' => $commentReplyContext,
+            ],
+        ));
+    }
+
+    /**
+     * Same left/right widgets as the home page (magazine recent list + kind-9802 highlights).
+     *
+     * @return array{sidebar_category_recent: list<\App\Dto\FeaturedArticleCard>, sidebar_highlights: list<\App\Entity\ArticleHighlight>}
+     */
+    private function sidebarLayoutData(): array
+    {
+        $categoryATags = $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly();
+        $curatedSlugs = $this->magazineContent->collectCuratedArticleSlugsForTenant($categoryATags);
+
+        return [
+            'sidebar_category_recent' => $this->magazineContent->buildHomeSidebarCategorizedRecent($categoryATags),
+            'sidebar_highlights' => $this->articleHighlightRepository->findRecentForHome(100, $curatedSlugs),
+        ];
     }
 
     /**

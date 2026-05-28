@@ -150,7 +150,12 @@
 </div>
 {% endblock %}
 
+{% block nav %}
+    {% if sidebar_category_recent|default([]) is not empty %}
+        {% include 'components/Organisms/SidebarMagazineCategoryRecent.html.twig' with { articles: sidebar_category_recent } only %}
+    {% endif %}
+{% endblock %}
+
 {% block aside %}
-{#    <h1>Suggestions</h1>#}
-{#    <twig:Organisms:CardList :list="suggestions" />#}
+    {% include 'components/Organisms/HomeHighlightsAside.html.twig' with { highlights: sidebar_highlights|default([]) } only %}
 {% endblock %}

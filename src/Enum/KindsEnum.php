@@ -18,9 +18,9 @@ enum KindsEnum: int
     case LONGFORM = 30023; // NIP-23
     case LONGFORM_DRAFT = 30024; // NIP-23
     case WIKI = 30817; // NIP-54 wiki pages (Markdown)
-    case PUBLICATION_INDEX = 30040; // NKBIP-01 index
+    case PUBLICATION_INDEX = 30040; // NKBIP-01 publication index
     case PUBLICATION_CONTENT = 30041; // NKBIP-01 section (Asciidoc)
-    case WIKI_ARTICLE = 30818; // NIP-54 wiki article (Asciidoc in publications)
+    case WIKI_ARTICLE = 30818; // NIP-54 wiki article (Asciidoc in NKBIP-01 publications)
     case ZAP_REQUEST = 9734; // NIP-57, Zap request
     case ZAP = 9735; // NIP-57, Zap receipt (Lightning)
     case MONERO_ZAP_RECEIPT = 9736; // Monero zap receipt (Garnet/Nosmero, analogous to 9735)
@@ -63,7 +63,7 @@ enum KindsEnum: int
     }
 
     /**
-     * Leaf section kinds inside a publication (NKBIP) 30040 index.
+     * Leaf section kinds inside a NKBIP-01 publication (30040 index).
      *
      * @return list<int>
      */

@@ -5,7 +5,7 @@
 {% block body %}
     <div class="search-page publications-page">
         <h1>Latest Publications</h1>
-        <p class="text-subtle">NKBIP curated publications from the network (recent indices).</p>
+        <p class="text-subtle">Publications from the network (recent indices).</p>
 
         {% if indices is not empty %}
             <div class="publications-grid article-list">
@@ -14,7 +14,7 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p><small>No publication indices in the local cache yet. Run <code>articles:get</code> or wait for prewarm.</small></p>
+            <p><small>No publication indices in the local cache yet. Run <code>app:prewarm</code> (publication index phase) or wait for the prewarm service.</small></p>
         {% endif %}
 
         {% if pagination.last_page > 1 %}

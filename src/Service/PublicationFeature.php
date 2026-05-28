@@ -7,7 +7,7 @@ namespace App\Service;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 
 /**
- * Tenant flag {@see community_publications}: NKBIP publications feed, ingest, and search.
+ * Tenant flag {@see community_publications}: NKBIP-01 publication feed, ingest, and search.
  */
 final class PublicationFeature
 {

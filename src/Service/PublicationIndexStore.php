@@ -11,7 +11,7 @@ use App\Repository\EventRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Community NKBIP kind-30040 indices ({@see Event::STORAGE_PUBLICATION_INDEX}), not the site magazine tree.
+ * Community NKBIP-01 publication kind-30040 indices ({@see Event::STORAGE_PUBLICATION_INDEX}), not the site magazine tree.
  */
 final class PublicationIndexStore
 {
@@ -129,32 +129,76 @@ final class PublicationIndexStore
     private function replaceByCoreKey(string $coreKey, Event $incoming): void
     {
         $prev = $this->eventRepository->findOneByCoreRowKey($coreKey);
-        if ($prev !== null && $prev->getId() === $incoming->getId()) {
-            $prev->setKind($incoming->getKind());
-            $prev->setPubkey($incoming->getPubkey());
-            $prev->setContent($incoming->getContent());
-            $prev->setCreatedAt($incoming->getCreatedAt());
-            $prev->setTags($incoming->getTags());
-            $prev->setSig($incoming->getSig());
-            $prev->setCoreRowKey($coreKey);
-            $prev->setStorageRole(Event::STORAGE_PUBLICATION_INDEX);
-            if ($incoming->getEventId() !== null) {
-                $prev->setEventId($incoming->getEventId());
-            }
+        if ($prev !== null) {
+            $this->applyIncomingToStoredRow($prev, $incoming, $coreKey);
             $this->entityManager->flush();
 
             return;
         }
-        if ($prev !== null) {
-            $this->entityManager->remove($prev);
-            $this->entityManager->flush();
-        }
+
         $incoming->setCoreRowKey($coreKey);
         $incoming->setStorageRole(Event::STORAGE_PUBLICATION_INDEX);
         if ($incoming->getKind() !== KindsEnum::PUBLICATION_INDEX->value) {
             $incoming->setKind(KindsEnum::PUBLICATION_INDEX->value);
         }
+        $this->assignStablePrimaryKey($coreKey, $incoming);
         $this->entityManager->persist($incoming);
         $this->entityManager->flush();
+    }
+
+    private function applyIncomingToStoredRow(Event $row, Event $incoming, string $coreKey): void
+    {
+        $nostrHex = $this->extractNostrEventIdHex($incoming);
+        $row->setKind($incoming->getKind());
+        $row->setPubkey($incoming->getPubkey());
+        $row->setContent($incoming->getContent());
+        $row->setCreatedAt($incoming->getCreatedAt());
+        $row->setTags($incoming->getTags());
+        $row->setSig($incoming->getSig());
+        $row->setCoreRowKey($coreKey);
+        $row->setStorageRole(Event::STORAGE_PUBLICATION_INDEX);
+        if ($nostrHex !== '') {
+            $row->setEventId($nostrHex);
+        }
+    }
+
+    /**
+     * {@see Event::$id} is the ORM primary key. Magazine rows for the same kind-30040 wire event
+     * already use the Nostr event id; publication rows use a deterministic hash of core_row_key instead.
+     */
+    private function assignStablePrimaryKey(string $coreKey, Event $incoming): void
+    {
+        $nostrHex = $this->extractNostrEventIdHex($incoming);
+        if ($nostrHex === '') {
+            $incoming->setId(hash('sha256', $coreKey));
+
+            return;
+        }
+        $incoming->setEventId($nostrHex);
+        $existing = $this->eventRepository->find($nostrHex);
+        if ($existing !== null && $existing->getCoreRowKey() !== $coreKey) {
+            $incoming->setId(hash('sha256', $coreKey));
+
+            return;
+        }
+        $incoming->setId($nostrHex);
+    }
+
+    private function extractNostrEventIdHex(Event $incoming): string
+    {
+        $id = strtolower(trim($incoming->getId()));
+        if (64 === \strlen($id) && ctype_xdigit($id)) {
+            return $id;
+        }
+        $eventId = $incoming->getEventId();
+        if ($eventId === null) {
+            return '';
+        }
+        $eventId = strtolower(trim($eventId));
+        if (64 === \strlen($eventId) && ctype_xdigit($eventId)) {
+            return $eventId;
+        }
+
+        return '';
     }
 }

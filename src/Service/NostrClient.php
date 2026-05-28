@@ -486,8 +486,16 @@ class NostrClient
             if ($d === null || $d === '') {
                 continue;
             }
-            $this->publicationIndexStore->put($entity->getPubkey(), $d, $entity);
-            ++$stored;
+            try {
+                $this->publicationIndexStore->put($entity->getPubkey(), $d, $entity);
+                ++$stored;
+            } catch (\Throwable $e) {
+                $this->logger->warning('ingestPublicationIndices: store failed', [
+                    'd' => $d,
+                    'pubkey' => $entity->getPubkey(),
+                    'message' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $stored;

@@ -64,7 +64,7 @@ final class MagazineEventKeys
     }
 
     /**
-     * Community publication kind-30040 (NKBIP), keyed by author + #d.
+     * Community publication kind-30040 (NKBIP-01), keyed by author + #d.
      */
     public static function publicationIndex(string $magazineSlug, string $pubkeyHex64, string $dTag): string
     {
