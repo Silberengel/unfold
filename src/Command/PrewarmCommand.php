@@ -182,8 +182,40 @@ final class PrewarmCommand extends Command
             }
             $until = time();
             $io->section('Community publication indices (kind 30040 mass ingest + tree warm)');
+            $io->writeln(sprintf(
+                'Target at least <info>%d</info> publication indices (since <info>%s</info>, budget <info>%ds</info>)…',
+                $pubMin,
+                $sinceStr,
+                $pubBudget,
+            ));
             try {
-                $result = $this->publicationIndexRefresher->refreshFromRelays($pubBudget, $since, $until, null, $pubMin);
+                $result = $this->publicationIndexRefresher->refreshFromRelays(
+                    $pubBudget,
+                    $since,
+                    $until,
+                    static function (string $phase, array $p) use ($io): void {
+                        if ($phase === 'before_mass_req') {
+                            $io->writeln('   <comment>Mass REQ on article relays (60-day chunks)…</comment>');
+                        } elseif ($phase === 'widen_window') {
+                            $io->writeln(sprintf(
+                                '   <comment>Widening window (still below target): since <info>%s</info></comment>',
+                                date('Y-m-d', (int) ($p['since'] ?? 0)),
+                            ));
+                        } elseif ($phase === 'after_mass_req') {
+                            $io->writeln(sprintf(
+                                '   Mass ingest stored <info>%d</info> this run; <info>%d</info> publication indices in DB so far.',
+                                (int) ($p['stored'] ?? 0),
+                                (int) ($p['index_count'] ?? 0),
+                            ));
+                        } elseif ($phase === 'nested_fetched' && ((int) ($p['step'] ?? 0)) % 10 === 1) {
+                            $io->writeln(sprintf(
+                                '   Nested 30040 fetches: <info>%d</info>…',
+                                (int) ($p['step'] ?? 0),
+                            ));
+                        }
+                    },
+                    $pubMin,
+                );
                 $io->writeln(sprintf(
                     'Stored <info>%d</info> index event(s) from relays; nested: <info>%d</info>; tree nested: <info>%d</info>; sections: <info>%d</info>; profiles: <info>%d</info>; total indices: <info>%d</info>.',
                     $result['stored_window'],
