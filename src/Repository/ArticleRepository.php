@@ -48,8 +48,6 @@ class ArticleRepository extends ServiceEntityRepository
 
         return $qb
             ->where($conditions)
-            ->andWhere('a.content IS NOT NULL')
-            ->andWhere('LENGTH(a.content) > 250') // Only articles with substantial content
             ->orderBy('a.createdAt', 'DESC')
             ->setFirstResult($offset)
             ->setMaxResults($limit)
@@ -87,8 +85,6 @@ class ArticleRepository extends ServiceEntityRepository
 
         return (int) $qb
             ->where($conditions)
-            ->andWhere('a.content IS NOT NULL')
-            ->andWhere('LENGTH(a.content) > 250')
             ->getQuery()
             ->getSingleScalarResult();
     }

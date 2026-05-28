@@ -14,8 +14,9 @@ class ArticleFactory
 {
     public function createFromLongFormContentEvent($source): Article
     {
-        if (!\in_array($source->kind, KindsEnum::longformKindValues(), true)) {
-            throw new InvalidArgumentException('Source event kind must be a longform kind (30023, 30024, 30817), got '.$source->kind);
+        $kind = (int) ($source->kind ?? 0);
+        if (!\in_array($kind, KindsEnum::longformKindValues(), true)) {
+            throw new InvalidArgumentException('Source event kind must be a longform kind (30023, 30024, 30817), got '.$kind);
         }
         $entity = new Article();
         $entity->setRaw($source);
@@ -26,14 +27,14 @@ class ArticleFactory
         }
         $entity->setCreatedAt($created);
         $entity->setContent($source->content);
-        $entity->setKind(KindsEnum::from($source->kind));
+        $entity->setKind(KindsEnum::from($kind));
         $entity->setPubkey($source->pubkey);
         $entity->setSig($source->sig);
         $entity->setEventStatus(EventStatusEnum::PUBLISHED);
         $entity->setRatingNegative(0);
         $entity->setRatingPositive(0);
         // process tags
-        $wikiKinds = $source->kind === KindsEnum::WIKI->value ? [] : null;
+        $wikiKinds = $kind === KindsEnum::WIKI->value ? [] : null;
         foreach ($source->tags as $tag) {
             if (!\is_array($tag) || !isset($tag[0])) {
                 continue;

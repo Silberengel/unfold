@@ -425,7 +425,7 @@ class NostrClient
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $filter = new Filter();
-        $filter->setKinds(KindsEnum::longformKinds());
+        $filter->setKinds(KindsEnum::longformKindValues());
         $filter->setSince($since);
         $filter->setUntil($until);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
@@ -1132,7 +1132,7 @@ class NostrClient
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
         $filter = new Filter();
-        $filter->setKinds(KindsEnum::longformKinds());
+        $filter->setKinds(KindsEnum::longformKindValues());
         $filter->setTag('#d', $slugs);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 

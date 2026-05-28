@@ -1017,7 +1017,7 @@ final class MagazineContentService
             if ($identifier === '') {
                 continue;
             }
-            if (\in_array($kind, [KindsEnum::LONGFORM->value, KindsEnum::LONGFORM_DRAFT->value], true)) {
+            if (\in_array($kind, KindsEnum::longformKindValues(), true)) {
                 $slugs[] = $identifier;
                 if (\count($slugs) >= $maxA) {
                     return $slugs;
