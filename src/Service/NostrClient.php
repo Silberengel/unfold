@@ -165,8 +165,11 @@ class NostrClient
      *
      * @return array<string, array{kind0: object, emoji_list: ?object, statuses: list<object>}> keyed by lowercase 64-hex pubkey (only authors with a kind-0 hit in this response)
      */
-    public function fetchProfilePrewarmWireBundlesForAuthors(array $authorPubkeyHex, int $authorsPerRequest = 50): array
-    {
+    public function fetchProfilePrewarmWireBundlesForAuthors(
+        array $authorPubkeyHex,
+        int $authorsPerRequest = 50,
+        ?int $relayTimeoutSec = null,
+    ): array {
         $authorPubkeyHex = \array_values(\array_unique(\array_filter(
             $authorPubkeyHex,
             static fn (string $h): bool => 64 === \strlen($h),
@@ -191,7 +194,8 @@ class NostrClient
                     KindsEnum::USER_STATUS,
                 ],
                 filters: ['authors' => $chunk],
-                relaySet: $relaySet
+                relaySet: $relaySet,
+                relayTimeoutSec: $relayTimeoutSec,
             );
             $events = $this->nostrRelayQuery->processResponse(
                 $request->send(),
@@ -501,9 +505,9 @@ class NostrClient
         return $stored;
     }
 
-    public function fetchAndStorePublicationIndex(string $npub, string $dTag): ?PublicationEventEntity
+    public function fetchAndStorePublicationIndex(string $npub, string $dTag, ?int $relayTimeoutSec = null): ?PublicationEventEntity
     {
-        $entity = $this->getMagazineIndex($npub, $dTag);
+        $entity = $this->getMagazineIndex($npub, $dTag, $relayTimeoutSec);
         if ($entity === null) {
             return null;
         }
@@ -1628,11 +1632,11 @@ class NostrClient
      * Tries article relays first; if no 30040 is found, retries on config `profile_relays` not
      * already listed in `article_relays` (see prewarm / category discovery).
      */
-    public function getMagazineIndex(mixed $npub, mixed $dTag): ?PublicationEventEntity
+    public function getMagazineIndex(mixed $npub, mixed $dTag, ?int $relayTimeoutSec = null): ?PublicationEventEntity
     {
         $urls = $this->relayListFactory->getConfiguredArticleRelayUrlList();
         $relaysForLog = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $urls));
-        $result = $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet, $relaysForLog);
+        $result = $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet, $relaysForLog, $relayTimeoutSec);
         if ($result !== null) {
             return $result;
         }
@@ -1643,11 +1647,16 @@ class NostrClient
         $pfSet = $this->relayListFactory->createRelaySetFromUrlsOnly($profileExtra);
         $relaysForLog2 = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $profileExtra)).' (profile_relays)';
 
-        return $this->queryMagazineIndex($npub, $dTag, $pfSet, $relaysForLog2);
+        return $this->queryMagazineIndex($npub, $dTag, $pfSet, $relaysForLog2, $relayTimeoutSec);
     }
 
-    private function queryMagazineIndex(mixed $npub, mixed $dTag, RelaySet $relaySet, string $relaysForLog): ?PublicationEventEntity
-    {
+    private function queryMagazineIndex(
+        mixed $npub,
+        mixed $dTag,
+        RelaySet $relaySet,
+        string $relaysForLog,
+        ?int $relayTimeoutSec = null,
+    ): ?PublicationEventEntity {
         $authorHex = $this->wireMerge->npubToHexPubkey($npub);
         if ($authorHex === null) {
             $this->logger->warning('Magazine index: could not resolve npub to hex pubkey', [
@@ -1662,6 +1671,7 @@ class NostrClient
             relaySet: $relaySet,
             kinds: [KindsEnum::PUBLICATION_INDEX],
             filters: ['authors' => [$authorHex], 'tag' => ['#d', [(string) $dTag]]],
+            relayTimeoutSec: $relayTimeoutSec,
         );
         $this->logger->info(sprintf('Magazine index query (relays: %s)', $relaysForLog), [
             'npub' => $npub,
@@ -1775,7 +1785,7 @@ class NostrClient
      *
      * @param list<string> $addresses kind:pubkey:identifier
      */
-    public function ingestLongformForCategoryCoordinates(array $addresses): void
+    public function ingestLongformForCategoryCoordinates(array $addresses, ?int $relayTimeoutSec = null): void
     {
         if ($addresses === []) {
             $this->logger->info('[longform_ingest] ingestLongform: no addresses, exit');
@@ -1834,6 +1844,7 @@ class NostrClient
                 defaultRelaySet: $this->defaultRelaySet,
                 kinds: [$kindEnum],
                 filters: ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
+                relayTimeoutSec: $relayTimeoutSec,
             );
             try {
                 $events = $this->nostrRelayQuery->processResponse(
@@ -1867,6 +1878,7 @@ class NostrClient
                         defaultRelaySet: $this->defaultRelaySet,
                         kinds: [$kindEnum],
                         filters: ['tag' => ['#d', $dTags]],
+                        relayTimeoutSec: $relayTimeoutSec,
                     );
                     $fallbackEvents = $this->nostrRelayQuery->processResponse(
                         $fallbackReq->send(),
@@ -1912,6 +1924,7 @@ class NostrClient
                             relaySet: $pfSet,
                             kinds: [$kindEnum],
                             filters: ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
+                            relayTimeoutSec: $relayTimeoutSec,
                         );
                         $events = $this->nostrRelayQuery->processResponse(
                             $requestPf->send(),
@@ -1924,6 +1937,7 @@ class NostrClient
                                 relaySet: $pfSet,
                                 kinds: [$kindEnum],
                                 filters: ['tag' => ['#d', $dTags]],
+                                relayTimeoutSec: $relayTimeoutSec,
                             );
                             $fallbackEventsPf = $this->nostrRelayQuery->processResponse(
                                 $fallbackPf->send(),

@@ -81,8 +81,9 @@ final class PrewarmCommand extends Command
             ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to sync highlights for (0 = all; each Nostr fetch is slow — default 25 keeps prewarm bounded)', '25')
             ->addOption('highlights-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the highlight sync phase', '600')
             ->addOption('no-publication-indices', null, InputOption::VALUE_NONE, 'Skip mass community kind-30040 publication index ingest')
-            ->addOption('publication-index-budget', null, InputOption::VALUE_REQUIRED, 'Seconds for BFS nested publication 30040 after mass REQ', '120')
-            ->addOption('publication-since', null, InputOption::VALUE_REQUIRED, 'strtotime() start for publication 30040 mass REQ', '-2 month');
+            ->addOption('publication-index-budget', null, InputOption::VALUE_REQUIRED, 'Seconds for nested publication 30040 + section/profile warm', '300')
+            ->addOption('publication-since', null, InputOption::VALUE_REQUIRED, 'strtotime() start for publication 30040 mass REQ (widens until min count)', '-6 months')
+            ->addOption('publication-min-count', null, InputOption::VALUE_REQUIRED, 'Target publication index rows in DB before section/profile warm', '500');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -173,19 +174,24 @@ final class PrewarmCommand extends Command
 
         if ($this->publicationFeature->isEnabled() && !$input->getOption('no-publication-indices')) {
             $pubBudget = max(1, (int) $input->getOption('publication-index-budget'));
+            $pubMin = max(1, (int) $input->getOption('publication-min-count'));
             $sinceStr = (string) $input->getOption('publication-since');
             $since = strtotime($sinceStr);
             if ($since === false) {
-                $since = strtotime('-2 month');
+                $since = strtotime('-6 months');
             }
             $until = time();
-            $io->section('Community publication indices (kind 30040 mass ingest)');
+            $io->section('Community publication indices (kind 30040 mass ingest + tree warm)');
             try {
-                $result = $this->publicationIndexRefresher->refreshFromRelays($pubBudget, $since, $until);
+                $result = $this->publicationIndexRefresher->refreshFromRelays($pubBudget, $since, $until, null, $pubMin);
                 $io->writeln(sprintf(
-                    'Stored <info>%d</info> publication index event(s) from time window; nested fetches: <info>%d</info>.',
+                    'Stored <info>%d</info> index event(s) from relays; nested: <info>%d</info>; tree nested: <info>%d</info>; sections: <info>%d</info>; profiles: <info>%d</info>; total indices: <info>%d</info>.',
                     $result['stored_window'],
                     $result['nested_fetched'],
+                    $result['tree_nested'],
+                    $result['tree_sections'],
+                    $result['tree_profiles'],
+                    $result['index_count'],
                 ));
             } catch (\Throwable $e) {
                 $this->logger->error('app:prewarm publication indices failed', ['e' => $e->getMessage()]);

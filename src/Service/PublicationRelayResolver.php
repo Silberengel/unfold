@@ -21,10 +21,11 @@ final class PublicationRelayResolver
         private readonly ArticleRepository $articleRepository,
         private readonly NostrKeyHelper $nostrKeyHelper,
         private readonly LoggerInterface $logger,
+        private readonly int $publicationRelayTimeoutSec = PublicationTreeWarmer::READER_RELAY_TIMEOUT_SEC,
     ) {
     }
 
-    public function resolvePublicationIndex(string $npub, string $dTag): ?Event
+    public function resolvePublicationIndex(string $npub, string $dTag, ?int $relayTimeoutSec = null): ?Event
     {
         $dTag = trim($dTag);
         if ($dTag === '') {
@@ -36,18 +37,19 @@ final class PublicationRelayResolver
             return $cached;
         }
 
+        $timeout = $relayTimeoutSec ?? $this->publicationRelayTimeoutSec;
+
         $this->logger->info('publication.relay_fallback', [
             'kind' => KindsEnum::PUBLICATION_INDEX->value,
             'd' => $dTag,
             'npub' => substr($npub, 0, 16).'…',
+            'timeout_sec' => $timeout,
         ]);
 
-        $entity = $this->nostrClient->fetchAndStorePublicationIndex($npub, $dTag);
-
-        return $entity;
+        return $this->nostrClient->fetchAndStorePublicationIndex($npub, $dTag, $timeout);
     }
 
-    public function resolveArticleByCoordinate(string $coordinate): ?Article
+    public function resolveArticleByCoordinate(string $coordinate, ?int $relayTimeoutSec = null): ?Article
     {
         $parts = explode(':', $coordinate, 3);
         if (\count($parts) < 3) {
@@ -68,11 +70,14 @@ final class PublicationRelayResolver
             return $article;
         }
 
+        $timeout = $relayTimeoutSec ?? $this->publicationRelayTimeoutSec;
+
         $this->logger->info('publication.relay_fallback', [
             'coordinate' => $kind.':'.$pubkey.':…',
+            'timeout_sec' => $timeout,
         ]);
 
-        $this->nostrClient->ingestLongformForCategoryCoordinates([$coordinate]);
+        $this->nostrClient->ingestLongformForCategoryCoordinates([$coordinate], $timeout);
 
         return $this->articleRepository->findLatestBySlugForTenant($slug, $pubkey);
     }

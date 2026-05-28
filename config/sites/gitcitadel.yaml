@@ -45,6 +45,10 @@ parameters:
     community_articles: false
     # Whether to show community publications on the home page
     community_publications: true
+    # Relay I/O timeout (seconds) for on-demand publication index/section fetches (/publication/…).
+    publication_relay_timeout_sec: 10
+    # Target rows in publication index store during app:prewarm (mass REQ widens until reached).
+    publication_prewarm_min_count: 500
     # Domain for site-assigned NIP-05 for featured (magazine category) authors; must match the host serving /.well-known/nostr.json
     nip05_domain: 'gitcitadel.imwald.eu'
     # Base URL for "Open in Jumble" on author profile (trailing slash optional; npub is appended as /{npub}).

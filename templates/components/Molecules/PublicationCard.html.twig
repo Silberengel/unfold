@@ -25,7 +25,6 @@
     </div>
     <a href="{{ href }}">
         <div class="card-header{{ card_image|trim == '' ? ' card-header--no-cover' : '' }}">
-            <span class="ui-badge ui-badge--brand">Publication</span>
             {% if card_image|trim != '' %}
                 <img src="{{ card_image }}" alt="" loading="lazy" width="800" height="450">
             {% endif %}

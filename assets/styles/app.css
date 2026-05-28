@@ -921,6 +921,14 @@ svg.icon {
     box-shadow: none;
 }
 
+/* Dark scheme: primary fill is a light accent — keep ink dark (text-contrast can stay light from site theme). */
+html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active,
+html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active:hover {
+    color: #1e1e1e;
+    background: var(--color-primary);
+    border-color: var(--color-primary-strong, var(--color-primary));
+}
+
 /* Trigger that opens a nested magazine section menu */
 .header__cat-link--dropdown {
     display: inline-flex;

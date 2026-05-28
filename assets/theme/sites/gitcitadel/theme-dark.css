@@ -73,3 +73,8 @@ html[data-color-scheme="dark"] .reply-toast--error {
     background: color-mix(in srgb, var(--color-bg) 70%, #a12b2b 30%);
     color: var(--color-text);
 }
+
+html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active,
+html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active:hover {
+    color: #1e1e1e;
+}

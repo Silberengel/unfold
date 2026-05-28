@@ -89,6 +89,12 @@ services:
     App\Service\TenantContext:
         arguments:
             $magazineSlug: '%magazine_slug%'
+    App\Service\PublicationRelayResolver:
+        arguments:
+            $publicationRelayTimeoutSec: '%publication_relay_timeout_sec%'
+    App\Service\PublicationIndexRefresher:
+        arguments:
+            $prewarmMinIndexCount: '%publication_prewarm_min_count%'
 
 when@test:
     services:

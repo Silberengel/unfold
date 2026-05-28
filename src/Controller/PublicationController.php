@@ -93,6 +93,8 @@ final class PublicationController extends AbstractController
             throw new NotFoundHttpException('Publication not found');
         }
 
+        $this->reader->ensurePublicationTreeWarm($index, $npub, $slug);
+
         $sectionCoord = $request->query->getString('section');
         $sectionHtml = null;
         if ($sectionCoord !== '') {

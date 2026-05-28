@@ -19,6 +19,7 @@ final class PublicationReaderService
     public function __construct(
         private readonly PublicationRelayResolver $relayResolver,
         private readonly PublicationIndexStore $publicationIndexStore,
+        private readonly PublicationTreeWarmer $publicationTreeWarmer,
         private readonly ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
         private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
@@ -27,6 +28,14 @@ final class PublicationReaderService
     public function resolveRootIndex(string $npub, string $dTag): ?Event
     {
         return $this->relayResolver->resolvePublicationIndex($npub, $dTag);
+    }
+
+    /**
+     * Fetches missing nested indices, section articles, and author profiles before TOC render.
+     */
+    public function ensurePublicationTreeWarm(Event $rootIndex, string $npub, string $slug): void
+    {
+        $this->publicationTreeWarmer->warmForReader($rootIndex, $npub, $slug);
     }
 
     /**

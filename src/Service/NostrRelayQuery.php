@@ -45,6 +45,7 @@ final readonly class NostrRelayQuery
         ?RelaySet $relaySet = null,
         array $kinds = [],
         array $filters = [],
+        ?int $relayTimeoutSec = null,
     ): Request {
         $subscription = new Subscription();
         $subscriptionId = $subscription->setId();
@@ -69,7 +70,7 @@ final readonly class NostrRelayQuery
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
         $set = $relaySet ?? $defaultRelaySet;
 
-        return $this->relayRequestFactory->createTimedRequest($set, $requestMessage);
+        return $this->relayRequestFactory->createTimedRequest($set, $requestMessage, $relayTimeoutSec);
     }
 
     /**
