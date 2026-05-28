@@ -292,32 +292,41 @@ class ArticleRepository extends ServiceEntityRepository
      * Published or archived long-form with at least one stored topic, matched case-insensitively.
      * Ordered newest first. Uses an in-process filter; suitable for moderate table sizes.
      *
+     * @param list<string> $curatedSlugs Magazine-index article `#d` slugs for this tenant.
+     *
      * @return list<Article>
      */
-    public function findPublishedByTopic(string $topic, int $limit, int $offset): array
+    public function findPublishedByTopic(string $topic, int $limit, int $offset, array $curatedSlugs = []): array
     {
         $all = $this->articlesMatchingTopicNormalized(
-            $this->normalizeTopicLabel($topic)
+            $this->normalizeTopicLabel($topic),
+            $curatedSlugs,
         );
 
         return \array_slice($all, $offset, $limit);
     }
 
-    public function countPublishedByTopic(string $topic): int
+    /**
+     * @param list<string> $curatedSlugs Magazine-index article `#d` slugs for this tenant.
+     */
+    public function countPublishedByTopic(string $topic, array $curatedSlugs = []): int
     {
         return \count(
             $this->articlesMatchingTopicNormalized(
-                $this->normalizeTopicLabel($topic)
+                $this->normalizeTopicLabel($topic),
+                $curatedSlugs,
             )
         );
     }
 
     /**
+     * @param list<string> $curatedSlugs Magazine-index article `#d` slugs for this tenant.
+     *
      * @return list<Article>
      */
-    private function articlesMatchingTopicNormalized(string $topicKey): array
+    private function articlesMatchingTopicNormalized(string $topicKey, array $curatedSlugs): array
     {
-        if ($topicKey === '') {
+        if ($topicKey === '' || $curatedSlugs === []) {
             return [];
         }
         $qb = $this->tenantQueryBuilder('a')
@@ -325,7 +334,9 @@ class ArticleRepository extends ServiceEntityRepository
             ->andWhere('a.content IS NOT NULL')
             ->andWhere('LENGTH(a.content) > 250')
             ->andWhere('a.eventStatus IN (:st)')
+            ->andWhere('a.slug IN (:curated)')
             ->setParameter('st', [EventStatusEnum::PUBLISHED, EventStatusEnum::ARCHIVED])
+            ->setParameter('curated', $curatedSlugs)
             ->orderBy('a.createdAt', 'DESC');
 
         /** @var list<Article> $candidates */

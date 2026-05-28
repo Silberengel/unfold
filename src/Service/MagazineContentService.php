@@ -762,6 +762,40 @@ final class MagazineContentService
     }
 
     /**
+     * Article `#d` slugs referenced by this tenant's kind-30040 magazine indices (root headline strip
+     * plus all home category trees). Used to scope sidebar topics and highlights to curated content,
+     * not every row linked via bulk {@see articles:get} backfill.
+     *
+     * @param list<array<int, string>> $categoryATags
+     *
+     * @return list<string>
+     */
+    public function collectCuratedArticleSlugsForTenant(array $categoryATags, int $maxSlugsPerCategory = 500): array
+    {
+        $slugSet = [];
+        foreach ($this->collectRootHeadlineLongformCoordinates() as $coord) {
+            $parts = explode(':', $coord, 3);
+            $s = \trim((string) ($parts[2] ?? ''));
+            if ($s !== '') {
+                $slugSet[$s] = true;
+            }
+        }
+        foreach ($categoryATags as $row) {
+            $coord = \trim((string) ($row[1] ?? ''));
+            if ($coord === '') {
+                continue;
+            }
+            foreach ($this->slugsFromCategoryCoord($coord, $maxSlugsPerCategory) as $s) {
+                if ($s !== '') {
+                    $slugSet[$s] = true;
+                }
+            }
+        }
+
+        return \array_keys($slugSet);
+    }
+
+    /**
      * Article slugs that appear in any home “featured” block (per-category first pages), for topic ranking.
      *
      * @param list<array<int, string>> $categoryATags

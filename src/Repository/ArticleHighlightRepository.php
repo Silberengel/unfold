@@ -9,6 +9,7 @@ use App\Entity\ArticleHighlight;
 use App\Enum\EventStatusEnum;
 use App\Service\TenantContext;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -31,9 +32,12 @@ class ArticleHighlightRepository extends ServiceEntityRepository
      *
      * @return list<ArticleHighlight>
      */
-    public function findRecentForHome(int $limit = 100): array
+    /**
+     * @param list<string> $curatedSlugs Article `#d` slugs from this tenant's magazine indices only.
+     */
+    public function findRecentForHome(int $limit = 100, array $curatedSlugs = []): array
     {
-        if ($limit <= 0) {
+        if ($limit <= 0 || $curatedSlugs === []) {
             return [];
         }
 
@@ -51,7 +55,9 @@ class ArticleHighlightRepository extends ServiceEntityRepository
                 'am.article = a AND am.magazineSlug = :mag'
             )
             ->where('a.eventStatus IN (:st)')
+            ->andWhere('a.slug IN (:curated)')
             ->setParameter('mag', $this->tenant->getMagazineSlug())
+            ->setParameter('curated', $curatedSlugs)
             ->setParameter('st', [EventStatusEnum::PUBLISHED, EventStatusEnum::ARCHIVED])
             ->orderBy('h.eventCreatedAt', 'DESC')
             ->addOrderBy('h.id', 'DESC')

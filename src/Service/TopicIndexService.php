@@ -27,10 +27,14 @@ final class TopicIndexService
      */
     public function getTopTopicLabels(int $limit = 10): array
     {
+        $categoryATags = $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly();
+        $curatedSlugs = $this->magazineContent->collectCuratedArticleSlugsForTenant($categoryATags);
+        if ($curatedSlugs === []) {
+            return [];
+        }
+
         $conn = $this->articleRepository->getEntityManager()->getConnection();
-        $slugs = $this->magazineContent->collectFeaturedArticleSlugsForHome(
-            $this->magazineContent->getHomeCategoryAIndexTagsFromStoreOnly(),
-        );
+        $slugs = $this->magazineContent->collectFeaturedArticleSlugsForHome($categoryATags);
         $featured = [];
         foreach ($slugs as $s) {
             $s = \strtolower(\trim((string) $s));
@@ -42,15 +46,18 @@ final class TopicIndexService
         $rows = $conn->fetchAllAssociative(
             'SELECT a.slug, a.topics FROM article a
              INNER JOIN article_magazine am ON am.article_id = a.id AND am.magazine_slug = :mag
-             WHERE a.topics IS NOT NULL
+             WHERE a.slug IN (:curated)
+               AND a.topics IS NOT NULL
                AND a.content IS NOT NULL
                AND CHAR_LENGTH(a.content) > 250
                AND a.event_status IN (:st)',
             [
                 'mag' => $this->tenant->getMagazineSlug(),
+                'curated' => $curatedSlugs,
                 'st' => [EventStatusEnum::PUBLISHED->value, EventStatusEnum::ARCHIVED->value],
             ],
             [
+                'curated' => ArrayParameterType::STRING,
                 'st' => ArrayParameterType::INTEGER,
             ],
         );
