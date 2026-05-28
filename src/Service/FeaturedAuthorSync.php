@@ -22,6 +22,7 @@ final class FeaturedAuthorSync
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
         private readonly NostrKeyHelper $nostrKeyHelper,
+        private readonly TenantContext $tenant,
     ) {
     }
 
@@ -40,7 +41,7 @@ final class FeaturedAuthorSync
         }
 
         $existingByPubkey = [];
-        foreach ($this->featuredAuthorRepository->findAll() as $row) {
+        foreach ($this->featuredAuthorRepository->findAllForTenant() as $row) {
             $existingByPubkey[strtolower($row->getPubkeyHex())] = $row;
         }
         $added = 0;
@@ -52,6 +53,7 @@ final class FeaturedAuthorSync
             $row = $existingByPubkey[$hex] ?? null;
             if ($row === null) {
                 $entity = new FeaturedAuthor();
+                $entity->setMagazineSlug($this->tenant->getMagazineSlug());
                 $entity->setPubkeyHex($hex);
                 $base = $this->deriveBaseLocalPart($hex);
                 $entity->setLocalPart($this->allocateUniqueLocalPart($base));

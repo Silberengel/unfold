@@ -35,6 +35,7 @@ final class Nip09DeletionApplier
         private readonly ParameterBagInterface $params,
         private readonly LoggerInterface $logger,
         private readonly NostrKeyHelper $nostrKeyHelper,
+        private readonly TenantContext $tenant,
     ) {
     }
 
@@ -403,7 +404,7 @@ final class Nip09DeletionApplier
             if ($d === '') {
                 return $out;
             }
-            $key = MagazineEventKeys::magazineCuration30004FromPubkeyHex($pk, $d);
+            $key = MagazineEventKeys::magazineCuration30004FromPubkeyHex($this->tenant->getMagazineSlug(), $pk, $d);
             if ($key === '') {
                 return $out;
             }

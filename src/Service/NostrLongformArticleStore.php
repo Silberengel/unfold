@@ -22,6 +22,7 @@ final class NostrLongformArticleStore
         private readonly ManagerRegistry $managerRegistry,
         private readonly LoggerInterface $logger,
         private readonly NostrWireEventMerge $wireMerge,
+        private readonly ArticleMagazineRegistry $articleMagazineRegistry,
     ) {
     }
 
@@ -32,6 +33,15 @@ final class NostrLongformArticleStore
         }
 
         return $this->entityManager->getRepository(Article::class)->findOneBy(['eventId' => $eventId]) !== null;
+    }
+
+    public function findByEventId(string $eventId): ?Article
+    {
+        if ($eventId === '') {
+            return null;
+        }
+
+        return $this->entityManager->getRepository(Article::class)->findOneBy(['eventId' => $eventId]);
     }
 
     public function findLatestByAuthorAndSlug(string $pubkey, string $slug): ?Article
@@ -106,6 +116,7 @@ final class NostrLongformArticleStore
             ]);
             $this->entityManager->persist($article);
             $this->entityManager->flush();
+            $this->articleMagazineRegistry->link($article);
         } catch (\Exception $e) {
             $this->logger->error('[longform_ingest] persistNewArticle failed: '.$e->getMessage(), [
                 'reason' => $reason,
@@ -113,5 +124,10 @@ final class NostrLongformArticleStore
             ]);
             $this->managerRegistry->resetManager();
         }
+    }
+
+    public function linkExistingArticle(Article $article): void
+    {
+        $this->articleMagazineRegistry->link($article);
     }
 }

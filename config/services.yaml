@@ -81,6 +81,10 @@ services:
         tags:
             - { name: kernel.reset, method: reset }
 
+    App\Service\TenantContext:
+        arguments:
+            $magazineSlug: '%magazine_slug%'
+
 when@test:
     services:
         Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:

@@ -18,6 +18,7 @@ final class MagazineIndexStore
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly EventRepository $eventRepository,
+        private readonly TenantContext $tenant,
     ) {
     }
 
@@ -26,7 +27,7 @@ final class MagazineIndexStore
         if ($dTag === '') {
             return null;
         }
-        $key = MagazineEventKeys::magazineRoot($npub, $dTag);
+        $key = MagazineEventKeys::magazineRoot($this->tenant->getMagazineSlug(), $npub, $dTag);
         if ($key === '') {
             return null;
         }
@@ -39,7 +40,7 @@ final class MagazineIndexStore
         if ($slug === '') {
             return null;
         }
-        $key = MagazineEventKeys::magazineCategory($slug);
+        $key = MagazineEventKeys::magazineCategory($this->tenant->getMagazineSlug(), $slug);
 
         return $this->eventRepository->findOneByCoreRowKey($key);
     }
@@ -49,7 +50,7 @@ final class MagazineIndexStore
         if ($dTag === '') {
             return;
         }
-        $key = MagazineEventKeys::magazineRoot($npub, $dTag);
+        $key = MagazineEventKeys::magazineRoot($this->tenant->getMagazineSlug(), $npub, $dTag);
         if ($key === '') {
             return;
         }
@@ -61,7 +62,7 @@ final class MagazineIndexStore
         if ($slug === '') {
             return;
         }
-        $key = MagazineEventKeys::magazineCategory($slug);
+        $key = MagazineEventKeys::magazineCategory($this->tenant->getMagazineSlug(), $slug);
         $this->replaceByCoreKey($key, Event::STORAGE_MAGAZINE_CATEGORY, $event);
     }
 
@@ -70,7 +71,7 @@ final class MagazineIndexStore
         if ($slug === '') {
             return;
         }
-        $key = MagazineEventKeys::magazineCategory($slug);
+        $key = MagazineEventKeys::magazineCategory($this->tenant->getMagazineSlug(), $slug);
         $this->removeByCoreKey($key);
     }
 
@@ -79,7 +80,7 @@ final class MagazineIndexStore
         if ($dTag === '') {
             return;
         }
-        $key = MagazineEventKeys::magazineRoot($npub, $dTag);
+        $key = MagazineEventKeys::magazineRoot($this->tenant->getMagazineSlug(), $npub, $dTag);
         $this->removeByCoreKey($key);
     }
 

@@ -10,8 +10,8 @@ A Symfony + FrankenPHP site that **reads Nostr long-form articles (kind 30023)**
 
 | Data | Storage |
 |------|---------|
-| Published articles (30023/24) | **MySQL** `article` table (from `articles:get` / relay sync) |
-| Magazine index (30040), kind-0 **profiles**, NIP-65 **relay lists** (10002) | **MySQL** `event` table with stable `core_row_key` (filled by `app:prewarm` and on-demand fetches) |
+| Published articles (30023/24) | **MySQL** `article` table (global rows) + `article_magazine` (which magazine tenant ingested/references each row) |
+| Magazine index (30040), kind-0 **profiles**, NIP-65 **relay lists** (10002) | **MySQL** `event` table with stable `core_row_key` — magazine indices are prefixed with `magazine_slug`; profiles/relay lists are shared |
 | Comment / reply / thread **UI** (fetched thread HTML, etc.) | **Filesystem cache** pool `cache.replies` (not the DB) |
 | Unpublished **editor preview** payloads | **Filesystem cache** pool `cache.drafts` |
 | Generic Symfony `cache.app` | Other app caches; **not** used for long-term profile or magazine index storage |
@@ -115,13 +115,24 @@ For a full **Nostr backfill** + one-shot prewarm, use **`make prewarm`** (or a h
 
 | What | File |
 |------|------|
-| Site title, `npub`, `d_tag`, **relays** (`default_relay`, `article_relays`, `profile_relays`), theme | `config/unfold.yaml` (imported as Symfony parameters) |
+| Site title, `npub`, `d_tag`, **`magazine_slug`** (tenant id for shared MySQL), **relays** (`default_relay`, `article_relays`, `profile_relays`), theme | `config/unfold.yaml` (imported as Symfony parameters) |
 | `MAGAZINE_PREWARM_PREFER_SLUGS` | `.env` / `.env.local` — optional comma-separated category slugs to prioritize in `app:prewarm` magazine phase (after the root). Use when the relay time budget would otherwise skip your updated category. |
 | `DATABASE_URL`, `APP_SECRET`, `HTTP_PORT`, `MYSQL_*`, optional **`PREWARM_FLAGS`** (for the Docker `cron` service) | `.env` / `.env.local` (see `.env.dist`) |
 | Cache pool definitions (`cache.replies`, `cache.drafts`, `cache.app`) | `config/packages/cache.yaml` |
 | Service wiring (e.g. which pool comment loaders use) | `config/services.yaml` |
 
 **Relays (short):** `default_relay` and `article_relays` drive article sync and many queries; `profile_relays` are used **first** for kind-0 / profile fetches, then the merged default + article set (see `NostrClient`).
+
+### Shared MySQL (multiple magazines on one host)
+
+Two deployments (e.g. Imwald + GitCitadel) can use **one MySQL** instead of separate `database_data` volumes:
+
+1. Set a unique **`magazine_slug`** in each image’s `config/unfold.yaml` (e.g. `imwald`, `gitcitadel`).
+2. Run **one** MySQL container (or external server). Point both stacks at the same **`DATABASE_URL`** (host port or Docker network alias).
+3. **Nuke old volumes** and run migrations once: `docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction`.
+4. Backfill each site separately (`articles:get`, `app:prewarm`) — each container tags rows with its own `magazine_slug`.
+
+Articles and kind-0 profiles are stored once and shared; magazine indices, featured authors, admin users, and list/search/sitemap views are scoped per `magazine_slug`.
 
 ---
 

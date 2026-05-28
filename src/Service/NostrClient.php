@@ -1348,6 +1348,10 @@ class NostrClient
             return;
         }
         if ($this->longformArticleStore->isEventIdAlreadyStored($newId)) {
+            $existing = $this->longformArticleStore->findByEventId($newId);
+            if ($existing !== null) {
+                $this->longformArticleStore->linkExistingArticle($existing);
+            }
             $this->logger->info('[longform_ingest] saveEachArticle: skip, DB already has this exact event id (no work)', [
                 'eventId' => $newId,
                 'slug' => $article->getSlug(),
@@ -1404,6 +1408,7 @@ class NostrClient
             }
             try {
                 $this->entityManager->flush();
+                $this->longformArticleStore->linkExistingArticle($incumbent);
             } catch (\Exception $e) {
                 $this->logger->error('[longform_ingest] saveEachArticle: flush after update failed: '.$e->getMessage());
                 $this->managerRegistry->resetManager();
@@ -1420,6 +1425,7 @@ class NostrClient
                 'dbCreatedAt' => $iTs,
                 'seenCreatedAt' => $cTs,
             ]);
+            $this->longformArticleStore->linkExistingArticle($incumbent);
         } elseif ((string) $incumbent->getEventId() !== $newId) {
             $this->logger->notice('[longform_ingest] saveEachArticle: inconclusive supersedes (different ids) — check relays / d-tag match', [
                 'address' => $pubkey.':…:'.$this->wireMerge->longformIngestShortSlug($slug),

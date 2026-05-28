@@ -5,15 +5,18 @@ namespace App\Repository;
 use App\Dto\FeaturedArticleCard;
 use App\Entity\Article;
 use App\Enum\EventStatusEnum;
+use App\Service\TenantContext;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\DBAL\Exception;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 class ArticleRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly TenantContext $tenant,
+    ) {
         parent::__construct($registry, Article::class);
     }
 
@@ -22,7 +25,7 @@ class ArticleRepository extends ServiceEntityRepository
      */
     public function searchArticles(string $query, int $limit = 12, int $offset = 0): array
     {
-        $qb = $this->createQueryBuilder('a');
+        $qb = $this->tenantQueryBuilder('a');
 
         $searchTerms = explode(' ', trim($query));
         $conditions = $qb->expr()->orX();
@@ -56,7 +59,7 @@ class ArticleRepository extends ServiceEntityRepository
 
     public function countSearchArticles(string $query): int
     {
-        $qb = $this->createQueryBuilder('a')
+        $qb = $this->tenantQueryBuilder('a')
             ->select('COUNT(a.id)');
 
         $searchTerms = explode(' ', trim($query));
@@ -106,7 +109,9 @@ class ArticleRepository extends ServiceEntityRepository
         $qb
             ->select('a.id', 'a.slug', 'a.title', 'a.summary', 'a.image', 'a.created_at', 'a.published_at', 'a.pubkey')
             ->from('article', 'a')
+            ->innerJoin('a', 'article_magazine', 'am', 'am.article_id = a.id AND am.magazine_slug = :mag')
             ->where($qb->expr()->in('a.slug', ':slugs'))
+            ->setParameter('mag', $this->tenant->getMagazineSlug())
             ->setParameter('slugs', $slugs, ArrayParameterType::STRING)
             ->orderBy('a.created_at', 'DESC');
 
@@ -145,7 +150,7 @@ class ArticleRepository extends ServiceEntityRepository
             return [];
         }
 
-        $qb = $this->createQueryBuilder('a');
+        $qb = $this->tenantQueryBuilder('a');
         $orX = $qb->expr()->orX();
         foreach ($pairs as $i => $p) {
             $pkQ = strtolower((string) $p['pubkey']);
@@ -173,13 +178,13 @@ class ArticleRepository extends ServiceEntityRepository
     }
 
     /**
-     * Distinct hex pubkeys for prewarming Nostr profile cache.
+     * Distinct hex pubkeys for prewarming Nostr profile cache (this magazine tenant only).
      *
      * @return list<string>
      */
     public function findDistinctAuthorPubkeys(): array
     {
-        return $this->createQueryBuilder('a')
+        return $this->tenantQueryBuilder('a')
             ->select('a.pubkey')
             ->distinct()
             ->where('a.pubkey IS NOT NULL')
@@ -188,13 +193,14 @@ class ArticleRepository extends ServiceEntityRepository
             ->getSingleColumnResult();
     }
 
+    /** Global lookup by Nostr event id (shared across magazine tenants). */
     public function findOneByEventId(string $eventId): ?Article
     {
         return $this->findOneBy(['eventId' => $eventId]);
     }
 
     /**
-     * Newest row for a NIP-23/24 `d` value (replaceable long-form can leave multiple `article` rows per slug).
+     * Newest row for a NIP-23/24 `d` value linked to this magazine tenant.
      */
     public function findLatestBySlug(string $slug): ?Article
     {
@@ -203,7 +209,7 @@ class ArticleRepository extends ServiceEntityRepository
             return null;
         }
 
-        return $this->createQueryBuilder('a')
+        return $this->tenantQueryBuilder('a')
             ->where('a.slug = :slug')
             ->setParameter('slug', $slug)
             ->orderBy('a.createdAt', 'DESC')
@@ -212,9 +218,27 @@ class ArticleRepository extends ServiceEntityRepository
             ->getOneOrNullResult();
     }
 
+    public function findLatestBySlugForTenant(string $slug, string $npubHex): ?Article
+    {
+        $slug = trim($slug);
+        if ($slug === '' || $npubHex === '') {
+            return null;
+        }
+
+        return $this->tenantQueryBuilder('a')
+            ->where('a.slug = :slug')
+            ->andWhere('LOWER(a.pubkey) = :pk')
+            ->setParameter('slug', $slug)
+            ->setParameter('pk', strtolower($npubHex))
+            ->orderBy('a.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     public function findByPubkeyPaginated(string $pubkey, int $limit, int $offset): array
     {
-        return $this->createQueryBuilder('a')
+        return $this->tenantQueryBuilder('a')
             ->where('a.pubkey = :pubkey')
             ->setParameter('pubkey', $pubkey)
             ->orderBy('a.createdAt', 'DESC')
@@ -226,12 +250,33 @@ class ArticleRepository extends ServiceEntityRepository
 
     public function countByPubkey(string $pubkey): int
     {
-        return (int) $this->createQueryBuilder('a')
+        return (int) $this->tenantQueryBuilder('a')
             ->select('COUNT(a.id)')
             ->where('a.pubkey = :pubkey')
             ->setParameter('pubkey', $pubkey)
             ->getQuery()
             ->getSingleScalarResult();
+    }
+
+    public function countForMagazine(): int
+    {
+        return (int) $this->tenantQueryBuilder('a')
+            ->select('COUNT(a.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * @return list<Article>
+     */
+    public function findForMagazinePaginated(int $limit, int $offset): array
+    {
+        return $this->tenantQueryBuilder('a')
+            ->orderBy('a.createdAt', 'DESC')
+            ->setFirstResult($offset)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 
     /**
@@ -242,7 +287,7 @@ class ArticleRepository extends ServiceEntityRepository
      */
     public function findPublishedForSyndication(int $limit = 5000): array
     {
-        return $this->createQueryBuilder('a')
+        return $this->tenantQueryBuilder('a')
             ->where('a.slug IS NOT NULL')
             ->andWhere("TRIM(a.slug) != ''")
             ->andWhere('a.eventStatus IN (:st)')
@@ -285,7 +330,7 @@ class ArticleRepository extends ServiceEntityRepository
         if ($topicKey === '') {
             return [];
         }
-        $qb = $this->createQueryBuilder('a')
+        $qb = $this->tenantQueryBuilder('a')
             ->where('a.topics IS NOT NULL')
             ->andWhere('a.content IS NOT NULL')
             ->andWhere('LENGTH(a.content) > 250')
@@ -335,5 +380,19 @@ class ArticleRepository extends ServiceEntityRepository
         }
 
         return \trim($t);
+    }
+
+    private function tenantQueryBuilder(string $alias = 'a'): QueryBuilder
+    {
+        $qb = $this->createQueryBuilder($alias);
+        $qb->innerJoin(
+            'App\Entity\ArticleMagazine',
+            'am',
+            'WITH',
+            'am.article = '.$alias.' AND am.magazineSlug = :_magazine_slug'
+        );
+        $qb->setParameter('_magazine_slug', $this->tenant->getMagazineSlug());
+
+        return $qb;
     }
 }

@@ -169,8 +169,10 @@ final class NostrShareMenuBuilder
         if ($npub === '' || $slug === '' || !str_starts_with($npub, 'npub1')) {
             return $this->siteWithRootMenu();
         }
-        $list = $this->articleRepository->findBy(['slug' => $slug], ['createdAt' => 'DESC'], 1);
-        $article = $list[0] ?? null;
+        $article = $this->articleRepository->findLatestBySlugForTenant(
+            $slug,
+            $this->nostrKeyHelper->convertToHex($npub),
+        );
         if ($article === null) {
             return $this->siteWithRootMenu();
         }

@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Entity\Article;
 use App\Entity\ArticleHighlight;
 use App\Enum\EventStatusEnum;
+use App\Service\TenantContext;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -15,8 +16,10 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class ArticleHighlightRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly TenantContext $tenant,
+    ) {
         parent::__construct($registry, ArticleHighlight::class);
     }
 
@@ -41,7 +44,14 @@ class ArticleHighlightRepository extends ServiceEntityRepository
 
         $qb = $this->createQueryBuilder('h')
             ->innerJoin('h.article', 'a')
+            ->innerJoin(
+                'App\Entity\ArticleMagazine',
+                'am',
+                'WITH',
+                'am.article = a AND am.magazineSlug = :mag'
+            )
             ->where('a.eventStatus IN (:st)')
+            ->setParameter('mag', $this->tenant->getMagazineSlug())
             ->setParameter('st', [EventStatusEnum::PUBLISHED, EventStatusEnum::ARCHIVED])
             ->orderBy('h.eventCreatedAt', 'DESC')
             ->addOrderBy('h.id', 'DESC')

@@ -1,7 +1,7 @@
 framework:
     cache:
         # Unique name of your app: used to compute stable namespaces for cache keys.
-        prefix_seed: newsroom/app
+        prefix_seed: '%magazine_slug%_newsroom/app'
 
         # Use filesystem cache
         app: cache.adapter.filesystem

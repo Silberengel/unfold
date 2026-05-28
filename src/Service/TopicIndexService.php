@@ -16,6 +16,7 @@ final class TopicIndexService
     public function __construct(
         private readonly ArticleRepository $articleRepository,
         private readonly MagazineContentService $magazineContent,
+        private readonly TenantContext $tenant,
     ) {
     }
 
@@ -40,11 +41,13 @@ final class TopicIndexService
 
         $rows = $conn->fetchAllAssociative(
             'SELECT a.slug, a.topics FROM article a
+             INNER JOIN article_magazine am ON am.article_id = a.id AND am.magazine_slug = :mag
              WHERE a.topics IS NOT NULL
                AND a.content IS NOT NULL
                AND CHAR_LENGTH(a.content) > 250
                AND a.event_status IN (:st)',
             [
+                'mag' => $this->tenant->getMagazineSlug(),
                 'st' => [EventStatusEnum::PUBLISHED->value, EventStatusEnum::ARCHIVED->value],
             ],
             [

@@ -103,15 +103,27 @@ export default class extends Controller {
   }
 
   handleTouchStart(event) {
-    const touch = event.changedTouches[0];
+    const touch = event.changedTouches?.[0];
+    if (!touch) {
+      return;
+    }
     this.touchStartX = touch.screenX;
     this.touchStartY = touch.screenY;
   }
 
   handleTouchEnd(event) {
-    const touch = event.changedTouches[0];
+    const touch = event.changedTouches?.[0];
+    if (
+      !touch
+      || typeof this.touchStartX !== 'number'
+      || typeof this.touchStartY !== 'number'
+    ) {
+      return;
+    }
     const dx = Math.abs(touch.screenX - this.touchStartX);
     const dy = Math.abs(touch.screenY - this.touchStartY);
+    this.touchStartX = undefined;
+    this.touchStartY = undefined;
     if (dx < 10 && dy < 10) {
       this.handleInteraction(event);
     }

@@ -3,7 +3,9 @@
 namespace App\Security;
 
 use App\Entity\User;
+use App\Repository\UserEntityRepository;
 use App\Service\CacheService;
+use App\Service\TenantContext;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -19,10 +21,11 @@ readonly class UserDTOProvider implements UserProviderInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private CacheService      $cacheService,
-        private LoggerInterface        $logger
-    )
-    {
+        private UserEntityRepository $userRepository,
+        private CacheService $cacheService,
+        private LoggerInterface $logger,
+        private TenantContext $tenant,
+    ) {
     }
 
     /**
@@ -38,10 +41,13 @@ readonly class UserDTOProvider implements UserProviderInterface
             throw new \InvalidArgumentException('Invalid user type.');
         }
         $this->logger->info('Refresh user.', ['user' => $user->getUserIdentifier()]);
-        $freshUser = $this->entityManager->getRepository(User::class)
-            ->findOneBy(['npub' => $user->getUserIdentifier()]);
+        $freshUser = $this->userRepository->findOneByNpub($user->getUserIdentifier());
+        if ($freshUser === null) {
+            throw new \InvalidArgumentException('User not found for this magazine tenant.');
+        }
         $metadata = $this->cacheService->getMetadata($user->getUserIdentifier());
         $freshUser->setMetadata($metadata);
+
         return $freshUser;
     }
 
@@ -50,12 +56,6 @@ readonly class UserDTOProvider implements UserProviderInterface
      */
     public function supportsClass(string $class): bool
     {
-        /**
-         * Checks if the provider supports the given user class.
-         *
-         * @param string $class The class name to check.
-         * @return bool True if the class is supported, false otherwise.
-         */
         return $class === User::class;
     }
 
@@ -65,11 +65,11 @@ readonly class UserDTOProvider implements UserProviderInterface
     public function loadUserByIdentifier(string $identifier): UserInterface
     {
         $this->logger->info('Load user by identifier.', ['identifier' => $identifier]);
-        // Get or create user
-        $user = $this->entityManager->getRepository(User::class)->findOneBy(['npub' => $identifier]);
+        $user = $this->userRepository->findOneByNpub($identifier);
 
         if (!$user) {
             $user = new User();
+            $user->setMagazineSlug($this->tenant->getMagazineSlug());
             $user->setNpub($identifier);
             $this->entityManager->persist($user);
             $this->entityManager->flush();

@@ -6,6 +6,10 @@ parameters:
     # Per-relay WebSocket I/O (seconds) in NostrClient; also default_socket_timeout during app:prewarm.
     nostr_relay_request_timeout_sec: 12
 
+    # Stable tenant id for shared MySQL (magazine indices, article visibility, featured authors, admin users).
+    # Lowercase alnum and hyphens only; must be unique per deployment on the same database.
+    magazine_slug: 'imwald'
+
     name: 'Nostr, Curated Thoughtfully'
     short_name: 'Imwald Blog'
     description: 'A selection of my own Nostr long-form articles and articles from other authors, selected for the quality of their writing and the depth of their analysis.'

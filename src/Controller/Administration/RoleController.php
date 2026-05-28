@@ -44,7 +44,7 @@ class RoleController extends AbstractController
         }
 
         $role = $form->get('role')->getData();
-        $user = $userRepository->findOneBy(['npub' => $npub]);
+        $user = $userRepository->findOneByNpub($npub);
         $user->addRole($role);
         $em->persist($user);
         $em->flush();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Entity\User;
+use App\Repository\UserEntityRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -18,8 +19,10 @@ use Symfony\Component\Console\Output\OutputInterface;
 )]
 class ElevateUserCommand extends Command
 {
-    public function __construct(private readonly EntityManagerInterface $entityManager)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $entityManager,
+        private readonly UserEntityRepository $userRepository,
+    ) {
         parent::__construct();
     }
 
@@ -39,7 +42,7 @@ class ElevateUserCommand extends Command
         }
 
         /** @var User|null $user */
-        $user = $this->entityManager->getRepository(User::class)->findOneBy(['npub' => $npub]);
+        $user = $this->userRepository->findOneByNpub($npub);
         if (!$user) {
             return Command::FAILURE;
         }

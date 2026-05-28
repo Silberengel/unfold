@@ -322,17 +322,14 @@ class ArticleController  extends AbstractController
     public function article(
         string $npub,
         string $slug,
-        EntityManagerInterface $entityManager,
+        ArticleRepository $articleRepository,
         CacheService $cacheService,
         ArticleCommentThreadLoader $commentThreadLoader,
         ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
         NostrKeyHelper $nostrKeyHelper,
     ): Response {
-        $article = $this->loadLatestArticleBySlug($entityManager, $slug);
+        $article = $articleRepository->findLatestBySlugForTenant($slug, $nostrKeyHelper->convertToHex($npub));
         if ($article === null) {
-            throw $this->createNotFoundException('The article could not be found');
-        }
-        if ($nostrKeyHelper->convertToHex($npub) !== strtolower((string) $article->getPubkey())) {
             throw $this->createNotFoundException('The article could not be found');
         }
 
@@ -627,14 +624,15 @@ class ArticleController  extends AbstractController
         $perPage = 25;
         $page = max(1, $request->query->getInt('page', 1));
         $offset = ($page - 1) * $perPage;
+        /** @var ArticleRepository $repo */
         $repo = $entityManager->getRepository(Article::class);
-        $total = $repo->count([]);
+        $total = $repo->countForMagazine();
         $lastPage = max(1, (int) ceil($total / $perPage));
         if ($page > $lastPage) {
             $page = $lastPage;
             $offset = ($page - 1) * $perPage;
         }
-        $articles = $repo->findBy([], ['createdAt' => 'DESC'], $perPage, $offset);
+        $articles = $repo->findForMagazinePaginated($perPage, $offset);
 
         $category = (object) [
             'title' => 'Community Articles',

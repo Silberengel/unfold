@@ -58,7 +58,8 @@ export default class extends Controller {
         this._hideT = 0;
         this._inTip = false;
 
-        this._onOver = (e) => {
+        // Stable handler refs (??=) so reconnect without disconnect does not stack listeners.
+        this._onOver ??= (e) => {
             if (!(e instanceof MouseEvent)) {
                 return;
             }
@@ -75,7 +76,7 @@ export default class extends Controller {
                 this._show(/** @type {HTMLElement} */ (m), e);
             }
         };
-        this._onOut = (e) => {
+        this._onOut ??= (e) => {
             if (!(e instanceof MouseEvent)) {
                 return;
             }
@@ -96,7 +97,7 @@ export default class extends Controller {
             this._scheduleHide();
         };
 
-        this._onFocus = (e) => {
+        this._onFocus ??= (e) => {
             const t = e.target;
             if (!(t instanceof Element)) {
                 return;
@@ -107,7 +108,7 @@ export default class extends Controller {
                 this._show(/** @type {HTMLElement} */ (m), e);
             }
         };
-        this._onBlur = (e) => {
+        this._onBlur ??= (e) => {
             const t = e.target;
             if (!(t instanceof Node)) {
                 return;
@@ -125,21 +126,27 @@ export default class extends Controller {
             this._scheduleHide();
         };
 
+        this.element.removeEventListener('mouseover', this._onOver);
+        this.element.removeEventListener('mouseout', this._onOut);
+        this.element.removeEventListener('focusin', this._onFocus);
+        this.element.removeEventListener('focusout', this._onBlur);
         this.element.addEventListener('mouseover', this._onOver);
         this.element.addEventListener('mouseout', this._onOut);
         this.element.addEventListener('focusin', this._onFocus);
         this.element.addEventListener('focusout', this._onBlur);
 
-        this._onResize = () => {
+        this._onResize ??= () => {
             if (this.activeMark) {
                 this._place(this.activeMark);
             }
         };
+        window.removeEventListener('resize', this._onResize);
         window.addEventListener('resize', this._onResize);
 
-        this._onHashChange = () => {
+        this._onHashChange ??= () => {
             this._scrollToHashHighlight();
         };
+        window.removeEventListener('hashchange', this._onHashChange);
         window.addEventListener('hashchange', this._onHashChange);
         this._scrollToHashHighlight();
     }
@@ -181,9 +188,7 @@ export default class extends Controller {
         this.element.removeEventListener('focusin', this._onFocus);
         this.element.removeEventListener('focusout', this._onBlur);
         window.removeEventListener('resize', this._onResize);
-        if (this._onHashChange) {
-            window.removeEventListener('hashchange', this._onHashChange);
-        }
+        window.removeEventListener('hashchange', this._onHashChange);
         this._cancelHide();
         if (this.tip) {
             this.tip.removeEventListener('mouseenter', this._onTipEnter);

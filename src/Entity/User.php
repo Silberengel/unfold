@@ -13,6 +13,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
  */
 #[ORM\Entity(repositoryClass: UserEntityRepository::class)]
 #[ORM\Table(name: "app_user")]
+#[ORM\UniqueConstraint(name: 'uniq_app_user_mag_npub', columns: ['magazine_slug', 'npub'])]
 class User implements UserInterface, EquatableInterface
 {
     #[ORM\Id]
@@ -20,7 +21,10 @@ class User implements UserInterface, EquatableInterface
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\Column(unique: true)]
+    #[ORM\Column(length: 64)]
+    private string $magazineSlug = '';
+
+    #[ORM\Column]
     private ?string $npub = null;
 
     #[ORM\Column(type: Types::JSON, nullable: true)]
@@ -73,6 +77,16 @@ class User implements UserInterface, EquatableInterface
         $this->npub = $npub;
     }
 
+    public function getMagazineSlug(): string
+    {
+        return $this->magazineSlug;
+    }
+
+    public function setMagazineSlug(string $magazineSlug): void
+    {
+        $this->magazineSlug = $magazineSlug;
+    }
+
     public function eraseCredentials(): void
     {
         $this->metadata = null;
@@ -118,6 +132,7 @@ class User implements UserInterface, EquatableInterface
     {
         return [
             'id' => $this->id,
+            'magazineSlug' => $this->magazineSlug,
             'npub' => $this->npub,
             'roles' => $this->roles,
             'metadata' => $this->metadata,
@@ -128,6 +143,7 @@ class User implements UserInterface, EquatableInterface
     public function __unserialize(array $data): void
     {
         $this->id = $data['id'];
+        $this->magazineSlug = $data['magazineSlug'] ?? '';
         $this->npub = $data['npub'];
         $this->roles = $data['roles'];
         $this->metadata = $data['metadata'];
