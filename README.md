@@ -163,7 +163,7 @@ Two deployments (e.g. Imwald + GitCitadel) can use **one MySQL** instead of sepa
 3. **Nuke old volumes** and run migrations once on the imwald stack.
 4. Backfill **each** hub stack separately (`articles:get`, `app:prewarm`) — each image tags rows with its own `magazine_slug`.
 
-Articles and kind-0 profiles are stored once and shared; magazine indices, featured authors, admin users, and list/search/sitemap views are scoped per `magazine_slug`.
+Articles and kind-0 profiles are stored once and shared; **search** spans all ingested articles in the database (any tenant). Magazine indices, featured authors, admin users, and list/sitemap views are scoped per `magazine_slug`.
 
 ---
 

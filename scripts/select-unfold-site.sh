@@ -37,7 +37,7 @@ for entry in "$LOCAL"/* "$LOCAL"/.[!.]*; do
   [ "$base" = ".gitignore" ] && continue
   rm -rf "$entry"
 done
-rsync -a "$THEME_SRC/" "$LOCAL/"
+cp -a "$THEME_SRC/." "$LOCAL/"
 
 if [ -f "$LOGO_SRC" ]; then
   cp "$LOGO_SRC" "$ROOT/assets/laeserin_logo.png"

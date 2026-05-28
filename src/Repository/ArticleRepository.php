@@ -21,33 +21,16 @@ class ArticleRepository extends ServiceEntityRepository
     }
 
     /**
-     * Search articles by title, content, and summary using database LIKE queries
+     * Search all ingested long-form articles (global; not scoped to the current magazine_slug).
      */
     public function searchArticles(string $query, int $limit = 12, int $offset = 0): array
     {
-        $qb = $this->tenantQueryBuilder('a');
-
-        $searchTerms = explode(' ', trim($query));
-        $conditions = $qb->expr()->orX();
-
-        foreach ($searchTerms as $index => $term) {
-            $term = trim($term);
-            if (empty($term)) {
-                continue;
-            }
-
-            $paramName = 'term' . $index;
-            $termCondition = $qb->expr()->orX(
-                $qb->expr()->like('a.title', ':' . $paramName),
-                $qb->expr()->like('a.content', ':' . $paramName),
-                $qb->expr()->like('a.summary', ':' . $paramName)
-            );
-            $conditions->add($termCondition);
-            $qb->setParameter($paramName, '%' . $term . '%');
+        $qb = $this->createGlobalSearchQueryBuilder($query);
+        if ($qb === null) {
+            return [];
         }
 
         return $qb
-            ->where($conditions)
             ->orderBy('a.createdAt', 'DESC')
             ->setFirstResult($offset)
             ->setMaxResults($limit)
@@ -57,15 +40,29 @@ class ArticleRepository extends ServiceEntityRepository
 
     public function countSearchArticles(string $query): int
     {
-        $qb = $this->tenantQueryBuilder('a')
-            ->select('COUNT(a.id)');
+        $qb = $this->createGlobalSearchQueryBuilder($query);
+        if ($qb === null) {
+            return 0;
+        }
 
+        return (int) $qb
+            ->select('COUNT(a.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * LIKE search over the full {@see Article} table (no article_magazine tenant join).
+     */
+    private function createGlobalSearchQueryBuilder(string $query): ?QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('a');
         $searchTerms = explode(' ', trim($query));
         $conditions = $qb->expr()->orX();
 
         foreach ($searchTerms as $index => $term) {
             $term = trim($term);
-            if (empty($term)) {
+            if ($term === '') {
                 continue;
             }
 
@@ -80,13 +77,10 @@ class ArticleRepository extends ServiceEntityRepository
         }
 
         if (\count($conditions->getParts()) === 0) {
-            return 0;
+            return null;
         }
 
-        return (int) $qb
-            ->where($conditions)
-            ->getQuery()
-            ->getSingleScalarResult();
+        return $qb->where($conditions);
     }
 
     /**
