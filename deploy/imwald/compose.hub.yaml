@@ -17,6 +17,7 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
       SERVER_NAME: ${SERVER_NAME:-:80}
       DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@${DATABASE_HOST:-unfold-mysql}:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
+      ASCIIDOCTOR_SERVER_URL: ${ASCIIDOCTOR_SERVER_URL:-http://asciidoctor:8091}
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -24,6 +25,7 @@ services:
       - "${HTTP_PUBLISH:-9080}:80/tcp"
     networks:
       - unfold_default
+      - wikistr-network
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
       interval: 10s
@@ -70,6 +72,9 @@ networks:
   unfold_default:
     external: true
     name: unfold_default
+  wikistr-network:
+    external: true
+    name: wikistr-network
 
 volumes:
   caddy_data:
