@@ -1,6 +1,14 @@
+# Imwald hub app (php + prewarm). For the server: copy this file, compose.hub.yaml,
+# hub-app.mk (from deploy/hub-app.mk), and .env into one directory (e.g. ~/unfold-imwald).
+# Do not use the repo-root Makefile.hub — that one targets deploy/imwald/compose.hub.yaml.
+
 THIS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 HUB_COMPOSE ?= compose.hub.yaml
-DB_DIR := $(THIS_DIR)../unfold-db
+DB_DIR ?= ../unfold-db
+ifeq ($(wildcard $(THIS_DIR)hub-app.mk),)
 include $(THIS_DIR)../hub-app.mk
+else
+include $(THIS_DIR)hub-app.mk
+endif
 
 .DEFAULT_GOAL := help

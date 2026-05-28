@@ -1,6 +1,13 @@
+# GitCitadel hub app (php + prewarm). Server copy: this file, compose.hub.yaml,
+# hub-app.mk (from deploy/hub-app.mk), and .env — not the repo-root Makefile.hub.
+
 THIS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 HUB_COMPOSE ?= compose.hub.yaml
-DB_DIR := $(THIS_DIR)../unfold-db
+DB_DIR ?= ../unfold-db
+ifeq ($(wildcard $(THIS_DIR)hub-app.mk),)
 include $(THIS_DIR)../hub-app.mk
+else
+include $(THIS_DIR)hub-app.mk
+endif
 
 .DEFAULT_GOAL := help

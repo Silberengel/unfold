@@ -173,7 +173,7 @@ Articles and kind-0 profiles are stored once and shared; **search** spans all in
 
 ## Production / Hub (remote server)
 
-Each site uses a **pre-built** image (site baked in at build time via **`UNFOLD_SITE`**). On the server: copy **`deploy/imwald/`** or **`deploy/gitcitadel/`** (`compose.hub.yaml` + `.env` from `.env.dist`), plus **`Makefile.hub`** from the repo root.
+Each site uses a **pre-built** image (site baked in at build time via **`UNFOLD_SITE`**). On the server, copy into one directory per stack (e.g. `~/unfold-imwald`): **`compose.hub.yaml`**, **`.env`** (from `.env.dist`), **`Makefile.hub`** from **`deploy/imwald/`** or **`deploy/gitcitadel/`**, and **`hub-app.mk`** from **`deploy/hub-app.mk`**. Do **not** copy the repo-root **`Makefile.hub`** (that file is for running from a full git checkout).
 
 | Site / role | Hub directory | Default image | HTTP (default) |
 |-------------|---------------|---------------|----------------|
@@ -242,7 +242,7 @@ After code changes: **`make -f Makefile.hub pull`** and **`up`** per app stack; 
 
 ### `Makefile.hub` (on the server)
 
-Copy **`Makefile.hub`** next to each hub’s **`compose.hub.yaml`**. For GitCitadel, set **`HUB_COMPOSE=compose.hub.yaml`** (file in that directory):
+Per app directory (`unfold-imwald`, `unfold-gitcitadel`), you need **`Makefile.hub`**, **`hub-app.mk`**, **`compose.hub.yaml`**, and **`.env`** in the same folder. **`deploy/unfold-db/Makefile.hub`** is self-contained (no `hub-app.mk`).
 
 ```bash
 make -f Makefile.hub help
@@ -252,10 +252,10 @@ make -f Makefile.hub migrate          # imwald only (runs migrations)
 make -f Makefile.hub backfill         # articles:get + prewarm-once
 ```
 
-**Imwald from repo root** (default `HUB_COMPOSE=deploy/imwald/compose.hub.yaml`):
+**From a full git checkout** (repo root), use the root **`Makefile.hub`** (`HUB_COMPOSE=deploy/imwald/compose.hub.yaml` by default):
 
 ```bash
-make -f Makefile.hub -C . pull
+make -f Makefile.hub pull
 ```
 
 ### One-time Nostr backfill (equivalent to `make prewarm` on dev)

@@ -4,7 +4,7 @@
 #   ./scripts/build-hub-image.sh imwald
 #   docker push silberengel/unfold:imwald
 
-name: unfold
+name: imwald
 
 services:
   php:
@@ -23,8 +23,7 @@ services:
     ports:
       - "${HTTP_PUBLISH:-9080}:80/tcp"
     networks:
-      - default
-      - unfold_db
+      - unfold_default
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
       interval: 10s
@@ -62,14 +61,13 @@ services:
       DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@${DATABASE_HOST:-unfold-mysql}:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
       PREWARM_FLAGS: ${PREWARM_FLAGS:-}
     networks:
-      - default
-      - unfold_db
+      - unfold_default
     depends_on:
       php:
         condition: service_started
 
 networks:
-  unfold_db:
+  unfold_default:
     external: true
     name: unfold_default
 
