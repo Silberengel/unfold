@@ -77,7 +77,7 @@ final class PublicationRelayResolver
             'timeout_sec' => $timeout,
         ]);
 
-        $this->nostrClient->ingestLongformForCategoryCoordinates([$coordinate], $timeout);
+        $this->nostrClient->ingestLongformForCategoryCoordinates([$coordinate], $timeout, true);
 
         return $this->articleRepository->findLatestBySlugForTenant($slug, $pubkey);
     }

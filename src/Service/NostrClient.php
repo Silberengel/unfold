@@ -21,7 +21,7 @@ use swentel\nostr\Subscription\Subscription;
 /**
  * Main integration point for swentel/nostr against configured relays: long-form fetch, kind-0 profile
  * metadata, article discussion and comment publish relay lists, magazine 30040 / highlight 9802 ingest,
- * and related REQ flows. Tuned via `default_relay`, `article_relays`, `profile_relays`, and
+ * and related REQ flows. Tuned via `community_relay`, `search_relays`, `profile_relays`, and
  * `nostr_relay_request_timeout_sec` (see `config/unfold.yaml`). Shared building blocks:
  * {@see NostrRelayRequestFactory} (timeouts), {@see NostrRelayQuery} (REQ + response fan-in),
  * {@see NostrRelayFanoutTransport} (sequential vs parallel multi-relay REQ), {@see NostrRelayListFactory}
@@ -48,7 +48,9 @@ class NostrClient
      */
     private const MAX_HIGHLIGHT_RELAY_URLS = 32;
 
-    private RelaySet $defaultRelaySet;
+    private RelaySet $communityRelaySet;
+
+    private RelaySet $searchRelaySet;
 
     /**
      * @param NostrRelayRequestFactory  $relayRequestFactory Per-relay WebSocket I/O cap (see `nostr_relay_request_timeout_sec` in `config/unfold.yaml`)
@@ -75,17 +77,18 @@ class NostrClient
         private readonly PublicationMagazineFilter $publicationMagazineFilter,
         private readonly LongformArticleIngest $longformArticleIngest,
     ) {
-        $this->defaultRelaySet = $this->relayListFactory->getDefaultArticleRelaySet();
+        $this->communityRelaySet = $this->relayListFactory->getCommunityRelaySet();
+        $this->searchRelaySet = $this->relayListFactory->getSearchRelaySet();
     }
 
     /**
-     * default_relay + article_relays (deduplicated) for publishing user comments.
+     * community_relay + search_relays (deduplicated) for publishing user comments.
      *
      * @return list<string>
      */
     public function getArticleWriteRelayUrls(): array
     {
-        return $this->relayListFactory->getConfiguredArticleRelayUrlList();
+        return $this->relayListFactory->getPublishRelayUrlList();
     }
 
     /**
@@ -100,7 +103,7 @@ class NostrClient
      */
     public function getRelayUrlsForCommentPublish(string $articleCoordinate, string $parentEventAuthorHex): array
     {
-        $base = $this->relayListFactory->getConfiguredArticleRelayUrlList();
+        $base = $this->relayListFactory->getPublishRelayUrlList();
         $parts = explode(':', $articleCoordinate, 3);
         $articlePk = \count($parts) >= 2 ? strtolower((string) $parts[1]) : '';
         if (64 !== \strlen($articlePk) || !ctype_xdigit($articlePk)) {
@@ -189,7 +192,7 @@ class NostrClient
                 $chunkLower[strtolower($h)] = true;
             }
             $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 kinds: [
                     KindsEnum::METADATA,
                     KindsEnum::EMOJI_LIST,
@@ -285,7 +288,7 @@ class NostrClient
         $numChunks = \count($chunks);
         foreach ($chunks as $i => $chunk) {
             $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 kinds: [KindsEnum::DELETION_REQUEST],
                 filters: [
                     'authors' => $chunk,
@@ -346,7 +349,7 @@ class NostrClient
         $relaySet = $this->relayListFactory->relaySetFromDistinctUrlList($relaysTried);
         try {
             $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 kinds: [KindsEnum::PAYMENT_TARGETS],
                 filters: ['authors' => [$authorHex], 'limit' => max(1, min(50, $limit))],
                 relaySet: $relaySet
@@ -424,14 +427,15 @@ class NostrClient
         $chunk = self::LONGFORM_BACKFILL_CHUNK_SECONDS;
         for ($windowFrom = $fromTs; $windowFrom < $toTs; $windowFrom += $chunk) {
             $windowTo = min($windowFrom + $chunk, $toTs);
-            $this->ingestArticleBodiesForTimeWindow($windowFrom, $windowTo, KindsEnum::longformKindValues());
+            $this->ingestArticleBodiesForTimeWindow($windowFrom, $windowTo, KindsEnum::longformKindValues(), $this->communityRelaySet);
             if ($this->publicationFeature->isEnabled()) {
                 $this->ingestPublicationIndicesForTimeWindow($windowFrom, $windowTo);
                 $this->ingestArticleBodiesForTimeWindow($windowFrom, $windowTo, [
                     KindsEnum::PUBLICATION_CONTENT->value,
                     KindsEnum::WIKI_ARTICLE->value,
-                ]);
+                ], $this->communityRelaySet);
             }
+            $this->ingestArticleBodiesForTimeWindow($windowFrom, $windowTo, KindsEnum::longformKindValues(), $this->searchRelaySet);
             $this->entityManager->clear();
         }
     }
@@ -439,7 +443,7 @@ class NostrClient
     /**
      * @param list<int> $kinds
      */
-    private function ingestArticleBodiesForTimeWindow(int $since, int $until, array $kinds): void
+    private function ingestArticleBodiesForTimeWindow(int $since, int $until, array $kinds, RelaySet $relaySet): void
     {
         if ($kinds === []) {
             return;
@@ -452,7 +456,7 @@ class NostrClient
         $filter->setUntil($until);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
-        $request = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
+        $request = $this->relayRequestFactory->createTimedRequest($relaySet, $requestMessage);
 
         $wrappers = $this->nostrRelayQuery->processResponse($request->send(), function (object $event) {
             $w = new \stdClass();
@@ -477,7 +481,7 @@ class NostrClient
         $filter->setSince($since);
         $filter->setUntil($until);
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
-        $request = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
+        $request = $this->relayRequestFactory->createTimedRequest($this->communityRelaySet, $requestMessage);
         $events = $this->nostrRelayQuery->processResponse($request->send(), static fn (object $event) => $event);
         $stored = 0;
         foreach ($this->wireMerge->mergeNip33ParameterizedWireEvents($events) as $wire) {
@@ -509,7 +513,9 @@ class NostrClient
 
     public function fetchAndStorePublicationIndex(string $npub, string $dTag, ?int $relayTimeoutSec = null): ?PublicationEventEntity
     {
-        $entity = $this->getMagazineIndex($npub, $dTag, $relayTimeoutSec);
+        $urls = $this->relayListFactory->getCommunityRelayUrlList();
+        $relaysForLog = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $urls));
+        $entity = $this->queryMagazineIndex($npub, $dTag, $this->communityRelaySet, $relaysForLog, $relayTimeoutSec);
         if ($entity === null) {
             return null;
         }
@@ -546,7 +552,7 @@ class NostrClient
         try {
             // Create request using the helper method for forest relay set
             $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 kinds: [$kind],
                 filters: [
                     'authors' => [$authorHex],
@@ -595,11 +601,11 @@ class NostrClient
         $this->logger->info('Getting event by ID', ['event_id' => $eventId, 'relays' => $relays]);
 
         // Use provided relays or default if empty
-        $relaySet = empty($relays) ? $this->defaultRelaySet : $this->relayListFactory->createRelaySetMergedWithArticleList($relays);
+        $relaySet = empty($relays) ? $this->searchRelaySet : $this->relayListFactory->createRelaySetMergedWithArticleList($relays);
 
         // Create request using the helper method
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             kinds: [], // Leave empty to accept any kind
             filters: ['ids' => [$eventId]],
             relaySet: $relaySet
@@ -646,7 +652,7 @@ class NostrClient
         $byId = $this->queryKind1EventsByIdsFromRelaySet($idList, $articleSet);
         $missing = array_values(array_diff($idList, array_keys($byId)));
         if ($missing !== []) {
-            $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromArticleRelays();
+            $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromSearchRelays();
             if ($profileExtra !== []) {
                 $pfSet = $this->relayListFactory->createRelaySetFromUrlsOnly($profileExtra);
                 $extra = $this->queryKind1EventsByIdsFromRelaySet($missing, $pfSet);
@@ -672,7 +678,7 @@ class NostrClient
             return [];
         }
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             relaySet: $relaySet,
             kinds: [KindsEnum::TEXT_NOTE],
             filters: ['ids' => $eventIdHexes],
@@ -729,7 +735,7 @@ class NostrClient
 
         // Create request using the helper method
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             kinds: [$kind],
             filters: [
                 'authors' => [$authorHex],
@@ -749,7 +755,7 @@ class NostrClient
 
         // Try default relays as fallback
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             kinds: [$kind],
             filters: [
                 'authors' => [$authorHex],
@@ -798,10 +804,10 @@ class NostrClient
             return null;
         }
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             kinds: [KindsEnum::RELAY_LIST],
             filters: ['authors' => [$authorHex]],
-            relaySet: $this->defaultRelaySet
+            relaySet: $this->searchRelaySet
         );
         $response = $this->nostrRelayQuery->processResponse($request->send(), function ($received) {
             return $received;
@@ -862,7 +868,7 @@ class NostrClient
             'author_relay_count' => \count($authorRelays),
         ]);
 
-        $baseForDiscussion = $this->relayListFactory->getConfiguredArticleRelayUrlList();
+        $baseForDiscussion = $this->relayListFactory->getSearchRelayUrlList();
         $mergedForDiscussion = $this->relayListFactory->withAggrNostrLandIfUserSubscribesNostrLand(
             array_merge($baseForDiscussion, $authorRelays)
         );
@@ -1043,8 +1049,8 @@ class NostrClient
 
     /**
      * Fetches kind 9802 (highlights) that reference the long-form address. Used for DB ingest only
-     * ({@see HighlightSyncService} / prewarm). Relays: {@see NostrRelayListFactory::getConfiguredArticleRelayUrlList()} (main +
-     * article_relays), then config {@see NostrRelayListFactory::getProfileRelayUrlList()}, then author NIP-65, deduped (cap
+     * ({@see HighlightSyncService} / prewarm). Relays: {@see NostrRelayListFactory::getSearchRelayUrlList()}, then
+     * {@see NostrRelayListFactory::getProfileRelayUrlList()}, then author NIP-65, deduped (cap
      * {@see MAX_HIGHLIGHT_RELAY_URLS}).
      *
      * @return list<object> unique wire events by id
@@ -1064,7 +1070,7 @@ class NostrClient
             'author_relay_count' => \count($authorRelays),
         ]);
 
-        $baseArticle = $this->relayListFactory->getConfiguredArticleRelayUrlList();
+        $baseArticle = $this->relayListFactory->getSearchRelayUrlList();
         $profileConfigured = $this->relayListFactory->getProfileRelayUrlList();
         $mergedForDiscussion = $this->relayListFactory->withAggrNostrLandIfUserSubscribesNostrLand(
             array_merge($baseArticle, $profileConfigured, $authorRelays)
@@ -1155,7 +1161,7 @@ class NostrClient
     {
         $seen = [];
         $out = [];
-        foreach (array_merge($this->relayListFactory->getConfiguredArticleRelayUrlList(), $relayUrls) as $relayUrl) {
+        foreach (array_merge($this->relayListFactory->getSearchRelayUrlList(), $relayUrls) as $relayUrl) {
             if ($relayUrl === '' || isset($seen[$relayUrl])) {
                 continue;
             }
@@ -1191,7 +1197,7 @@ class NostrClient
         // Create request using the helper method
         // Zaps are kind 9735
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             kinds: [KindsEnum::ZAP],
             filters: ['tag' => ['#a', [$coordinate]]],
             relaySet: $relaySet
@@ -1215,95 +1221,36 @@ class NostrClient
         $requestMessage = new RequestMessage($subscriptionId, [$filter]);
 
         try {
-            $request = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
+            $request = $this->relayRequestFactory->createTimedRequest($this->communityRelaySet, $requestMessage);
             $response = $request->send();
-            $hasEvents = false;
-
-            // Check if we got any events
-            foreach ($response as $relayUrl => $value) {
-                if ($value instanceof \Throwable) {
-                    $this->logger->warning(sprintf(
-                        '[%s] getArticles: %s',
-                        NostrRelayQuery::relayLogLabel($relayUrl),
-                        $value->getMessage()
-                    ), ['relay' => $relayUrl]);
-
-                    continue;
-                }
-                if (!\is_iterable($value)) {
-                    continue;
-                }
-                foreach ($value as $item) {
-                    if ($item->type === 'EVENT') {
-                        if (!isset($articles[$item->event->id])) {
-                            $articles[$item->event->id] = $item->event;
-                            $hasEvents = true;
-                        }
-                    }
-                }
-            }
-
-            // If no articles found, try the default relay set
-            if (!$hasEvents && !empty($slugs)) {
-                $this->logger->info('No results from theforest, trying default relays');
-
-                $request = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
-                $response = $request->send();
-
-                foreach ($response as $relayUrl => $value) {
-                    if ($value instanceof \Throwable) {
-                        $this->logger->warning(sprintf(
-                            '[%s] getArticles: %s',
-                            NostrRelayQuery::relayLogLabel($relayUrl),
-                            $value->getMessage()
-                        ), ['relay' => $relayUrl]);
-
-                        continue;
-                    }
-                    if (!\is_iterable($value)) {
-                        continue;
-                    }
-                    foreach ($value as $item) {
-                        if ($item->type === 'EVENT') {
-                            if (!isset($articles[$item->event->id])) {
-                                $articles[$item->event->id] = $item->event;
-                            }
-                        } elseif (in_array($item->type, ['AUTH', 'ERROR', 'NOTICE'], true)) {
-                            $msg = (string) ($item->message ?? '');
-                            $this->logger->error(sprintf(
-                                '[%s] %s while getting articles: %s',
-                                NostrRelayQuery::relayLogLabel($relayUrl),
-                                $item->type,
-                                $msg !== '' ? $msg : '(no message)'
-                            ), ['relay' => $relayUrl, 'response' => $item]);
-                        }
-                    }
-                }
-            }
         } catch (\Exception $e) {
-            $relaysTried = $this->relayListFactory->getConfiguredArticleRelayUrlList();
+            $relaysTried = $this->relayListFactory->getCommunityRelayUrlList();
             $relaysStr = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relaysTried));
             $this->logger->error(sprintf('Error querying relays (%s): %s', $relaysStr, $e->getMessage()), [
                 'error' => $e->getMessage(),
                 'relays' => $relaysTried,
             ]);
 
-            // Fall back to default relay set
-            $request = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
-            $response = $request->send();
+            return [];
+        }
 
-            foreach ($response as $relayUrl => $value) {
-                if ($value instanceof \Throwable) {
-                    continue;
-                }
-                if (!\is_iterable($value)) {
-                    continue;
-                }
-                foreach ($value as $item) {
-                    if ($item->type === 'EVENT') {
-                        if (!isset($articles[$item->event->id])) {
-                            $articles[$item->event->id] = $item->event;
-                        }
+        foreach ($response as $relayUrl => $value) {
+            if ($value instanceof \Throwable) {
+                $this->logger->warning(sprintf(
+                    '[%s] getArticles: %s',
+                    NostrRelayQuery::relayLogLabel($relayUrl),
+                    $value->getMessage()
+                ), ['relay' => $relayUrl]);
+
+                continue;
+            }
+            if (!\is_iterable($value)) {
+                continue;
+            }
+            foreach ($value as $item) {
+                if ($item->type === 'EVENT') {
+                    if (!isset($articles[$item->event->id])) {
+                        $articles[$item->event->id] = $item->event;
                     }
                 }
             }
@@ -1385,7 +1332,7 @@ class NostrClient
                     $this->logger->info('Article not found in author relays, trying default relays', [
                         'coordinate' => $coordinate
                     ]);
-                    $request2 = $this->relayRequestFactory->createTimedRequest($this->defaultRelaySet, $requestMessage);
+                    $request2 = $this->relayRequestFactory->createTimedRequest($this->searchRelaySet, $requestMessage);
                     $events2 = $this->nostrRelayQuery->processResponse(
                         $request2->send(),
                         static fn (object $event) => $event,
@@ -1442,10 +1389,10 @@ class NostrClient
                 // NIP-01: filter by "ids", not "#e" (which matches *tags* named "e").
                 $kind = isset($data->kind) ? (int) $data->kind : 1;
                 $request = $this->nostrRelayQuery->createNostrRequest(
-                    defaultRelaySet: $this->defaultRelaySet,
+                    defaultRelaySet: $this->searchRelaySet,
                     kinds: [$kind],
                     filters: ['ids' => [$data->id]],
-                    relaySet: $this->defaultRelaySet
+                    relaySet: $this->searchRelaySet
                 );
             } else {
                 // Replaceable address (naddr): must filter on #d like {@see getEventByNaddr()}.
@@ -1459,13 +1406,13 @@ class NostrClient
                 }
                 $kind = (int) ($data->kind ?? KindsEnum::LONGFORM->value);
                 $request = $this->nostrRelayQuery->createNostrRequest(
-                    defaultRelaySet: $this->defaultRelaySet,
+                    defaultRelaySet: $this->searchRelaySet,
                     kinds: [$kind],
                     filters: [
                         'authors' => [$pubkey],
                         'tag' => ['#d', [$identifier]],
                     ],
-                    relaySet: $this->defaultRelaySet
+                    relaySet: $this->searchRelaySet
                 );
             }
 
@@ -1535,18 +1482,18 @@ class NostrClient
      * (third segment of the root "a" address). A category 30040 lists 30023/30024 article "a" tags
      * and may also list nested kind-30040 section indices.
      *
-     * Tries article relays first; if no 30040 is found, retries on config `profile_relays` not
-     * already listed in `article_relays` (see prewarm / category discovery).
+     * Tries search_relays first; if no 30040 is found, retries on config `profile_relays` not
+     * already listed in search_relays (see prewarm / category discovery).
      */
     public function getMagazineIndex(mixed $npub, mixed $dTag, ?int $relayTimeoutSec = null): ?PublicationEventEntity
     {
-        $urls = $this->relayListFactory->getConfiguredArticleRelayUrlList();
+        $urls = $this->relayListFactory->getSearchRelayUrlList();
         $relaysForLog = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $urls));
-        $result = $this->queryMagazineIndex($npub, $dTag, $this->defaultRelaySet, $relaysForLog, $relayTimeoutSec);
+        $result = $this->queryMagazineIndex($npub, $dTag, $this->searchRelaySet, $relaysForLog, $relayTimeoutSec);
         if ($result !== null) {
             return $result;
         }
-        $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromArticleRelays();
+        $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromSearchRelays();
         if ($profileExtra === []) {
             return null;
         }
@@ -1573,7 +1520,7 @@ class NostrClient
             return null;
         }
         $request = $this->nostrRelayQuery->createNostrRequest(
-            defaultRelaySet: $this->defaultRelaySet,
+            defaultRelaySet: $this->searchRelaySet,
             relaySet: $relaySet,
             kinds: [KindsEnum::PUBLICATION_INDEX],
             filters: ['authors' => [$authorHex], 'tag' => ['#d', [(string) $dTag]]],
@@ -1612,11 +1559,11 @@ class NostrClient
     }
 
     /**
-     * Single long-form coordinate on config profile relays only (not already in article_relays).
+     * Single long-form coordinate on config profile relays only (not already in search_relays).
      */
     private function tryFetchLongformCoordinateOnProfileRelays(string $coordinate): ?object
     {
-        $extra = $this->relayListFactory->getProfileRelayUrlsExcludedFromArticleRelays();
+        $extra = $this->relayListFactory->getProfileRelayUrlsExcludedFromSearchRelays();
         if ($extra === []) {
             return null;
         }
@@ -1634,7 +1581,7 @@ class NostrClient
         $pfSet = $this->relayListFactory->createRelaySetFromUrlsOnly($extra);
         try {
             $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 relaySet: $pfSet,
                 kinds: [$kindEnum],
                 filters: ['authors' => [$pubkey], 'tag' => ['#d', [$slug]]],
@@ -1648,7 +1595,7 @@ class NostrClient
                 return $ev;
             }
             $fallbackReq = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 relaySet: $pfSet,
                 kinds: [$kindEnum],
                 filters: ['tag' => ['#d', [$slug]]],
@@ -1681,24 +1628,25 @@ class NostrClient
 
     /**
      * Batch-fetch latest longform for category `a` coordinates; one Nostr call per (author × kind)
-     * group. Uses the same full article {@see $defaultRelaySet} as kind 30040 index queries so merged
-     * NIP-33 results are not stuck on a single relay’s copy. {@see saveEachArticleToTheDatabase}
-     * upserts by NIP-33 address.
+     * group. Default relays: {@see $searchRelaySet} (site magazine categories). Pass
+     * {@code $communityFeed = true} for publication section bodies ({@see community_relay}).
      *
-     * After article relays return nothing (or some addresses stay missing), retries use config
-     * `profile_relays` not already in `article_relays`. The generic community listing at `/articles`
-     * is DB-only and does not add a profile-relay pass; {@see getArticles} stays article-relays-only.
+     * After search_relays return nothing, retries use `profile_relays` not already in search_relays.
      *
      * @param list<string> $addresses kind:pubkey:identifier
      */
-    public function ingestLongformForCategoryCoordinates(array $addresses, ?int $relayTimeoutSec = null): void
+    public function ingestLongformForCategoryCoordinates(array $addresses, ?int $relayTimeoutSec = null, bool $communityFeed = false): void
     {
         if ($addresses === []) {
             $this->logger->info('[longform_ingest] ingestLongform: no addresses, exit');
 
             return;
         }
-        $relaysForLog = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $this->relayListFactory->getConfiguredArticleRelayUrlList()));
+        $relaySet = $communityFeed ? $this->communityRelaySet : $this->searchRelaySet;
+        $relayUrlList = $communityFeed
+            ? $this->relayListFactory->getCommunityRelayUrlList()
+            : $this->relayListFactory->getSearchRelayUrlList();
+        $relaysForLog = implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $relayUrlList));
         $this->logger->info('[longform_ingest] ingestLongform: start', [
             'address_count' => \count($addresses),
             'relays' => $relaysForLog,
@@ -1747,9 +1695,10 @@ class NostrClient
                 ),
             ]);
             $request = $this->nostrRelayQuery->createNostrRequest(
-                defaultRelaySet: $this->defaultRelaySet,
+                defaultRelaySet: $this->searchRelaySet,
                 kinds: [$kindEnum],
                 filters: ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
+                relaySet: $relaySet,
                 relayTimeoutSec: $relayTimeoutSec,
             );
             try {
@@ -1781,9 +1730,10 @@ class NostrClient
                     // Some relays fail to satisfy combined authors+#d filters for parameterized replaceables.
                     // Fallback: query by #d only, then enforce author and d-tag match client-side.
                     $fallbackReq = $this->nostrRelayQuery->createNostrRequest(
-                        defaultRelaySet: $this->defaultRelaySet,
+                        defaultRelaySet: $this->searchRelaySet,
                         kinds: [$kindEnum],
                         filters: ['tag' => ['#d', $dTags]],
+                        relaySet: $relaySet,
                         relayTimeoutSec: $relayTimeoutSec,
                     );
                     $fallbackEvents = $this->nostrRelayQuery->processResponse(
@@ -1818,15 +1768,15 @@ class NostrClient
                     }
                 }
                 if ($rawCount === 0) {
-                    $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromArticleRelays();
+                    $profileExtra = $this->relayListFactory->getProfileRelayUrlsExcludedFromSearchRelays();
                     if ($profileExtra !== []) {
                         $pfSet = $this->relayListFactory->createRelaySetFromUrlsOnly($profileExtra);
-                        $this->logger->info('[longform_ingest] ingestLongform: no rows on article relays; trying profile_relays', [
+                        $this->logger->info('[longform_ingest] ingestLongform: no rows on configured relays; trying profile_relays', [
                             'group_key' => $gkey,
                             'relays' => implode(', ', array_map(NostrRelayQuery::relayLogLabel(...), $profileExtra)),
                         ]);
                         $requestPf = $this->nostrRelayQuery->createNostrRequest(
-                            defaultRelaySet: $this->defaultRelaySet,
+                            defaultRelaySet: $this->searchRelaySet,
                             relaySet: $pfSet,
                             kinds: [$kindEnum],
                             filters: ['authors' => [(string) $g['pubkey']], 'tag' => ['#d', $dTags]],
@@ -1839,7 +1789,7 @@ class NostrClient
                         $rawCount = \count($events);
                         if ($rawCount === 0) {
                             $fallbackPf = $this->nostrRelayQuery->createNostrRequest(
-                                defaultRelaySet: $this->defaultRelaySet,
+                                defaultRelaySet: $this->searchRelaySet,
                                 relaySet: $pfSet,
                                 kinds: [$kindEnum],
                                 filters: ['tag' => ['#d', $dTags]],

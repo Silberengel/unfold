@@ -43,8 +43,8 @@ services:
             $projectDir: '%kernel.project_dir%'
     App\Service\NostrRelayListFactory:
         arguments:
-            $defaultRelayUrl: '%default_relay%'
-            $articleRelayUrls: '%article_relays%'
+            $communityRelayUrl: '%community_relay%'
+            $searchRelayUrls: '%search_relays%'
             $profileRelayUrls: '%profile_relays%'
     App\Service\NostrAuthorRelayCache:
         lazy: true

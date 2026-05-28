@@ -1,38 +1,38 @@
 /*
- * imwald / magazine dark color scheme (second stylesheet).
+ * GitCitadel dark color scheme.
  * Loaded only when data-color-scheme="dark" and config theme_stylesheet_dark is set.
- * Override tokens here; keep components using var(--color-…).
+ * Palette mirrors gitcitadel-online/static/css/main.css exactly:
+ *   bg-primary #2d2d2d, bg-secondary #1e1e1e, accent #7c9eff, hover #9bb3ff, visited #a58fff.
  */
 html[data-color-scheme="dark"] {
     /* Backgrounds */
-    --color-bg: #1c1a18;
-    --color-bg-light: #262320;
-    --color-bg-primary: #2f2b27;
+    --color-bg: #1e1e1e;                 /* --bg-secondary from gitcitadel-online */
+    --color-bg-light: #2d2d2d;           /* --bg-primary */
+    --color-bg-primary: #3a3a3a;         /* Slightly lifted surface */
     /* Text */
-    --color-text: #e8e1d9;
-    --color-text-mid: #b7ada3;
-    --color-text-contrast: #1c1a18;
-    /* Accents (muted greens) */
-    --color-primary: #8faf8f;
-    --color-secondary: #a8c3a8;
-    --color-primary-strong: #6f9a6f;
-    --color-border: #3a3632;
-    --color-border-soft: #2a2724;
+    --color-text: #f0f0f0;               /* --text-primary */
+    --color-text-mid: #c0c0c0;           /* --text-secondary */
+    --color-text-contrast: #1e1e1e;
+    /* Accents — periwinkle/lavender from gitcitadel-online */
+    --color-primary: #7c9eff;            /* --accent-color / --link-color */
+    --color-secondary: #9bb3ff;          /* --link-hover */
+    --color-primary-strong: #6b8bef;
+    --color-border: #404040;             /* --border-color */
+    --color-border-soft: #333333;
     --color-text-light: var(--color-text-mid);
-    --color-footer-bg: #1c1a18;
+    --color-footer-bg: #1e1e1e;
     --color-footer-text: var(--color-text);
     --color-footer-link: var(--color-primary);
-    --color-highlight-mark-fg: #1c1a18;
-    --color-link: #8faf8f;
-    --color-link-hover: #a8c3a8;
-    --color-link-visited: #7e9f7e;
-    --color-focus-ring: #8faf8f;
-    --color-shadow: color-mix(in srgb, #000 28%, transparent);
-    --brand-color: #e8e1d9;
+    --color-highlight-mark-fg: #1e1e1e;
+    --color-link: #7c9eff;
+    --color-link-hover: #9bb3ff;
+    --color-link-visited: #a58fff;       /* --link-visited: lavender-purple */
+    --color-focus-ring: #9bb3ff;
+    --color-shadow: color-mix(in srgb, #000 32%, transparent);
+    --brand-color: #f0f0f0;
     --accent-color: var(--color-secondary);
-    /* Reading pane / headline stack: clearly lifted from --color-bg (88/12 was visually identical). */
-    --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 28%, var(--color-bg-light) 72%);
-    --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 38%, var(--color-text) 62%);
+    --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 30%, var(--color-bg-light) 70%);
+    --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 35%, var(--color-text) 65%);
 }
 
 html[data-color-scheme="dark"] a:visited {
@@ -53,15 +53,15 @@ html[data-color-scheme="dark"] .home-aside-highlights__item-inner {
 }
 
 html[data-color-scheme="dark"] .home-aside-highlights__quote {
-    color: #d8d0c8;
+    color: #d8d4ee;
 }
 
 html[data-color-scheme="dark"] .home-aside-highlights__item-inner:hover,
 html[data-color-scheme="dark"] .home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) {
-    background: #2f2b27;
+    background: #3a3a3a;
 }
 
-/* Reply toasts: base article.css uses hardcoded light greens/reds; override for dark. */
+/* Reply toasts: override base article.css for dark. */
 html[data-color-scheme="dark"] .reply-toast--success {
     border-color: #3a8a55;
     background: color-mix(in srgb, var(--color-bg) 70%, #2f7a4b 30%);
@@ -72,4 +72,9 @@ html[data-color-scheme="dark"] .reply-toast--error {
     border-color: #b03030;
     background: color-mix(in srgb, var(--color-bg) 70%, #a12b2b 30%);
     color: var(--color-text);
+}
+
+html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active,
+html[data-color-scheme="dark"] .header__cat-link--cta.header__cat-link--active:hover {
+    color: #1e1e1e;
 }

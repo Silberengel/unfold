@@ -11,7 +11,7 @@ use App\Nostr\MagazineEventKeys;
 use Psr\Log\LoggerInterface;
 
 /**
- * When a wire event is returned from a tenant-configured relay (default, article_relays, profile_relays),
+ * When a wire event is returned from a tenant-configured relay (community_relay, search_relays, profile_relays),
  * persist it so later reads can use MySQL first.
  */
 class RelayFetchedEventPersister

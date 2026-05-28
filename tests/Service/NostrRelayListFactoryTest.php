@@ -11,26 +11,41 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 
 final class NostrRelayListFactoryTest extends TestCase
 {
-    public function testGetConfiguredArticleRelayUrlListDeduplicatesAndPreservesOrder(): void
+    public function testGetSearchRelayUrlListDeduplicates(): void
     {
         $tokenStorage = $this->createMock(TokenStorageInterface::class);
         $tokenStorage->method('getToken')->willReturn(null);
         $f = new NostrRelayListFactory(
-            'wss://main',
-            ['wss://extra', 'wss://main', 'wss://extra'],
+            'wss://forest',
+            ['wss://forest', 'wss://citadel'],
             ['wss://profile'],
             $tokenStorage,
-            new NullLogger()
+            new NullLogger(),
         );
-        $this->assertSame(['wss://main', 'wss://extra'], $f->getConfiguredArticleRelayUrlList());
+        $this->assertSame(['wss://forest', 'wss://citadel'], $f->getSearchRelayUrlList());
     }
 
-    public function testGetDefaultRelayUrl(): void
+    public function testGetCommunityRelayUrl(): void
     {
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
-        $f = new NostrRelayListFactory('wss://d', [], [], $ts, new NullLogger());
-        $this->assertSame('wss://d', $f->getDefaultRelayUrl());
+        $f = new NostrRelayListFactory('wss://forest', [], [], $ts, new NullLogger());
+        $this->assertSame('wss://forest', $f->getCommunityRelayUrl());
+        $this->assertSame(['wss://forest'], $f->getCommunityRelayUrlList());
+    }
+
+    public function testGetPublishRelayUrlListMergesCommunityAndSearch(): void
+    {
+        $ts = $this->createMock(TokenStorageInterface::class);
+        $ts->method('getToken')->willReturn(null);
+        $f = new NostrRelayListFactory(
+            'wss://forest',
+            ['wss://citadel'],
+            [],
+            $ts,
+            new NullLogger(),
+        );
+        $this->assertSame(['wss://forest', 'wss://citadel'], $f->getPublishRelayUrlList());
     }
 
     public function testIsTenantConfiguredRelay(): void
@@ -38,13 +53,13 @@ final class NostrRelayListFactoryTest extends TestCase
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
         $f = new NostrRelayListFactory(
-            'wss://main',
-            ['wss://article'],
+            'wss://forest',
+            ['wss://citadel'],
             ['wss://profile'],
             $ts,
             new NullLogger(),
         );
-        $this->assertTrue($f->isTenantConfiguredRelay('wss://main/'));
+        $this->assertTrue($f->isTenantConfiguredRelay('wss://forest/'));
         $this->assertTrue($f->isTenantConfiguredRelay('wss://profile'));
         $this->assertFalse($f->isTenantConfiguredRelay('wss://other'));
     }

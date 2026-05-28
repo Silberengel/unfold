@@ -66,8 +66,9 @@ final class MagazineRefresher
         // (category phase) and by Nostr request timeouts; PHP should stay unlimited in CLI.
         $this->ensureUnlimitedPhpExecutionTime();
 
-        $defaultRelay = (string) $this->params->get('default_relay');
-        $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
+        $searchRelays = $this->params->get('search_relays');
+        $firstSearch = \is_array($searchRelays) && $searchRelays !== [] ? (string) $searchRelays[0] : '';
+        $relayLabel = (string) (parse_url($firstSearch, \PHP_URL_HOST) ?: $firstSearch);
 
         if ($preferFromEnv !== []) {
             $this->logger->info('MagazineRefresher: prefer slugs (env) merged into fetch order', [
@@ -84,7 +85,7 @@ final class MagazineRefresher
                 $relayLabel
             ), [
                 'd_tag' => $dTag,
-                'relay' => $defaultRelay,
+                'relay' => $firstSearch,
             ]);
 
             return;
@@ -240,8 +241,9 @@ final class MagazineRefresher
                 }
             }
         }
-        $defaultRelay = (string) $this->params->get('default_relay');
-        $relayLabel = (string) (parse_url($defaultRelay, \PHP_URL_HOST) ?: $defaultRelay);
+        $searchRelays = $this->params->get('search_relays');
+        $firstSearch = \is_array($searchRelays) && $searchRelays !== [] ? (string) $searchRelays[0] : '';
+        $relayLabel = (string) (parse_url($firstSearch, \PHP_URL_HOST) ?: $firstSearch);
         while ($queue !== [] && microtime(true) < $deadline) {
             $slug = array_shift($queue);
             if (trim($slug) === '') {

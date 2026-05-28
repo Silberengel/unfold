@@ -153,7 +153,7 @@ docker push silberengel/unfold:gitcitadel
 
 Root `compose.hub.yaml` matches **`deploy/imwald/compose.hub.yaml`** (app only). MySQL lives in **`deploy/unfold-db/`**.
 
-**Relays (short):** `default_relay` and `article_relays` drive article sync and many queries; `profile_relays` are used **first** for kind-0 / profile fetches, then the merged default + article set (see `NostrClient`).
+**Relays (short):** `community_relay` (latest articles/publications feed), `search_relays` (magazine tree, category ingest, search backfill, discussions), `profile_relays` (kind-0 first, then community + search). See comments in `config/sites/*.yaml`.
 
 ### Shared MySQL (three stacks on one host)
 

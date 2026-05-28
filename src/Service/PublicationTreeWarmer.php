@@ -265,7 +265,7 @@ final class PublicationTreeWarmer
             }
             $before = $this->countPresentSections($chunk);
             try {
-                $this->nostrClient->ingestLongformForCategoryCoordinates($chunk, $relayTimeoutSec);
+                $this->nostrClient->ingestLongformForCategoryCoordinates($chunk, $relayTimeoutSec, true);
             } catch (\Throwable $e) {
                 $this->logger->warning('PublicationTreeWarmer: section ingest batch failed', [
                     'count' => \count($chunk),
