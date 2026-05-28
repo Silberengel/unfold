@@ -6,7 +6,7 @@
 #
 # Override compose file:  make -f Makefile.hub HUB_COMPOSE=compose.custom.yaml up
 
-HUB_COMPOSE ?= deploy/imwald/compose.hub.yaml
+HUB_COMPOSE ?= compose.hub.yaml
 COMPOSE := docker compose -f $(HUB_COMPOSE)
 
 ARTICLES_FROM ?= -2 month

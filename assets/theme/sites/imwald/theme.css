@@ -1,0 +1,40 @@
+/*
+ * imwald / magazine light color scheme.
+ * Loaded when data-color-scheme="light". Mirror of theme-dark.css: selector must match
+ * html[data-color-scheme="..."] because data-theme is set to the magazine name ("imwald"),
+ * not "light". Previously used [data-theme="light"] which never matched.
+ */
+html[data-color-scheme="light"] {
+    /* Backgrounds */
+    --color-bg: #f4f1ee;
+    --color-bg-light: #e8e4df;
+    --color-bg-primary: #e0dbd4;
+    /* Text */
+    --color-text: #2a2a2a;
+    --color-text-mid: #3d3a36;
+    --color-text-contrast: #f4f1ee;  /* cream on filled surfaces (buttons, badges) */
+    /* Accent greens tuned for ≥4.5:1 on #f4f1ee / #e8e4df:
+       primary  #3d5c38 → 6.8:1 on cream  ✓
+       secondary #4d6847 → 5.7:1 on cream  ✓ */
+    --color-primary: #3d5c38;
+    --color-secondary: #4d6847;
+    --color-primary-strong: #2e4729;
+    --color-border: #c8c3bd;
+    --color-border-soft: #d9d4cf;
+    /* Links */
+    --color-link: #3a342f;
+    --color-link-hover: #1a1a1a;
+    --color-focus-ring: #1a1a1a;
+    /* Footer */
+    --color-footer-bg: var(--color-bg-light);
+    --color-footer-text: var(--color-text);
+    --color-footer-link: var(--color-secondary);
+    /* Misc */
+    --color-shadow: color-mix(in srgb, var(--color-text) 10%, transparent);
+    --brand-color: black;
+    --accent-color: var(--color-secondary);
+    --color-highlight-mark-fg: #1a1a1a;
+    /* Reading pane: light mix produces a warm off-white (not pure white) */
+    --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 70%, #ffffff 30%);
+    --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 35%, var(--color-text) 65%);
+}

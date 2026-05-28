@@ -1,75 +1,26 @@
-/*
- * imwald / magazine dark color scheme (second stylesheet).
- * Loaded only when data-color-scheme="dark" and config theme_stylesheet_dark is set.
- * Override tokens here; keep components using var(--color-…).
- */
+/* Generic dark fallback when assets/theme/local/ has no theme-dark.css. */
 html[data-color-scheme="dark"] {
-    /* Backgrounds */
-    --color-bg: #1c1a18;
-    --color-bg-light: #262320;
-    --color-bg-primary: #2f2b27;
-    /* Text */
-    --color-text: #e8e1d9;
-    --color-text-mid: #b7ada3;
-    --color-text-contrast: #1c1a18;
-    /* Accents (muted greens) */
-    --color-primary: #8faf8f;
-    --color-secondary: #a8c3a8;
-    --color-primary-strong: #6f9a6f;
-    --color-border: #3a3632;
-    --color-border-soft: #2a2724;
-    --color-text-light: var(--color-text-mid);
-    --color-footer-bg: #1c1a18;
+    --color-bg: #1a1a1a;
+    --color-bg-light: #2a2a2a;
+    --color-bg-primary: #333333;
+    --color-text: #f0f0f0;
+    --color-text-mid: #cccccc;
+    --color-text-contrast: #1a1a1a;
+    --color-primary: #cccccc;
+    --color-secondary: #aaaaaa;
+    --color-primary-strong: #ffffff;
+    --color-border: #444444;
+    --color-border-soft: #555555;
+    --color-link: #e0e0e0;
+    --color-link-hover: #ffffff;
+    --color-focus-ring: #cccccc;
+    --color-footer-bg: var(--color-bg-light);
     --color-footer-text: var(--color-text);
-    --color-footer-link: var(--color-primary);
-    --color-highlight-mark-fg: #1c1a18;
-    --color-link: #8faf8f;
-    --color-link-hover: #a8c3a8;
-    --color-link-visited: #7e9f7e;
-    --color-focus-ring: #8faf8f;
-    --color-shadow: color-mix(in srgb, #000 28%, transparent);
-    --brand-color: #e8e1d9;
+    --color-footer-link: var(--color-secondary);
+    --color-shadow: color-mix(in srgb, #000000 40%, transparent);
+    --brand-color: #f0f0f0;
     --accent-color: var(--color-secondary);
-    /* Reading pane / headline stack: clearly lifted from --color-bg (88/12 was visually identical). */
-    --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 28%, var(--color-bg-light) 72%);
-    --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 38%, var(--color-text) 62%);
-}
-
-html[data-color-scheme="dark"] a:visited {
-    color: var(--color-link-visited);
-}
-
-html[data-color-scheme="dark"] .article-main p,
-html[data-color-scheme="dark"] .article-main ul,
-html[data-color-scheme="dark"] .article-main ol,
-html[data-color-scheme="dark"] .article-main li {
-    font-weight: 450;
-}
-
-html[data-color-scheme="dark"] .home-aside-highlights__item-inner {
-    border-left: 2px solid var(--color-primary);
-    padding-left: 0.5rem;
-    background: color-mix(in srgb, var(--color-bg-light) 55%, transparent);
-}
-
-html[data-color-scheme="dark"] .home-aside-highlights__quote {
-    color: #d8d0c8;
-}
-
-html[data-color-scheme="dark"] .home-aside-highlights__item-inner:hover,
-html[data-color-scheme="dark"] .home-aside-highlights__item-inner:has(.home-aside-highlights__hit:focus-visible) {
-    background: #2f2b27;
-}
-
-/* Reply toasts: base article.css uses hardcoded light greens/reds; override for dark. */
-html[data-color-scheme="dark"] .reply-toast--success {
-    border-color: #3a8a55;
-    background: color-mix(in srgb, var(--color-bg) 70%, #2f7a4b 30%);
-    color: var(--color-text);
-}
-
-html[data-color-scheme="dark"] .reply-toast--error {
-    border-color: #b03030;
-    background: color-mix(in srgb, var(--color-bg) 70%, #a12b2b 30%);
-    color: var(--color-text);
+    --color-highlight-mark-fg: #1a1a1a;
+    --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 85%, #000000 15%);
+    --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 35%, var(--color-text) 65%);
 }

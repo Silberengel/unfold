@@ -1,0 +1,79 @@
+# GitCitadel hub — copy this directory (compose.hub.yaml + .env) to the server.
+# No bundled MySQL: uses imwald hub DB (unfold-mysql on network unfold_default). Start imwald first.
+#
+# Build image (from repo root):
+#   ./scripts/build-hub-image.sh gitcitadel
+#   docker push silberengel/unfold:gitcitadel
+
+name: gitcitadel
+
+services:
+  php:
+    image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:gitcitadel}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_SECRET: ${APP_SECRET}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
+      SERVER_NAME: ${SERVER_NAME:-:80}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@${DATABASE_HOST:-unfold-mysql}:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "${HTTP_PUBLISH:-127.0.0.1:9085}:80/tcp"
+    networks:
+      - default
+      - imwald_db
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health", "-o", "/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+
+  prewarm:
+    image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:gitcitadel}
+    pull_policy: always
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    working_dir: /app
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until php bin/console dbal:run-sql -q "SELECT 1" 2>/dev/null; do
+          echo "prewarm: waiting for database…"
+          sleep 2
+        done
+        until php bin/console dbal:run-sql -q "SELECT 1 FROM doctrine_migration_versions LIMIT 1" 2>/dev/null; do
+          echo "prewarm: waiting for migrations…"
+          sleep 3
+        done
+        while true; do
+          sleep 600
+          php bin/console app:prewarm $${PREWARM_FLAGS-} || true
+        done
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_SECRET: ${APP_SECRET}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.0/8,10.0.0.0/8}
+      SERVER_NAME: ${SERVER_NAME:-:80}
+      DATABASE_URL: mysql://${MYSQL_USER:-unfold_user}:${MYSQL_PASSWORD:-password}@${DATABASE_HOST:-unfold-mysql}:3306/${MYSQL_DATABASE:-unfold_db}?serverVersion=${MYSQL_VERSION:-8.0.36}&charset=${MYSQL_CHARSET:-utf8mb4}
+      PREWARM_FLAGS: ${PREWARM_FLAGS:-}
+    networks:
+      - default
+      - imwald_db
+    depends_on:
+      php:
+        condition: service_started
+
+networks:
+  imwald_db:
+    external: true
+    name: unfold_default
+
+volumes:
+  caddy_data:
+  caddy_config:

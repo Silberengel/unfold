@@ -1,0 +1,32 @@
+/*
+ * GitCitadel light theme.
+ * Accent palette mirrors gitcitadel-online: periwinkle blue (#7c9eff) / lavender-purple (#a58fff).
+ * Light backgrounds use a cool lavender undertone; brand accent is a deep grape-purple.
+ */
+[data-theme="gitcitadel"] {
+    --color-bg: #f5f2fb;              /* Very light lavender canvas */
+    --color-bg-light: #ede8f5;        /* Soft lavender, slightly deeper */
+    --color-text: #1a1530;            /* Deep purple-navy — strong contrast */
+    /* ≥4.5:1 on --color-bg and usable on --color-bg-light for secondary copy */
+    --color-text-mid: #3d3458;
+    --color-text-contrast: #f5f2fb;
+
+    --brand-color: #5c3d8f;           /* Deep grape-purple */
+    --accent-color: #7c5cbf;          /* Medium violet (between brand and link) */
+    --color-link: #5535a0;            /* Periwinkle-to-violet (WCAG AA on light bg) */
+    --color-link-hover: #3d2278;
+    --color-focus-ring: #7c9eff;      /* Matches gitcitadel-online --focus-color */
+    --color-shadow: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+/* Landscape logo (GitCitadel mark) — overrides global app.css portrait crop for imwald. */
+.card-header--no-cover img {
+    object-fit: contain;
+    object-position: center;
+}
+
+.header__logo-banner {
+    object-fit: contain;
+    object-position: center;
+    box-shadow: none;
+}

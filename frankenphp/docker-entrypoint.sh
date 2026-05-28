@@ -43,6 +43,10 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 	# Project `var/` is often gitignored; create dirs before setfacl so log/cache handlers can always run.
 	mkdir -p var/log var/cache
 
+	if [ -n "${UNFOLD_SITE:-}" ] && [ -x /app/scripts/select-unfold-site.sh ]; then
+		/app/scripts/select-unfold-site.sh "$UNFOLD_SITE"
+	fi
+
 	if [ -n "${DATABASE_URL:-}" ] || { [ -f .env ] && grep -q ^DATABASE_URL= .env; }; then
 		echo 'Waiting for database to be ready...'
 		ATTEMPTS_LEFT_TO_REACH_DATABASE=60

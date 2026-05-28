@@ -83,6 +83,9 @@ CMD [ "frankenphp", "run", "--config", "/etc/caddy/Caddyfile", "--watch" ]
 # Prod FrankenPHP image
 FROM frankenphp_base AS frankenphp_prod
 
+# imwald | gitcitadel — selects config/sites/*.yaml and assets/theme/sites/* before cache compile.
+ARG UNFOLD_SITE=imwald
+
 ENV APP_ENV=prod
 ENV FRANKENPHP_CONFIG="import worker.Caddyfile"
 
@@ -100,6 +103,10 @@ RUN set -eux; \
 # copy sources
 COPY --link . ./
 RUN rm -Rf frankenphp/
+
+RUN set -eux; \
+	chmod +x scripts/select-unfold-site.sh; \
+	./scripts/select-unfold-site.sh "${UNFOLD_SITE}";
 
 RUN set -eux; \
 	mkdir -p var/cache var/log; \

@@ -1,10 +1,12 @@
-# Unfold: Imwald
+# Unfold
 
 <p align="center">
-  <img src="assets/laeserin_logo.png" alt="Imwald" width="150">
+  <img src="assets/laeserin_logo.png" alt="Site logo" width="150">
 </p>
 
-A Symfony + FrankenPHP site that **reads Nostr long-form articles (kind 30023)** and related data from relays, and serves pages with Twig.
+A Symfony + FrankenPHP site that **reads Nostr long-form articles (kinds 30023/30024/30817)** and related data from relays, and serves pages with Twig.
+
+**One repository, multiple sites.** Imwald and GitCitadel (and future magazines) share this codebase and can share one MySQL database. Each site has a profile under `config/sites/` and `assets/theme/sites/`; Docker images are built with **`UNFOLD_SITE`** (see below).
 
 ### Where data lives
 
@@ -32,7 +34,7 @@ NIP-09 kind-5 deletions that target stored kinds are applied to **MySQL** (artic
 
 ## Local development (Docker)
 
-1. **Env:** copy `.env.dist` to `.env` and adjust if needed (especially `APP_SECRET` outside dev).
+1. **Env:** copy `.env.dist` to `.env` and adjust if needed (especially `APP_SECRET` outside dev). Default site is **`UNFOLD_SITE=imwald`**; switch with `make use-site UNFOLD_SITE=gitcitadel` (set **`HTTP_PORT=9085`** in `.env` if running both stacks locally).
 2. **Start stack**
 
    ```bash
@@ -115,11 +117,40 @@ For a full **Nostr backfill** + one-shot prewarm, use **`make prewarm`** (or a h
 
 | What | File |
 |------|------|
-| Site title, `npub`, `d_tag`, **`magazine_slug`** (tenant id for shared MySQL), **relays** (`default_relay`, `article_relays`, `profile_relays`), theme | `config/unfold.yaml` (imported as Symfony parameters) |
+| **Site profiles** (edit these) | `config/sites/imwald.yaml`, `config/sites/gitcitadel.yaml` |
+| Active Symfony config (generated) | `config/unfold.yaml` — from `scripts/select-unfold-site.sh` |
+| Site theme assets (source) | `assets/theme/sites/{imwald,gitcitadel}/` → copied to `assets/theme/local/` |
+| Site logo | `assets/sites/{imwald,gitcitadel}/laeserin_logo.png` |
+| `UNFOLD_SITE` (dev Docker) | `.env` — `imwald` (default) or `gitcitadel`; entrypoint runs select script |
 | `MAGAZINE_PREWARM_PREFER_SLUGS` | `.env` / `.env.local` — optional comma-separated category slugs to prioritize in `app:prewarm` magazine phase (after the root). Use when the relay time budget would otherwise skip your updated category. |
 | `DATABASE_URL`, `APP_SECRET`, `HTTP_PORT`, `MYSQL_*`, optional **`PREWARM_FLAGS`** (for the Docker `cron` service) | `.env` / `.env.local` (see `.env.dist`) |
 | Cache pool definitions (`cache.replies`, `cache.drafts`, `cache.app`) | `config/packages/cache.yaml` |
 | Service wiring (e.g. which pool comment loaders use) | `config/services.yaml` |
+
+### Multiple sites (one branch)
+
+| Site | `magazine_slug` | Hub compose | Default image tag |
+|------|-----------------|-------------|-------------------|
+| **Imwald** | `imwald` | `deploy/imwald/compose.hub.yaml` (includes MySQL) | `silberengel/unfold:imwald` |
+| **GitCitadel** | `gitcitadel` | `deploy/gitcitadel/compose.hub.yaml` (shared DB) | `silberengel/unfold:gitcitadel` |
+
+**Local dev — switch site:**
+
+```bash
+make use-site UNFOLD_SITE=gitcitadel   # or imwald (default)
+docker compose up -d --force-recreate php cron
+```
+
+**Production — build per site** (same Dockerfile, different build arg):
+
+```bash
+./scripts/build-hub-image.sh imwald
+./scripts/build-hub-image.sh gitcitadel
+docker push silberengel/unfold:imwald
+docker push silberengel/unfold:gitcitadel
+```
+
+Root `compose.hub.yaml` is a copy of **`deploy/imwald/compose.hub.yaml`** for backward compatibility.
 
 **Relays (short):** `default_relay` and `article_relays` drive article sync and many queries; `profile_relays` are used **first** for kind-0 / profile fetches, then the merged default + article set (see `NostrClient`).
 
@@ -127,10 +158,10 @@ For a full **Nostr backfill** + one-shot prewarm, use **`make prewarm`** (or a h
 
 Two deployments (e.g. Imwald + GitCitadel) can use **one MySQL** instead of separate `database_data` volumes:
 
-1. Set a unique **`magazine_slug`** in each image’s `config/unfold.yaml` (e.g. `imwald`, `gitcitadel`).
-2. Run **one** MySQL container (or external server). Point both stacks at the same **`DATABASE_URL`** (host port or Docker network alias).
-3. **Nuke old volumes** and run migrations once: `docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction`.
-4. Backfill each site separately (`articles:get`, `app:prewarm`) — each container tags rows with its own `magazine_slug`.
+1. Set a unique **`magazine_slug`** in each site profile (`config/sites/imwald.yaml`, `config/sites/gitcitadel.yaml`).
+2. Run **one** MySQL container (imwald hub **`deploy/imwald/`** owns `unfold-mysql`). Point GitCitadel at **`DATABASE_HOST=unfold-mysql`** on network `unfold_default`.
+3. **Nuke old volumes** and run migrations once on the imwald stack.
+4. Backfill **each** hub stack separately (`articles:get`, `app:prewarm`) — each image tags rows with its own `magazine_slug`.
 
 Articles and kind-0 profiles are stored once and shared; magazine indices, featured authors, admin users, and list/search/sitemap views are scoped per `magazine_slug`.
 
@@ -138,66 +169,80 @@ Articles and kind-0 profiles are stored once and shared; magazine indices, featu
 
 ## Production / Hub (remote server)
 
-The app runs as a **pre-built** image (no app source on the server). The server only needs `compose.hub.yaml`, a `.env`, and Docker. Default image: `silberengel/unfold:latest`; override with **`UNFOLD_DOCKER_IMAGE`**.
+Each site uses a **pre-built** image (site baked in at build time via **`UNFOLD_SITE`**). On the server: copy **`deploy/imwald/`** or **`deploy/gitcitadel/`** (`compose.hub.yaml` + `.env` from `.env.dist`), plus **`Makefile.hub`** from the repo root.
+
+| Site | Hub directory | Default image | HTTP (default) |
+|------|---------------|---------------|----------------|
+| Imwald (DB owner) | `deploy/imwald/` | `silberengel/unfold:imwald` | `9080` |
+| GitCitadel | `deploy/gitcitadel/` | `silberengel/unfold:gitcitadel` | `127.0.0.1:9085` |
 
 | Topic | Notes |
 |-------|--------|
-| `compose.hub.yaml` | Defines **`php`** (FrankenPHP) + **`database`** (MySQL) + **`prewarm`** (same app image: **`app:prewarm` every 10 minutes**, like dev’s `docker/cron`). Optional: disable `prewarm` in Compose if you prefer a host `cron` only. |
-| HTTP | **`HTTP_PUBLISH`** in `.env` maps **host** port → container **80** (default **9080**). Put a reverse proxy (e.g. Apache) in front; set **`TRUSTED_PROXIES`** to match your proxy (often include `127.0.0.0/8` and the Docker bridge CIDR, e.g. `172.16.0.0/12`). |
-| Secrets | Real **`APP_SECRET`** and **`MYSQL_*`** (or external DB via `DATABASE_URL` if you change the file). Do not commit production `.env`. |
-| `PREWARM_FLAGS` | Optional extra CLI args for the hub **`prewarm`** service (and dev **`cron`**). After editing `.env`, run `docker compose -f compose.hub.yaml up -d --force-recreate prewarm`. |
+| Imwald `compose.hub.yaml` | **`php`** + **`database`** (`unfold-mysql`) + **`prewarm`**. Start this stack first. |
+| GitCitadel `compose.hub.yaml` | **`php`** + **`prewarm`** only; joins external network **`unfold_default`**. |
+| HTTP | **`HTTP_PUBLISH`** in `.env`. Reverse proxy (Apache/nginx) in front; set **`TRUSTED_PROXIES`**. |
+| Secrets | Real **`APP_SECRET`** and **`MYSQL_*`** (same credentials on both hubs when sharing DB). |
+| `PREWARM_FLAGS` | Optional CLI args for **`prewarm`**. After editing `.env`: `docker compose … up -d --force-recreate prewarm`. |
 
 ### Build, tag, and push (on your machine or CI)
 
-From the **repository root** (same `Dockerfile` as local prod):
+From the **repository root**:
 
 ```bash
-# Production image
-docker build --platform linux/amd64 --target frankenphp_prod -t YOUR_REGISTRY/unfold:latest .
-
-# Optional: immutable tag for rollbacks
-docker build --platform linux/amd64 --target frankenphp_prod -t YOUR_REGISTRY/unfold:1.0.0 .
-
-# Push what you use on the server
-docker push YOUR_REGISTRY/unfold:latest
-docker push YOUR_REGISTRY/unfold:1.0.0
+./scripts/build-hub-image.sh imwald
+./scripts/build-hub-image.sh gitcitadel
+docker push silberengel/unfold:imwald
+docker push silberengel/unfold:gitcitadel
 ```
 
-- Use **`linux/amd64`** if the server is amd64; use **`arm64`** (or a matching `--platform`) for arm servers.
-- The image name must match what the server will pull: either keep **`UNFOLD_DOCKER_IMAGE=YOUR_REGISTRY/unfold:TAG`** in server `.env`, or push to the default name **`silberengel/unfold:latest`**.
+Equivalent manual build:
+
+```bash
+docker build --platform linux/amd64 --target frankenphp_prod \
+  --build-arg UNFOLD_SITE=imwald -t silberengel/unfold:imwald .
+```
+
+- Use **`linux/amd64`** on amd64 servers; **`arm64`** on arm servers if needed.
+- Override on the server with **`UNFOLD_DOCKER_IMAGE`** in `.env` if you use a private registry.
 
 ### Deploy on the server (pull, up, migrate)
 
-In a directory that contains **only** `compose.hub.yaml` and your **`.env`** (e.g. `~/tmp/unfold`):
+**Imwald (first — creates MySQL):**
 
 ```bash
-cd /path/to/deploy
+cd /path/to/imwald-deploy   # deploy/imwald/ contents + .env
 docker compose -f compose.hub.yaml pull
 docker compose -f compose.hub.yaml up -d
 docker compose -f compose.hub.yaml exec php php bin/console doctrine:migrations:migrate --no-interaction
 ```
 
-After code changes: **`pull` → `up -d`**; run **migrations** when the repo added new migration files.
+**GitCitadel (after imwald hub is up):**
+
+```bash
+cd /path/to/gitcitadel-deploy   # deploy/gitcitadel/ contents + .env
+docker compose -f compose.hub.yaml pull
+docker compose -f compose.hub.yaml up -d
+make -f Makefile.hub HUB_COMPOSE=compose.hub.yaml backfill   # optional first-time Nostr import
+```
+
+After code changes: **`pull` → `up -d`** on each stack; run **migrations** once on imwald when new migration files ship.
 
 ### `Makefile.hub` (on the server)
 
-Copy **`Makefile.hub`** into the same directory as **`compose.hub.yaml`** and **`.env`** (no full clone required). You get short commands like the dev **`Makefile`**, all using `docker compose -f compose.hub.yaml` under the hood:
+Copy **`Makefile.hub`** next to each hub’s **`compose.hub.yaml`**. For GitCitadel, set **`HUB_COMPOSE=compose.hub.yaml`** (file in that directory):
 
 ```bash
-make -f Makefile.hub help      # list targets
+make -f Makefile.hub help
 make -f Makefile.hub pull
 make -f Makefile.hub up
-make -f Makefile.hub migrate
-make -f Makefile.hub prewarm-once
-make -f Makefile.hub articles-get    # optional: ARTICLES_FROM='-1 year' ARTICLES_TO=now
-make -f Makefile.hub backfill        # up + migrate + articles-get + prewarm-once (closest to dev `make prewarm`)
+make -f Makefile.hub migrate          # imwald only (runs migrations)
+make -f Makefile.hub backfill         # articles:get + prewarm-once
 ```
 
-**Optional image / tag** (in `.env` or one-shot):
+**Imwald from repo root** (default `HUB_COMPOSE=deploy/imwald/compose.hub.yaml`):
 
 ```bash
-export UNFOLD_DOCKER_IMAGE=YOUR_REGISTRY/unfold:1.0.0
-docker compose -f compose.hub.yaml up -d
+make -f Makefile.hub -C . pull
 ```
 
 ### One-time Nostr backfill (equivalent to `make prewarm` on dev)

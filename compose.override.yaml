@@ -13,6 +13,8 @@ services:
       #  from the bind-mount for better performance by enabling the next line:
       - /app/vendor
     environment:
+      # Active site profile: imwald | gitcitadel (config/sites/*.yaml + assets/theme/sites/*).
+      UNFOLD_SITE: "${UNFOLD_SITE:-imwald}"
       # Set to 1 to run `app:prewarm` after migrations on php container start (see README).
       # PREWARM_ON_START: "0"
       # develop: xdebug_info(), better stack traces, etc. Use debug,develop for step debugging (IDE).
