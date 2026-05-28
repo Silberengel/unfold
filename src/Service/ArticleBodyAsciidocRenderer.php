@@ -24,7 +24,7 @@ final class ArticleBodyAsciidocRenderer
         if (!is_readable($script)) {
             $this->logger->warning('asciidoc.render: script missing', ['path' => $script]);
 
-            return htmlspecialchars($asciidoc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            return $this->escapeWithParagraphs($asciidoc);
         }
 
         $process = new Process(['node', $script], $this->projectDir, null, $asciidoc, 120);
@@ -34,9 +34,28 @@ final class ArticleBodyAsciidocRenderer
                 'error' => $process->getErrorOutput(),
             ]);
 
-            return htmlspecialchars($asciidoc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            return $this->escapeWithParagraphs($asciidoc);
         }
 
         return $process->getOutput();
+    }
+
+    /**
+     * Plain-text fallback when Asciidoctor.js is unavailable: preserve blank-line paragraph breaks.
+     */
+    private function escapeWithParagraphs(string $asciidoc): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $asciidoc);
+        $blocks = preg_split('/\n\s*\n/', $normalized) ?: [];
+        $html = '';
+        foreach ($blocks as $block) {
+            $block = trim($block);
+            if ($block === '') {
+                continue;
+            }
+            $html .= '<p>'.nl2br(htmlspecialchars($block, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), false).'</p>';
+        }
+
+        return $html !== '' ? $html : '<p>'.htmlspecialchars($asciidoc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</p>';
     }
 }

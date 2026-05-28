@@ -20,12 +20,19 @@ VOLUME /app/var/
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	acl \
 	curl \
+	ca-certificates \
+	gnupg \
 	file \
 	gettext \
 	git \
         bash \
     libnss3-tools \
     cron \
+	&& rm -rf /var/lib/apt/lists/*
+
+# Asciidoctor.js (kind 30041 / 30818 publication bodies) via bin/render-asciidoc.mjs
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+	&& apt-get install -y --no-install-recommends nodejs \
 	&& rm -rf /var/lib/apt/lists/*
 
 # Composer: copy from the official image instead of @composer on install-php-extensions, which
@@ -103,6 +110,9 @@ RUN set -eux; \
 # copy sources
 COPY --link . ./
 RUN rm -Rf frankenphp/
+
+RUN set -eux; \
+	npm ci --omit=dev
 
 RUN set -eux; \
 	chmod +x scripts/select-unfold-site.sh; \

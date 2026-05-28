@@ -760,6 +760,14 @@
     box-shadow: 0 2px 8px color-mix(in srgb, var(--color-text) 12%, transparent);
 }
 
+.article-main .paragraph,
+.article-main .olist,
+.article-main .ulist,
+.article-main .dlist,
+.article-main .quoteblock {
+    margin: 0 0 1.25rem;
+}
+
 .article-main .sect1,
 .article-main .sect2 {
     margin-top: 1.5rem;
