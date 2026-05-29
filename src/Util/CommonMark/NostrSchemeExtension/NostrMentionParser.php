@@ -2,7 +2,6 @@
 
 namespace App\Util\CommonMark\NostrSchemeExtension;
 
-use App\Service\CacheService;
 use League\CommonMark\Parser\Inline\InlineParserInterface;
 use League\CommonMark\Parser\Inline\InlineParserMatch;
 use League\CommonMark\Parser\InlineParserContext;
@@ -15,10 +14,6 @@ use League\CommonMark\Parser\InlineParserContext;
  */
 readonly class NostrMentionParser implements InlineParserInterface
 {
-    public function __construct(
-        private CacheService $cacheService
-    ){}
-
     public function getMatchDefinition(): InlineParserMatch
     {
         // Define a match for a markdown link-like structure with "npub" links

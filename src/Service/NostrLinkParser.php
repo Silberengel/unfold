@@ -170,7 +170,7 @@ readonly class NostrLinkParser
         }
 
         if (preg_match_all(
-            '~(?<![\w#])(?:@)?(naddr1[0-9a-z]+|nevent1[0-9a-z]+)(?![0-9a-z])~i',
+            '~(?<![\w#])(?:@)?(naddr1[0-9a-z]+|nevent1[0-9a-z]+|npub1[0-9a-z]+|nprofile1[0-9a-z]+)(?![0-9a-z])~i',
             $content,
             $bare,
             PREG_SET_ORDER | PREG_OFFSET_CAPTURE
@@ -181,13 +181,13 @@ readonly class NostrLinkParser
                 $identifier = ltrim($raw, '@');
                 try {
                     $decoded = $this->nip19->decode($identifier);
-                    if (!\in_array($decoded->type, ['naddr', 'nevent'], true)) {
+                    if (!\in_array($decoded->type, ['naddr', 'nevent', 'npub', 'nprofile'], true)) {
                         continue;
                     }
                     $links[] = [
                         'type' => $decoded->type,
                         'identifier' => $identifier,
-                        'full_match' => 'nostr:'.$identifier,
+                        'full_match' => $raw,
                         'position' => $position,
                         'data' => $decoded->data,
                         'is_url' => false,

@@ -3,15 +3,16 @@
 namespace App\Util\CommonMark\NostrSchemeExtension;
 
 use App\Nostr\Nip19Codec;
-use App\Service\CacheService;
+use App\Service\NostrPreviewPlaceholderRenderer;
+use App\Service\UserBadgeHtmlRenderer;
 use League\CommonMark\Environment\EnvironmentBuilderInterface;
 use League\CommonMark\Extension\ExtensionInterface;
 
-class NostrSchemeExtension  implements ExtensionInterface
+class NostrSchemeExtension implements ExtensionInterface
 {
-
     public function __construct(
-        private readonly CacheService $cacheService,
+        private readonly UserBadgeHtmlRenderer $userBadgeHtmlRenderer,
+        private readonly NostrPreviewPlaceholderRenderer $nostrPreviewPlaceholderRenderer,
         private readonly Nip19Codec $nip19,
     ) {
     }
@@ -20,12 +21,13 @@ class NostrSchemeExtension  implements ExtensionInterface
     {
         $environment
             ->addInlineParser(new NostrBareBech32Parser($this->nip19), 202)
-            ->addInlineParser(new NostrMentionParser($this->cacheService), 200)
+            ->addInlineParser(new NostrBareNprofileParser($this->nip19), 201)
+            ->addInlineParser(new NostrMentionParser(), 200)
             ->addInlineParser(new NostrSchemeParser($this->nip19), 199)
             ->addInlineParser(new NostrRawNpubParser(), 198)
 
-            ->addRenderer(NostrSchemeData::class, new NostrEventRenderer($this->nip19), 2)
-            ->addRenderer(NostrMentionLink::class, new NostrMentionRenderer($this->cacheService), 1)
+            ->addRenderer(NostrSchemeData::class, new NostrEventRenderer($this->nostrPreviewPlaceholderRenderer), 2)
+            ->addRenderer(NostrMentionLink::class, new NostrMentionRenderer($this->userBadgeHtmlRenderer), 1)
         ;
     }
 }

@@ -1,3 +1,9 @@
+{% if preview.type == 'npub' %}
+    {{ user_badge(preview.identifier) }}
+{% elseif preview.type == 'nprofile' %}
+    {% set _profile_pk = preview.data.pubkey is defined ? preview.data.pubkey : preview.identifier %}
+    {{ user_badge(_profile_pk) }}
+{% else %}
 <div class="nostr-preview"
      data-controller="nostr-preview"
      data-nostr-preview-identifier-value="{{ preview.identifier }}"
@@ -14,23 +20,6 @@
                 <a href="{{ preview.full_match }}" target="_blank" rel="noopener noreferrer">{{ preview.full_match }}</a>
             </div>
         {% endif %}
-        {% if preview.data is not null %}
-            <div class="nostr-preview-details mt-2">
-                {% if preview.data.kind is defined %}
-                    {% set _pk = preview.data.kind %}
-                    <span class="ui-badge ui-badge--neutral">
-                        {%- if _pk == 0 -%}Profile
-                        {%- elseif _pk == 1 -%}Note
-                        {%- elseif _pk == 6 or _pk == 16 -%}Repost
-                        {%- elseif _pk == 7 -%}Reaction
-                        {%- elseif _pk == 1111 -%}Comment
-                        {%- elseif _pk == 9802 -%}Highlight
-                        {%- elseif _pk == 30023 or _pk == 30024 -%}Article
-                        {%- else -%}Event
-                        {%- endif -%}
-                    </span>
-                {% endif %}
-            </div>
-        {% endif %}
     </div>
 </div>
+{% endif %}

@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Tests\Service;
 
 use App\Entity\ArticleHighlight;
+use App\Nostr\Nip19Codec;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Service\HighlightAuthorMetadataProvider;
 use App\Service\NostrKeyHelper;
+use App\Service\UserBadgeHtmlRenderer;
 use App\Util\CommonMark\Converter;
 use League\CommonMark\Exception\CommonMarkException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Asset\Packages;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * Exercises the same two steps as {@see \App\Controller\ArticleController::renderArticle}:
@@ -106,7 +110,17 @@ final class ArticleHighlightCommonMarkPipelineTest extends KernelTestCase
             (object) ['display_name' => 'Test', 'name' => 'Test', 'picture' => ''],
         );
 
-        return new ArticleBodyHighlightInjector($meta, new NostrKeyHelper());
+        return new ArticleBodyHighlightInjector(
+            $meta,
+            new NostrKeyHelper(),
+            new UserBadgeHtmlRenderer(
+                $meta,
+                new NostrKeyHelper(),
+                new Nip19Codec(),
+                $this->createMock(UrlGeneratorInterface::class),
+                $this->createMock(Packages::class),
+            ),
+        );
     }
 
     private function makeHighlight(

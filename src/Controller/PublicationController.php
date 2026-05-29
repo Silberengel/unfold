@@ -11,6 +11,7 @@ use App\Service\ArticleCommentReplyContextBuilder;
 use App\Service\ArticleCommentThreadLoader;
 use App\Service\NostrKeyHelper;
 use App\Service\PublicationFeature;
+use App\Service\PublicationIndexMetadataBuilder;
 use App\Service\PublicationIndexStore;
 use App\Service\PublicationExportService;
 use App\Service\PublicationExportException;

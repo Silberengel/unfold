@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Dto\UserBadgeOptions;
 use App\Entity\ArticleHighlight;
 use App\Util\HighlightEventTags;
 use App\Util\ProfileMetadataReader;
@@ -36,6 +37,7 @@ final class ArticleBodyHighlightInjector
     public function __construct(
         private readonly HighlightAuthorMetadataProvider $highlightAuthorMetadata,
         private readonly NostrKeyHelper $nostrKeyHelper,
+        private readonly UserBadgeHtmlRenderer $userBadgeHtmlRenderer,
     ) {
     }
 
@@ -761,31 +763,15 @@ final class ArticleBodyHighlightInjector
             }
             $labels[] = $label;
 
-            $link = $this->dom->createElement('a');
-            $link->setAttribute('class', 'user-highlight__author');
-            $link->setAttribute('href', '/p/'.\rawurlencode($npub));
-            $link->setAttribute('title', $label);
-
-            $avatar = $this->dom->createElement('span');
-            $avatar->setAttribute('class', 'user-highlight__author-avatar');
             $pic = isset($row['p']) && \is_string($row['p']) ? \trim($row['p']) : '';
-            if ($pic !== '') {
-                $img = $this->dom->createElement('img');
-                $img->setAttribute('class', 'user-highlight__author-avatar-img');
-                $img->setAttribute('src', $pic);
-                $img->setAttribute('alt', '');
-                $img->setAttribute('loading', 'lazy');
-                $img->setAttribute('decoding', 'async');
-                $img->setAttribute('onerror', 'this.classList.add(\'is-broken\')');
-                $avatar->appendChild($img);
-            }
-            $fallback = $this->dom->createElement('span');
-            $fallback->setAttribute('class', 'user-highlight__author-avatar-fallback');
-            $initial = \mb_strtoupper(\mb_substr($label, 0, 1, 'UTF-8'), 'UTF-8');
-            $fallback->appendChild($this->dom->createTextNode($initial !== '' ? $initial : '…'));
-            $avatar->appendChild($fallback);
-            $link->appendChild($avatar);
-            $wrap->appendChild($link);
+            $badgeOpts = new UserBadgeOptions(
+                size: UserBadgeOptions::SIZE_XS,
+                avatarOnly: true,
+                pictureOverride: $pic !== '' ? $pic : null,
+                nameOverride: $label !== $npub ? $label : null,
+            );
+            $badgeHtml = $this->userBadgeHtmlRenderer->render($npub, $badgeOpts);
+            $this->appendHtmlFragment($wrap, $badgeHtml);
         }
 
         if (!$wrap->hasChildNodes()) {
@@ -800,5 +786,32 @@ final class ArticleBodyHighlightInjector
             return;
         }
         $parent->insertBefore($wrap, $mark->nextSibling);
+    }
+
+    private function appendHtmlFragment(DOMElement $parent, string $html): void
+    {
+        if ($html === '') {
+            return;
+        }
+        $fragment = $this->dom->createDocumentFragment();
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $fragment->appendXML($html);
+        libxml_use_internal_errors($previous);
+        if ($loaded === false) {
+            $tmp = new DOMDocument();
+            $tmp->loadHTML(
+                '<?xml encoding="UTF-8"><div>'.$html.'</div>',
+                \LIBXML_HTML_NOIMPLIED | \LIBXML_HTML_NODEFDTD,
+            );
+            $container = $tmp->getElementsByTagName('div')->item(0);
+            if ($container !== null) {
+                foreach ($container->childNodes as $child) {
+                    $fragment->appendChild($this->dom->importNode($child, true));
+                }
+            }
+        }
+        if ($fragment->hasChildNodes()) {
+            $parent->appendChild($fragment);
+        }
     }
 }

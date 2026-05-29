@@ -6,6 +6,7 @@ use App\Entity\Article;
 use App\Http\PhpExecutionTime;
 use App\Repository\ArticleHighlightRepository;
 use App\Repository\ArticleRepository;
+use App\Dto\UserBadgeOptions;
 use App\Service\ArticleBodyHtmlRenderer;
 use App\Service\MagazineContentService;
 use App\Enum\KindsEnum;
@@ -17,6 +18,7 @@ use App\Service\NostrKeyHelper;
 use App\Service\CacheService;
 use App\Nostr\Nip19Codec;
 use App\Util\CommonMark\Converter;
+use App\Service\UserBadgeHtmlRenderer;
 use Doctrine\ORM\EntityManagerInterface;
 use League\CommonMark\Exception\CommonMarkException;
 use Psr\Log\LoggerInterface;
@@ -327,8 +329,7 @@ class ArticleController extends AbstractController
     public function articlePreviewEvent(
         Request $request,
         NostrClient $nostrClient,
-        CacheService $cacheService,
-        NostrKeyHelper $nostrKeyHelper,
+        UserBadgeHtmlRenderer $userBadgeHtmlRenderer,
     ): Response {
         $data = $request->getContent();
         $descriptor = json_decode($data);
@@ -344,23 +345,20 @@ class ArticleController extends AbstractController
         $html = '';
 
         try {
-            if ($descriptor->type === 'nprofile') {
-                if (!isset($descriptor->decoded) || !\is_string($descriptor->decoded)) {
+            if ($descriptor->type === 'npub' || $descriptor->type === 'nprofile') {
+                $ident = '';
+                if ($descriptor->type === 'npub' && isset($descriptor->identifier) && \is_string($descriptor->identifier)) {
+                    $ident = $descriptor->identifier;
+                } elseif ($descriptor->type === 'nprofile' && isset($descriptor->decoded) && \is_string($descriptor->decoded)) {
+                    $hint = json_decode($descriptor->decoded);
+                    if (\is_object($hint) && isset($hint->pubkey)) {
+                        $ident = (string) $hint->pubkey;
+                    }
+                }
+                if ($ident === '') {
                     $html = '<span class="text-subtle">Profile preview unavailable.</span>';
                 } else {
-                    $hint = json_decode($descriptor->decoded);
-                    if (!\is_object($hint) || !isset($hint->pubkey)) {
-                        $html = '<span class="text-subtle">Profile preview unavailable.</span>';
-                    } else {
-                        $npub = $nostrKeyHelper->convertPublicKeyToBech32($hint->pubkey);
-                        $metadata = $cacheService->getMetadata($npub);
-                        $metadata->npub = $npub;
-                        $metadata->pubkey = $hint->pubkey;
-                        $metadata->type = 'nprofile';
-                        $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
-                            'preview' => $metadata,
-                        ]);
-                    }
+                    $html = $userBadgeHtmlRenderer->render($ident, UserBadgeOptions::inline());
                 }
             } elseif (!isset($descriptor->decoded)) {
                 $html = '<span class="text-subtle">Preview unavailable (missing data).</span>';

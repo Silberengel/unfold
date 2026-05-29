@@ -4,7 +4,7 @@
     {% if meta.summary|default('')|trim != '' %}
         <div class="publication-meta__group">
             <dt class="publication-meta__label">Summary</dt>
-            <dd class="publication-meta__value publication-meta__value--prose">{{ meta.summary }}</dd>
+            <dd class="publication-meta__value publication-meta__value--prose">{{ meta.summary|nostrify }}</dd>
         </div>
     {% endif %}
 
@@ -13,8 +13,8 @@
         <dd class="publication-meta__value">
             {% if meta.publisherNpub|default('') != '' %}
                 <twig:Molecules:UserFromNpub ident="{{ meta.publisherNpub }}" />
-            {% else %}
-                <span class="text-subtle">{{ meta.publisherPubkeyHex|default('') }}</span>
+            {% elseif meta.publisherPubkeyHex|default('') != '' %}
+                <twig:Molecules:UserFromNpub ident="{{ meta.publisherPubkeyHex }}" />
             {% endif %}
         </dd>
     </div>

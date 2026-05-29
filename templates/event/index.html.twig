@@ -6,25 +6,13 @@
 <div class="container">
     <div class="event-page">
         <div class="event-page__header">
-            {% if author %}
-                {% set author_pic = null %}
-                {% if author.picture is defined and author.picture %}
-                    {% set author_pic = author.picture %}
-                {% elseif author.image is defined and author.image %}
-                    {% set author_pic = author.image %}
-                {% endif %}
-                {% if author_pic %}
-                    <div class="author-profile__avatar author-profile__avatar--compact">
-                        <img src="{{ author_pic }}" alt="" loading="lazy" decoding="async" onerror="this.parentElement.remove()" />
-                    </div>
-                {% endif %}
-
+            {% if event.pubkey|default('') != '' %}
                 <twig:Molecules:UserFromNpub ident="{{ event.pubkey }}" />
-                <div>
-                    {% if author.about is defined %}
-                        {{ author.about|markdown_to_html|mentionify  }}
-                    {% endif %}
+                {% if author and author.about is defined and author.about|trim != '' %}
+                <div class="event-page__author-about">
+                    {{ author.about|markdown_to_html|mentionify }}
                 </div>
+                {% endif %}
                 <hr />
             {% endif %}
             <div class="event-page__meta">
@@ -40,14 +28,11 @@
         {% if nostrLinks is defined and nostrLinks|length > 0 %}
         <div class="event-page__links">
             <h4>Referenced Nostr Links</h4>
-            <ul class="link-list">
+            <div class="event-page__link-previews">
                 {% for link in nostrLinks %}
-                <li>
-                    <a href="/e/{{ link.identifier }}">{{ link.identifier }}</a>
-                    <span class="event-page__link-type">({{ link.type }})</span>
-                </li>
+                    <twig:Molecules:NostrPreview preview="{{ link }}" />
                 {% endfor %}
-            </ul>
+            </div>
         </div>
         {% endif %}
 

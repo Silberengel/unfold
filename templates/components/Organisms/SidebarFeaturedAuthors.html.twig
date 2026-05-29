@@ -5,26 +5,8 @@
             {% for row in rows %}
                 {% set _name = row.display_name|default('')|trim %}
                 {% set _label = _name != '' ? _name : (row.npub|shortenNpub) %}
-                {% set _avatar_src = row.picture|default('')|trim != '' ? row.picture : asset('icons/favicon-96x96.png') %}
                 <li class="sidebar-featured-authors__item">
-                    <a
-                        class="sidebar-featured-authors__link"
-                        href="{{ path('author-profile', { npub: row.npub }) }}"
-                        title="{{ _label|e('html_attr') }}"
-                    >
-                        <span class="sidebar-featured-authors__avatar">
-                            <img
-                                src="{{ _avatar_src|e('html_attr') }}"
-                                alt=""
-                                width="40"
-                                height="40"
-                                loading="lazy"
-                                decoding="async"
-                                onerror="this.onerror=null;this.src='{{ asset('icons/favicon-96x96.png')|e('js') }}';"
-                            >
-                        </span>
-                        <span class="visually-hidden">{{ _label }}</span>
-                    </a>
+                    {{ user_badge(row.npub, { size: 'md', faviconFallback: true, avatarOnly: true }) }}
                 </li>
             {% endfor %}
         </ul>

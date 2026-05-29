@@ -2,7 +2,6 @@
 
 namespace App\Util\CommonMark;
 
-use App\Nostr\Nip19Codec;
 use App\Service\CacheService;
 use App\Util\NpubBech32Extractor;
 use App\Util\CommonMark\ImagesExtension\RawImageLinkExtension;
@@ -28,7 +27,7 @@ readonly class Converter
 {
     public function __construct(
         private CacheService $cacheService,
-        private Nip19Codec $nip19Codec,
+        private NostrSchemeExtension $nostrSchemeExtension,
     ) {
     }
 
@@ -71,7 +70,7 @@ readonly class Converter
         $environment->addExtension(new TableExtension());
         $environment->addExtension(new StrikethroughExtension());
         // create a custom extension, that handles nostr mentions
-        $environment->addExtension(new NostrSchemeExtension($this->cacheService, $this->nip19Codec));
+        $environment->addExtension($this->nostrSchemeExtension);
         $environment->addExtension(new SmartPunctExtension());
         $environment->addExtension(new EmbedExtension());
         $environment->addRenderer(Embed::class, new HtmlDecorator(new EmbedRenderer(), 'div', ['class' => 'embedded-content']));

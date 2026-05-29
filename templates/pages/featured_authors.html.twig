@@ -26,11 +26,7 @@
                         role="listitem"
                     >
                         <div class="featured-authors-grid__avatar">
-                            {% if row.picture|default('')|trim != '' %}
-                                <img src="{{ row.picture|e('html_attr') }}" alt="{{ _label|e('html_attr') }}">
-                            {% else %}
-                                <span class="featured-authors-grid__avatar-fallback">{{ _label|slice(0, 1)|upper }}</span>
-                            {% endif %}
+                            {{ user_badge(row.npub, { size: 'lg', avatarOnly: true, linked: false }) }}
                         </div>
                         <div class="featured-authors-grid__name">{{ _label }}</div>
                         <div class="featured-authors-grid__handle text-subtle">@{{ row.local_part|e }}</div>

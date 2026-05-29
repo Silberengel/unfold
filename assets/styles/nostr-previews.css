@@ -33,8 +33,18 @@
 }
 
 .nostr-preview.nostr-preview--inline {
+    display: block;
     margin: 1rem 0;
     max-width: 100%;
+}
+
+.nostr-user-badge-inline {
+    display: inline;
+    vertical-align: middle;
+}
+
+.nostr-user-badge-inline .user-badge {
+    display: inline-flex;
 }
 
 .nostr-preview .nostr-preview-link a {

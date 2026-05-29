@@ -528,12 +528,10 @@ final readonly class ArticleCommentThreadLoader
         } catch (\Throwable) {
             $links = [];
         }
-        // naddr / nevent are already expanded as inline `nostr-preview` widgets in markdown
-        // (NostrEventRenderer + NostrBareBech32Parser). Footer previews would duplicate the
-        // same fetch/card (and looked like extra “OG” embeds next to the body).
+        // Inline widgets in markdown already render npub/nprofile badges and nevent/naddr cards.
         $links = array_values(array_filter(
             $links,
-            static fn (array $link): bool => !\in_array($link['type'] ?? '', ['naddr', 'nevent'], true),
+            static fn (array $link): bool => !\in_array($link['type'] ?? '', ['naddr', 'nevent', 'npub', 'nprofile'], true),
         ));
         if ($links !== []) {
             $linkBucket[$idKey] = $links;

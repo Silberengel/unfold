@@ -127,19 +127,5 @@
         </div>
     {% endif %}
 {% elseif preview.type == 'nprofile' %}
-    <div class="card nostr-profile-preview">
-        {% set _pr_share = nostr_event_share(preview) %}
-        {% if _pr_share %}
-            <div class="nostr-preview-card__menu">
-                {% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _pr_share, event_menu: true } only %}
-            </div>
-        {% endif %}
-        <div class="card-body nostr-profile-preview__body">
-            <h5 class="card-title">{{ preview.display_name ?: preview.name }} </h5>
-            <small class="text-subtle">@{{ preview.npub|shortenNpub }}</small>
-            {% if preview.about %}
-                <p class="card-text">{{ preview.about|length > 150 ? preview.about|slice(0, 150) ~ '...' : preview.about }}</p>
-            {% endif %}
-        </div>
-    </div>
+    {{ user_badge(preview.pubkey|default(preview.npub)) }}
 {% endif %}

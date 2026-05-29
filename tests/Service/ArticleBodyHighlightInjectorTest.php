@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Tests\Service;
 
 use App\Entity\ArticleHighlight;
+use App\Nostr\Nip19Codec;
 use App\Service\ArticleBodyHighlightInjector;
 use App\Service\HighlightAuthorMetadataProvider;
 use App\Service\NostrKeyHelper;
+use App\Service\UserBadgeHtmlRenderer;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Asset\Packages;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * In-article marks use the same matching rules as production ({@see \App\Controller\ArticleController::renderArticle}:
@@ -147,7 +151,7 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
         $out = $injector->inject($html, [$h]);
 
         $this->assertStringContainsString('https://cdn.example/stored.jpg', $out['html']);
-        $this->assertStringContainsString('user-highlight__author-avatar-img', $out['html']);
+        $this->assertStringContainsString('user-badge__avatar-img', $out['html']);
     }
 
     private function createInjector(): ArticleBodyHighlightInjector
@@ -168,7 +172,17 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
             ]
         );
 
-        return new ArticleBodyHighlightInjector($meta, new NostrKeyHelper());
+        return new ArticleBodyHighlightInjector(
+            $meta,
+            new NostrKeyHelper(),
+            new UserBadgeHtmlRenderer(
+                $meta,
+                new NostrKeyHelper(),
+                new Nip19Codec(),
+                $this->createMock(UrlGeneratorInterface::class),
+                $this->createMock(Packages::class),
+            ),
+        );
     }
 
     /**
