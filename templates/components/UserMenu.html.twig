@@ -8,6 +8,7 @@
         amberInvalidUrlMessage: 'login.amber_invalid_url'|trans,
         amberWaitingMessage: 'login.amber_waiting'|trans,
         amberConnectedMessage: 'login.amber_connected'|trans,
+        amberRelaysInvalidMessage: 'login.amber_relays_invalid'|trans,
         copyUriLabel: 'login.amber_copy_link'|trans,
         copiedMessage: 'login.amber_copied'|trans,
         nip46Relays: nip46_client_relays,
@@ -69,6 +70,23 @@
             <p class="user-menu__section-label">{{ 'login.amber_scan_heading'|trans }}</p>
             <div class="user-menu__amber-qr-section">
                 <p class="user-menu__amber-help">{{ 'login.amber_qr_help'|trans }}</p>
+                <label class="user-menu__amber-label" for="user-menu-nip46-relays">{{ 'login.amber_relays_label'|trans }}</label>
+                <textarea
+                    id="user-menu-nip46-relays"
+                    class="user-menu__amber-relays-input"
+                    rows="3"
+                    data-login-target="relayInput"
+                    spellcheck="false"
+                    autocomplete="off"
+                    aria-describedby="user-menu-nip46-relays-hint"
+                ></textarea>
+                <p id="user-menu-nip46-relays-hint" class="user-menu__amber-help">{{ 'login.amber_relays_hint'|trans }}</p>
+                <button
+                    type="button"
+                    class="user-menu__amber-copy"
+                    data-login-target="relayRefreshButton"
+                    data-action="click->login#refreshNostrConnectRelaysAct"
+                >{{ 'login.amber_relays_refresh'|trans }}</button>
                 <canvas class="user-menu__amber-qr" data-login-target="qrCanvas" width="220" height="220"></canvas>
                 <label class="user-menu__amber-label" for="user-menu-connect-uri">{{ 'login.amber_link_label'|trans }}</label>
                 <div class="user-menu__amber-uri-row">

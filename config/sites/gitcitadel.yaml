@@ -48,7 +48,6 @@ parameters:
     # WSS relays for browser NIP-46 (nostrconnect:// QR login). See config/sites/imwald.yaml.
     nip46_client_relays: [
       'wss://relay.nsec.app',
-      'wss://relays.primal.net',
       'wss://theforest.nostr1.com'
     ]
 

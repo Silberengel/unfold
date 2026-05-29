@@ -11,6 +11,8 @@ import {
     waitForNostrConnect,
 } from '../nostr/signer.js';
 
+const NIP46_RELAY_STORAGE_KEY = 'unfold.nostr.nip46.client_relays';
+
 export default class extends Controller {
   static targets = [
     'error',
@@ -20,6 +22,8 @@ export default class extends Controller {
     'bunkerInput',
     'amberSubmitButton',
     'qrCanvas',
+    'relayInput',
+    'relayRefreshButton',
     'connectUriInput',
     'copyUriButton',
     'amberStatus',
@@ -32,6 +36,7 @@ export default class extends Controller {
     amberInvalidUrlMessage: String,
     amberWaitingMessage: String,
     amberConnectedMessage: String,
+    amberRelaysInvalidMessage: String,
     copyUriLabel: String,
     copiedMessage: String,
     nip46Relays: Array,
@@ -119,6 +124,71 @@ export default class extends Controller {
       this.setAmberStatus('');
       return;
     }
+    this.populateRelayInput();
+    void this.startNostrConnectFlow();
+  }
+
+  defaultNip46Relays() {
+    return Array.isArray(this.nip46RelaysValue) ? this.nip46RelaysValue : [];
+  }
+
+  loadStoredNip46Relays() {
+    try {
+      const raw = localStorage.getItem(NIP46_RELAY_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return null;
+      }
+      const relays = parsed.filter((r) => typeof r === 'string' && r.startsWith('wss://'));
+      return relays.length > 0 ? relays : null;
+    } catch {
+      return null;
+    }
+  }
+
+  saveNip46Relays(relays) {
+    localStorage.setItem(NIP46_RELAY_STORAGE_KEY, JSON.stringify(relays));
+  }
+
+  parseRelayList(text) {
+    return String(text ?? '')
+      .split(/[\s,]+/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.startsWith('wss://'));
+  }
+
+  populateRelayInput() {
+    if (!this.hasRelayInputTarget) {
+      return;
+    }
+    const relays = this.loadStoredNip46Relays() ?? this.defaultNip46Relays();
+    this.relayInputTarget.value = relays.join('\n');
+  }
+
+  currentNip46Relays() {
+    if (this.hasRelayInputTarget) {
+      const fromInput = this.parseRelayList(this.relayInputTarget.value);
+      if (fromInput.length > 0) {
+        return fromInput;
+      }
+    }
+    return this.loadStoredNip46Relays() ?? this.defaultNip46Relays();
+  }
+
+  refreshNostrConnectRelaysAct() {
+    if (!this.hasRelayInputTarget) {
+      return;
+    }
+    const relays = this.parseRelayList(this.relayInputTarget.value);
+    if (relays.length === 0) {
+      this.showError(this.amberRelaysInvalidMessageValue || this.amberInvalidUrlMessageValue);
+      return;
+    }
+    this.saveNip46Relays(relays);
+    this.relayInputTarget.value = relays.join('\n');
     void this.startNostrConnectFlow();
   }
 
@@ -127,10 +197,14 @@ export default class extends Controller {
     this.abortNostrConnectFlow();
     this.setAmberStatus('');
 
-    const relays = Array.isArray(this.nip46RelaysValue) ? this.nip46RelaysValue : [];
+    const relays = this.currentNip46Relays();
     if (relays.length === 0) {
-      this.showError(this.amberInvalidUrlMessageValue);
+      this.showError(this.amberRelaysInvalidMessageValue || this.amberInvalidUrlMessageValue);
       return;
+    }
+    this.saveNip46Relays(relays);
+    if (this.hasRelayInputTarget) {
+      this.relayInputTarget.value = relays.join('\n');
     }
 
     try {

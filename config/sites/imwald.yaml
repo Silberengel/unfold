@@ -52,7 +52,6 @@ parameters:
     # available signer-friendly relays, not magazine/indexer relays.
     nip46_client_relays: [
       'wss://relay.nsec.app',
-      'wss://relays.primal.net',
       'wss://theforest.nostr1.com'
     ]
 
