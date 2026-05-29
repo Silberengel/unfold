@@ -554,6 +554,45 @@ main {
     max-width: 270px;
 }
 
+.user-menu__login-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.user-menu__amber-toggle {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: left;
+    text-decoration: underline;
+}
+
+.user-menu__amber-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.user-menu__amber-help {
+    font-size: 0.9em;
+    margin: 0;
+}
+
+.user-menu__amber-label {
+    font-size: 0.9em;
+}
+
+.user-menu__amber-input {
+    box-sizing: border-box;
+    font: inherit;
+    width: 100%;
+}
+
 @media (min-width: 1025px) {
     :root {
         --site-fixed-header-offset: 120px;

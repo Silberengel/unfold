@@ -4,6 +4,8 @@
         noExtensionMessage: 'login.error_no_extension'|trans,
         cancelledMessage: 'login.error_cancelled'|trans,
         failedMessage: 'login.error_failed'|trans,
+        amberPromptMessage: 'login.amber_prompt'|trans,
+        amberInvalidUrlMessage: 'login.amber_invalid_url'|trans,
     })) }}
 >
     {% if app.user %}
@@ -41,10 +43,34 @@
             <p>Log in to access search.</p>
         </div>
         <p class="notice error user-menu__login-error" data-login-target="error" role="alert" hidden></p>
-        <twig:Atoms:Button
-            data-login-target="submitButton"
-            {{ ...stimulus_action('login', 'loginAct') }}
-        >{{ 'heading.logIn'|trans }}</twig:Atoms:Button>
+        <div class="user-menu__login-actions">
+            <twig:Atoms:Button
+                data-login-target="submitButton"
+                {{ ...stimulus_action('login', 'loginAct') }}
+            >{{ 'login.extension'|trans }}</twig:Atoms:Button>
+            <button
+                type="button"
+                class="user-menu__amber-toggle"
+                {{ stimulus_action('login', 'toggleAmberPanel') }}
+            >{{ 'login.amber_toggle'|trans }}</button>
+        </div>
+        <div class="user-menu__amber-panel" data-login-target="amberPanel" hidden>
+            <p class="user-menu__amber-help">{{ 'login.amber_help'|trans }}</p>
+            <label class="user-menu__amber-label" for="user-menu-bunker-url">{{ 'login.amber_url_label'|trans }}</label>
+            <input
+                id="user-menu-bunker-url"
+                type="url"
+                class="user-menu__amber-input"
+                data-login-target="bunkerInput"
+                placeholder="{{ 'login.amber_url_placeholder'|trans }}"
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <twig:Atoms:Button
+                data-login-target="amberSubmitButton"
+                {{ ...stimulus_action('login', 'loginWithAmberAct') }}
+            >{{ 'login.amber_submit'|trans }}</twig:Atoms:Button>
+        </div>
     {% endif %}
     <div>
         <div class="spinner" data-loading>

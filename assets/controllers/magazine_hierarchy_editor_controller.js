@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { canSignEvents, signEvent } from '../nostr/signer.js';
 
 const KIND_PUBLICATION_INDEX = 30040;
 const KIND_LONGFORM = 30023;
@@ -771,8 +772,8 @@ export default class MagazineHierarchyEditorController extends Controller {
         this.setStatus('Checking for changes…', { tone: 'info', scroll: true });
 
         try {
-            if (!this.hasNip07()) {
-                this.setStatus('Install a Nostr extension (NIP-07) to sign index events.', { tone: 'error', scroll: true });
+            if (!canSignEvents()) {
+                this.setStatus('Install a Nostr extension or connect Amber (remote signer) to sign index events.', { tone: 'error', scroll: true });
                 return;
             }
             const ownerHex = (this.ownerHexValue || '').toLowerCase().trim();
@@ -863,7 +864,7 @@ export default class MagazineHierarchyEditorController extends Controller {
 
                 let signed;
                 try {
-                    signed = await window.nostr.signEvent(unsigned);
+                    signed = await signEvent(unsigned);
                 } catch (err) {
                     this.setStatus(`Signing failed (#d ${dTag}): ${err instanceof Error ? err.message : String(err)}`, {
                         tone: 'error',
@@ -1071,7 +1072,7 @@ export default class MagazineHierarchyEditorController extends Controller {
     }
 
     hasNip07() {
-        return typeof window.nostr !== 'undefined' && typeof window.nostr.signEvent === 'function';
+        return canSignEvents();
     }
 }
 

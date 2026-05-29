@@ -106,7 +106,11 @@ final readonly class CommentReplyService
             }
         }
 
-        $relays = $this->nostrClient->getRelayUrlsForCommentPublish($expectedCoordinate, $parentAuthorHex);
+        $relays = $this->nostrClient->getRelayUrlsForCommentPublish(
+            $expectedCoordinate,
+            $parentAuthorHex,
+            $userHex,
+        );
         $result = $this->nostrClient->publishEvent($wire, $relays);
         $okRelays = 0;
         foreach ($result as $relayRes) {

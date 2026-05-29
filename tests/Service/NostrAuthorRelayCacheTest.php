@@ -38,6 +38,30 @@ final class NostrAuthorRelayCacheTest extends TestCase
         $this->assertSame(['wss://r1', 'wss://r2'], $c->getAuthorNip65RelaysList($pk), 'second call should use cache, not re-fetch');
     }
 
+    public function testGetAuthorNip65OutboxRelaysListDedupesAndCaches(): void
+    {
+        $pk = str_repeat('d', 64);
+        $nostr = $this->createMock(NostrClient::class);
+        $nostr->expects($this->once())
+            ->method('getNpubOutboxRelays')
+            ->with($pk)
+            ->willReturn(['wss://out1', 'wss://out2', 'wss://out1']);
+
+        $ts = $this->createMock(TokenStorageInterface::class);
+        $ts->method('getToken')->willReturn(null);
+        $listFactory = new NostrRelayListFactory(['wss://default'], [], [], $ts, new NullLogger());
+
+        $c = new NostrAuthorRelayCache(
+            new ArrayAdapter(),
+            new NullLogger(),
+            $listFactory,
+            $nostr
+        );
+
+        $this->assertSame(['wss://out1', 'wss://out2'], $c->getAuthorNip65OutboxRelaysList($pk));
+        $this->assertSame(['wss://out1', 'wss://out2'], $c->getAuthorNip65OutboxRelaysList($pk), 'second call should use cache');
+    }
+
     public function testGetTopReputableRelaysForAuthorFallsBackToDefaultRelayWhenEmpty(): void
     {
         $pk = str_repeat('c', 64);

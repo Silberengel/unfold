@@ -86,4 +86,52 @@ class NostrAuthorRelayCache
 
         return \array_slice($all, 0, $limit);
     }
+
+    /**
+     * NIP-65 outbox relays (`write` + unmarked `r` tags) for publish fan-out.
+     *
+     * @return list<string>
+     */
+    public function getAuthorNip65OutboxRelaysList(string $pubkey): array
+    {
+        $cacheKey = 'nostr_kind10002_outbox_v1_'.hash('sha256', $pubkey);
+
+        return $this->relayQueryCache->get($cacheKey, function (ItemInterface $item) use ($pubkey): array {
+            $item->expiresAfter(3600);
+            try {
+                $authorRelays = $this->nostrClient->getNpubOutboxRelays($pubkey);
+            } catch (\Exception $e) {
+                $this->logger->error('Error getting author NIP-65 outbox relay list', [
+                    'pubkey' => $pubkey,
+                    'error' => $e->getMessage(),
+                ]);
+                $authorRelays = [];
+            }
+
+            return $this->dedupeWssUrls($authorRelays);
+        });
+    }
+
+    /**
+     * @param list<string> $urls
+     *
+     * @return list<string>
+     */
+    private function dedupeWssUrls(array $urls): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($urls as $u) {
+            if (!\is_string($u) || $u === '' || !str_starts_with($u, 'wss:') || str_contains($u, 'localhost')) {
+                continue;
+            }
+            if (isset($seen[$u])) {
+                continue;
+            }
+            $seen[$u] = true;
+            $out[] = $u;
+        }
+
+        return $out;
+    }
 }

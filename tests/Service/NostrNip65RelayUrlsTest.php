@@ -23,4 +23,27 @@ final class NostrNip65RelayUrlsTest extends TestCase
         $out = $s->wssListFromKind10002Wire($wire);
         $this->assertSame(['wss://relay.example.com'], $out);
     }
+
+    public function testOutboxIncludesWriteAndUnmarkedOnly(): void
+    {
+        $s = new NostrNip65RelayUrls();
+        $wire = (object) [
+            'tags' => [
+                ['r', 'wss://read-only', 'read'],
+                ['r', 'wss://write-relay', 'write'],
+                ['r', 'wss://legacy-relay'],
+                ['r', 'wss://localhost:1', 'write'],
+            ],
+        ];
+        $all = $s->wssListFromKind10002Wire($wire);
+        $outbox = $s->outboxWssListFromKind10002Wire($wire);
+        $this->assertSame(
+            ['wss://read-only', 'wss://write-relay', 'wss://legacy-relay'],
+            $all,
+        );
+        $this->assertSame(
+            ['wss://write-relay', 'wss://legacy-relay'],
+            $outbox,
+        );
+    }
 }

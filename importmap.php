@@ -52,23 +52,20 @@ return [
     'nostr-tools' => [
         'version' => '2.10.4',
     ],
-    // Subpath: bech32 only (no @noble/curves) — used by comment_reply_controller for NIP-19 in blurb lines.
     'nostr-tools/nip19' => [
         'version' => '2.10.4',
     ],
     '@noble/hashes' => [
         'version' => '1.3.1',
     ],
-    // Required by nostr-tools/nip19 (bytesToHex / hexToBytes / concatBytes); bare @noble/hashes is not enough.
     '@noble/hashes/utils' => [
         'version' => '1.3.1',
     ],
-    // Used by @noble/hashes/utils (WebCrypto); without this, dynamic import of nip19 fails in the browser.
     '@noble/hashes/crypto' => [
         'version' => '1.3.1',
     ],
     '@scure/base' => [
-        'version' => '1.1.1',
+        'version' => '2.0.0',
     ],
     'quill/dist/quill.core.css' => [
         'version' => '2.0.3',
@@ -77,5 +74,29 @@ return [
     'quill/dist/quill.snow.css' => [
         'version' => '2.0.3',
         'type' => 'css',
+    ],
+    'nostr-tools/nip46' => [
+        'version' => '2.23.5',
+    ],
+    '@noble/curves/secp256k1.js' => [
+        'version' => '2.0.1',
+    ],
+    '@noble/hashes/utils.js' => [
+        'version' => '2.0.1',
+    ],
+    '@noble/hashes/sha2.js' => [
+        'version' => '2.0.1',
+    ],
+    '@noble/ciphers/chacha.js' => [
+        'version' => '2.1.1',
+    ],
+    '@noble/ciphers/utils.js' => [
+        'version' => '2.1.1',
+    ],
+    '@noble/hashes/hkdf.js' => [
+        'version' => '2.0.1',
+    ],
+    '@noble/hashes/hmac.js' => [
+        'version' => '2.0.1',
     ],
 ];

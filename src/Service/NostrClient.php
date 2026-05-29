@@ -104,17 +104,20 @@ class NostrClient
     }
 
     /**
-     * Relays to publish a kind-1111 reply: site defaults plus NIP-65 (kind-10002) for the
-     * article author and, when the direct parent is another pubkey (nested comment), that
-     * author’s relays as well.
+     * Relays to publish a kind-1111 reply: site defaults plus NIP-65 outbox (`write` + unmarked `r`)
+     * for the publishing pubkey, article author, and (when nested) parent author.
      *
      * @param string $articleCoordinate         kind:pubkey:identifier
      * @param string $parentEventAuthorHex      64-char hex of the event being replied to
+     * @param string $publisherPubkeyHex        64-char hex of the logged-in commenter
      *
      * @return list<string>
      */
-    public function getRelayUrlsForCommentPublish(string $articleCoordinate, string $parentEventAuthorHex): array
-    {
+    public function getRelayUrlsForCommentPublish(
+        string $articleCoordinate,
+        string $parentEventAuthorHex,
+        string $publisherPubkeyHex = '',
+    ): array {
         $base = $this->relayListFactory->getPublishRelayUrlList();
         $parts = explode(':', $articleCoordinate, 3);
         $articlePk = \count($parts) >= 2 ? strtolower((string) $parts[1]) : '';
@@ -125,18 +128,27 @@ class NostrClient
         if (64 !== \strlen($parentPk) || !ctype_xdigit($parentPk)) {
             $parentPk = '';
         }
+        $publisherPk = strtolower(trim($publisherPubkeyHex));
+        if (64 !== \strlen($publisherPk) || !ctype_xdigit($publisherPk)) {
+            $publisherPk = '';
+        }
+
         $pubkeys = [];
+        if ($publisherPk !== '') {
+            $pubkeys[] = $publisherPk;
+        }
         if ($articlePk !== '') {
             $pubkeys[] = $articlePk;
         }
         if ($parentPk !== '' && $parentPk !== $articlePk) {
             $pubkeys[] = $parentPk;
         }
+        $pubkeys = array_values(array_unique($pubkeys));
 
         $seen = array_fill_keys($base, true);
         $out = $base;
         foreach ($pubkeys as $pk) {
-            foreach ($this->authorRelayCache->getAuthorNip65RelaysList($pk) as $wss) {
+            foreach ($this->authorRelayCache->getAuthorNip65OutboxRelaysList($pk) as $wss) {
                 if ($wss === '' || isset($seen[$wss])) {
                     continue;
                 }
@@ -872,6 +884,21 @@ class NostrClient
         }
 
         return $this->nip65RelayUrls->wssListFromKind10002Wire($use);
+    }
+
+    /**
+     * NIP-65 outbox relays for publish fan-out.
+     *
+     * @return list<string>
+     */
+    public function getNpubOutboxRelays(mixed $npub): array
+    {
+        $use = $this->getNpubRelayList10002Wire($npub);
+        if ($use === null) {
+            return [];
+        }
+
+        return $this->nip65RelayUrls->outboxWssListFromKind10002Wire($use);
     }
 
     /**

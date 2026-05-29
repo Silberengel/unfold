@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { canSignEvents, signEvent } from '../nostr/signer.js';
 
 /**
  * Article-thread reply: NIP-22 kind 1111 (default) or legacy kind 1 when the parent is kind 1. Sign with NIP-07, POST, refresh thread.
@@ -50,8 +51,8 @@ export default class extends Controller {
      */
     async publish(ev) {
         ev.preventDefault();
-        if (!this.hasNip07()) {
-            this.setHint('Install a Nostr extension (NIP-07) to sign comments.');
+        if (!canSignEvents()) {
+            this.setHint('Install a Nostr extension or connect Amber (remote signer) to sign comments.');
             return;
         }
         const root = this.hasPanelTarget ? this.panelTarget : this.element;
@@ -81,7 +82,7 @@ export default class extends Controller {
         };
         let signed;
         try {
-            signed = await window.nostr.signEvent(unsigned);
+            signed = await signEvent(unsigned);
         } catch (err) {
             this.setHint(`Signing failed: ${err instanceof Error ? err.message : String(err)}`);
             return;
@@ -147,8 +148,9 @@ export default class extends Controller {
         }
     }
 
+    /** @deprecated use canSignEvents() from nostr/signer.js */
     hasNip07() {
-        return typeof window.nostr !== 'undefined' && typeof window.nostr.signEvent === 'function';
+        return canSignEvents();
     }
 
     /**
