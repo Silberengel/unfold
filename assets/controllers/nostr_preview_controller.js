@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { activateControllers } from '../stimulus/activate_controllers.js';
 
 const LOADING_HTML = `<div class="nostr-preview__loading text-center my-2"><span class="nostr-preview__spinner" role="status" aria-label="Loading"></span><span class="nostr-preview__loading-text ms-2">Loading preview…</span></div>`;
 const UNAVAILABLE_HTML = `<div class="alert alert-warning my-2" role="status">Preview unavailable.</div>`;
@@ -156,8 +157,6 @@ export default class extends Controller {
         if (fallbackLink) {
             fallbackLink.remove();
         }
-        if (this.application?.load) {
-            this.application.load(this.containerTarget);
-        }
+        activateControllers(this.application, this.containerTarget);
     }
 }

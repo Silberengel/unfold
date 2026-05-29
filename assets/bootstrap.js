@@ -9,6 +9,7 @@ import MagazineHierarchyEditorController from './controllers/magazine_hierarchy_
 import FooterMagazineEditController from './controllers/footer_magazine_edit_controller.js';
 import PublicationExportController from './controllers/publication_export_controller.js';
 import LoginController from './controllers/login_controller.js';
+import NostrPreviewController from './controllers/nostr_preview_controller.js';
 const app = startStimulusApp();
 if (typeof app.debug === 'boolean') {
     app.debug = false;
@@ -62,6 +63,11 @@ try {
 }
 try {
     app.register('login', LoginController);
+} catch {
+    /* already registered by the bundle */
+}
+try {
+    app.register('nostr-preview', NostrPreviewController);
 } catch {
     /* already registered by the bundle */
 }

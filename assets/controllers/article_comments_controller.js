@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { activateControllers } from '../stimulus/activate_controllers.js';
 
 /**
  * Two-phase comment loading with progressive merge:
@@ -125,6 +126,12 @@ export default class extends Controller {
     applyCommentsHtml(html) {
         this.containerTarget.innerHTML = html;
         this.containerTarget.classList.remove('comments--pending');
+        this.activateInjectedComments(this.containerTarget);
+    }
+
+    /** Wire Stimulus controllers in HTML injected via innerHTML (nostr previews, reply forms, …). */
+    activateInjectedComments(root) {
+        activateControllers(this.application, root);
     }
 
     /**
@@ -188,6 +195,10 @@ export default class extends Controller {
 
         if (added > 0 || root.querySelector('.card.comment')) {
             this.containerTarget.classList.remove('comments--pending');
+        }
+
+        if (added > 0) {
+            this.activateInjectedComments(this.containerTarget);
         }
 
         return added;

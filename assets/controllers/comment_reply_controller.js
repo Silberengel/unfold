@@ -1,5 +1,6 @@
 import { Controller } from '@hotwired/stimulus';
 import { canSignEvents, signEvent } from '../nostr/signer.js';
+import { activateControllers } from '../stimulus/activate_controllers.js';
 
 /**
  * Article-thread reply: NIP-22 kind 1111 (default) or legacy kind 1 when the parent is kind 1. Sign with NIP-07, POST, refresh thread.
@@ -209,11 +210,13 @@ export default class extends Controller {
                 const html = await res.text();
                 if (!wantId) {
                     container.innerHTML = html;
+                    this.activateInjectedComments(container);
                     return;
                 }
                 const parsed = new DOMParser().parseFromString(html, 'text/html');
                 if (parsed.querySelector(`[data-event-id="${wantId}"]`)) {
                     container.innerHTML = html;
+                    this.activateInjectedComments(container);
                     return;
                 }
             } catch {
@@ -225,6 +228,11 @@ export default class extends Controller {
         if (wantId) {
             window.location.reload();
         }
+    }
+
+    /** Wire Stimulus controllers in HTML injected via innerHTML. */
+    activateInjectedComments(root) {
+        activateControllers(this.application, root);
     }
 
     /**

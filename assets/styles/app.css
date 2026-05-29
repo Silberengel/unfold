@@ -1465,6 +1465,33 @@ a.tag:focus-visible {
     white-space: normal;
 }
 
+/* Profile URLs: use link tokens so hover is visible (global `a` uses --color-secondary,
+   which equals --color-link-hover in gitcitadel dark). */
+.author-profile__header-meta a.author-profile__identity-link,
+.author-profile__header-meta a.author-profile__nip05-link {
+    color: var(--color-link, var(--color-primary));
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    transition: color 0.15s ease;
+}
+
+.author-profile__header-meta a.author-profile__identity-link:hover,
+.author-profile__header-meta a.author-profile__nip05-link:hover,
+.author-profile__header-meta a.author-profile__identity-link:focus-visible,
+.author-profile__header-meta a.author-profile__nip05-link:focus-visible {
+    color: var(--color-link-hover, var(--color-secondary));
+}
+
+.author-profile__about a {
+    color: var(--color-link, var(--color-primary));
+    transition: color 0.15s ease;
+}
+
+.author-profile__about a:hover,
+.author-profile__about a:focus-visible {
+    color: var(--color-link-hover, var(--color-secondary));
+}
+
 .author-profile__payment-value {
     display: flex;
     align-items: flex-start;
@@ -1479,7 +1506,7 @@ a.tag:focus-visible {
     text-decoration: none;
 }
 
-.author-profile__copy-btn {
+.author-profile__copy-btn.btn.btn-secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1488,6 +1515,26 @@ a.tag:focus-visible {
     height: 2rem;
     padding: 0;
     line-height: 1;
+    color: var(--color-primary);
+    border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+}
+
+.author-profile__copy-btn.btn.btn-secondary:hover {
+    color: var(--color-text-contrast, var(--color-bg));
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+html[data-color-scheme="dark"] .author-profile__copy-btn.btn.btn-secondary {
+    color: var(--color-text);
+    background-color: var(--color-bg-primary, var(--color-bg-light));
+    border-color: var(--color-border);
+}
+
+html[data-color-scheme="dark"] .author-profile__copy-btn.btn.btn-secondary:hover {
+    color: var(--color-text-contrast, #121212);
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
 }
 
 .author-profile__copy-btn.is-copied {
