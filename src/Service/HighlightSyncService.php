@@ -9,11 +9,13 @@ use App\Entity\ArticleHighlight;
 use App\Enum\KindsEnum;
 use App\Repository\ArticleHighlightRepository;
 use App\Util\HighlightEventTags;
+use App\Util\ProfileMetadataReader;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 
 /**
  * Pulls kind-9802 highlights from relays and upserts into {@see ArticleHighlight}.
+ * Kind-0 profile metadata for highlight authors is fetched during sync and stored on each row.
  */
 final class HighlightSyncService
 {
@@ -21,6 +23,8 @@ final class HighlightSyncService
         private readonly NostrClient $nostrClient,
         private readonly EntityManagerInterface $entityManager,
         private readonly ArticleHighlightRepository $highlightRepository,
+        private readonly CacheService $cacheService,
+        private readonly NostrKeyHelper $nostrKeyHelper,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -45,6 +49,20 @@ final class HighlightSyncService
         $coordinate = $kind.':'.$pubkey.':'.$slug;
 
         $events = $this->nostrClient->fetchHighlightEventsForArticle($coordinate);
+        $authorHexes = [];
+        foreach ($events as $ev) {
+            if ((int) ($ev->kind ?? 0) !== KindsEnum::HIGHLIGHTS->value) {
+                continue;
+            }
+            $author = strtolower((string) ($ev->pubkey ?? ''));
+            if (64 === \strlen($author) && ctype_xdigit($author)) {
+                $authorHexes[$author] = true;
+            }
+        }
+        if ($authorHexes !== []) {
+            $this->cacheService->prefetchMetadataForPubkeyHexes(array_keys($authorHexes));
+        }
+
         $n = 0;
         foreach ($events as $ev) {
             if ((int) ($ev->kind ?? 0) !== KindsEnum::HIGHLIGHTS->value) {
@@ -85,6 +103,7 @@ final class HighlightSyncService
             $row->setTags($tags);
             $row->setEventCreatedAt($ca);
             $row->setQuoteExcerpt($excerpt !== '' ? $excerpt : null);
+            $this->applyAuthorProfileToHighlight($row, $author);
             $this->entityManager->persist($row);
             ++$n;
         }
@@ -99,5 +118,23 @@ final class HighlightSyncService
         ]);
 
         return $n;
+    }
+
+    private function applyAuthorProfileToHighlight(ArticleHighlight $row, string $authorHex): void
+    {
+        try {
+            $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($authorHex);
+        } catch (\Throwable) {
+            $row->setAuthorDisplayName(null);
+            $row->setAuthorPictureUrl(null);
+
+            return;
+        }
+
+        $meta = $this->cacheService->getMetadataBundle($npub)['content'];
+        $name = ProfileMetadataReader::displayName($meta);
+        $pic = ProfileMetadataReader::pictureUrl($meta);
+        $row->setAuthorDisplayName($name !== '' ? $name : null);
+        $row->setAuthorPictureUrl($pic !== '' ? $pic : null);
     }
 }

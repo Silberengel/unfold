@@ -1,29 +1,27 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * Two-phase comment loading:
+ * Two-phase comment loading with progressive merge:
  *
- * Phase 1 — fires ?cached=1 immediately, shows whatever is in the server-side cache
- *            without touching any Nostr relays (< 100 ms on a warm cache).
+ * Phase 1 — polls ?cached=1 while relays are queried; shows partial threads as soon as the server
+ *            writes them to cache (relay batches during incremental fetch).
  *
- * Phase 2 — fires the full URL in parallel, which does relay I/O.  When it resolves
- *            it replaces the Phase-1 content.  If Phase 2 finishes first (e.g. the
- *            cached response was held up by DNS), Phase 1 is silently discarded.
- *
- * Result: readers always see something quickly; fresh relay data appears when ready.
+ * Phase 2 — full fragment URL; merges new comment cards by event id instead of replacing the list.
  */
 export default class extends Controller {
     static values = {
         url: String,
         preloaded: { type: Boolean, default: false },
+        error: { type: String, default: 'Comments could not be loaded.' },
+        empty: { type: String, default: 'No comments yet.' },
     };
 
-    static targets = ['container'];
+    static targets = ['container', 'loadingTemplate'];
 
     connect() {
         this.partialReloads = 0;
         this._loadGeneration = 0;
-        // Stable reference across reconnects: rebinding each connect() would strand old listeners.
+        this._cachePollTimer = null;
         this.boundOnAuth ??= this.onAuthChanged.bind(this);
         this.boundOnCommentPublished ??= this.onCommentPublished.bind(this);
         window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
@@ -34,14 +32,13 @@ export default class extends Controller {
             return;
         }
         if (this.preloadedValue) {
-            // Article SSR already included comments (cache hit at render time).  Do not re-fetch;
-            // a slow relay request would only replace working HTML.  Auth changes may still reload.
             return;
         }
         void this.load();
     }
 
     disconnect() {
+        this.stopCachePolling();
         if (this.boundOnAuth) {
             window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
         }
@@ -68,11 +65,11 @@ export default class extends Controller {
                 }
             }
         }
-        // Abort an in-flight relay fetch so it cannot overwrite the freshly merged thread.
         this._loadGeneration += 1;
         this._fullFetchDone = true;
+        this.stopCachePolling();
         if (detail.merged === true) {
-            void this._showCachedVersion();
+            void this._pollCachedVersion();
             return;
         }
         void this.load();
@@ -85,7 +82,6 @@ export default class extends Controller {
         void this.load();
     }
 
-    /** Append ?cb=<timestamp> (and optional extras) to bust HTTP caches. */
     buildFetchUrl(extra = '') {
         const u = this.urlValue;
         const parts = [`cb=${Date.now()}`, extra].filter(Boolean);
@@ -93,23 +89,157 @@ export default class extends Controller {
         return u.includes('?') ? `${u}&${qs}` : `${u}?${qs}`;
     }
 
+    isDisplayableCommentsHtml(html) {
+        if (!html || !String(html).trim()) {
+            return false;
+        }
+        if (/class="card comment\b/.test(html)) {
+            return true;
+        }
+        if (/class="superchats\b/.test(html)) {
+            return true;
+        }
+        if (/comments__empty/.test(html)) {
+            return true;
+        }
+        if (/data-comments-partial="1"/.test(html)) {
+            return false;
+        }
+        return /class="comments\b/.test(html);
+    }
+
+    showLoading() {
+        if (!this.hasContainerTarget) {
+            return;
+        }
+        if (this.containerTarget.querySelector('.card.comment[data-event-id]')) {
+            return;
+        }
+        const markup = this.hasLoadingTemplateTarget
+            ? this.loadingTemplateTarget.innerHTML
+            : '<p class="text-subtle">Looking for comments…</p>';
+        this.containerTarget.innerHTML = markup;
+        this.containerTarget.classList.add('comments--pending');
+    }
+
+    applyCommentsHtml(html) {
+        this.containerTarget.innerHTML = html;
+        this.containerTarget.classList.remove('comments--pending');
+    }
+
+    /**
+     * Merge new comment cards (and superchats) into the live DOM by data-event-id.
+     *
+     * @returns {number} count of newly inserted comment nodes
+     */
+    mergeCommentsHtml(html) {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+
+        const incomingRoot = wrapper.querySelector('.comments');
+        if (!incomingRoot) {
+            if (this.isDisplayableCommentsHtml(html)) {
+                this.applyCommentsHtml(html);
+            }
+            return 0;
+        }
+
+        let root = this.containerTarget.querySelector('.comments');
+        if (!root) {
+            this.applyCommentsHtml(html);
+            return incomingRoot.querySelectorAll('.card.comment[data-event-id]').length;
+        }
+
+        const emptyMsg = root.querySelector('.comments__empty');
+        if (emptyMsg) {
+            emptyMsg.remove();
+        }
+
+        let added = 0;
+        const existingIds = new Set(
+            [...root.querySelectorAll('.card.comment[data-event-id]')].map((el) =>
+                (el.getAttribute('data-event-id') || '').toLowerCase(),
+            ),
+        );
+
+        incomingRoot.querySelectorAll('.card.comment[data-event-id]').forEach((node) => {
+            const id = (node.getAttribute('data-event-id') || '').toLowerCase();
+            if (id === '' || existingIds.has(id)) {
+                return;
+            }
+            existingIds.add(id);
+            const clone = node.cloneNode(true);
+            clone.classList.add('comment--arriving');
+            root.appendChild(clone);
+            window.setTimeout(() => clone.classList.remove('comment--arriving'), 600);
+            added += 1;
+        });
+
+        const incomingSuperchats = wrapper.querySelector('.superchats');
+        if (incomingSuperchats) {
+            let scBlock = this.containerTarget.querySelector('.superchats');
+            if (!scBlock) {
+                this.containerTarget.insertBefore(incomingSuperchats.cloneNode(true), root);
+            }
+        }
+
+        const isPartial = incomingRoot.getAttribute('data-comments-partial') === '1';
+        root.setAttribute('data-comments-partial', isPartial ? '1' : '0');
+
+        if (added > 0 || root.querySelector('.card.comment')) {
+            this.containerTarget.classList.remove('comments--pending');
+        }
+
+        return added;
+    }
+
+    /**
+     * @returns {boolean} true when the thread is complete (not partial)
+     */
+    ingestCommentsHtml(html) {
+        const isPartial = /data-comments-partial="1"/.test(html);
+        const hasExisting = Boolean(this.containerTarget.querySelector('.card.comment[data-event-id]'));
+
+        if (!this.isDisplayableCommentsHtml(html)) {
+            return !isPartial;
+        }
+
+        if (hasExisting) {
+            this.mergeCommentsHtml(html);
+        } else {
+            this.applyCommentsHtml(html);
+        }
+
+        return !isPartial;
+    }
+
+    startCachePolling(generation) {
+        this.stopCachePolling();
+        this._cachePollTimer = window.setInterval(() => {
+            if (generation !== this._loadGeneration || this._fullFetchDone) {
+                this.stopCachePolling();
+                return;
+            }
+            void this._pollCachedVersion();
+        }, 1500);
+    }
+
+    stopCachePolling() {
+        if (this._cachePollTimer !== null) {
+            window.clearInterval(this._cachePollTimer);
+            this._cachePollTimer = null;
+        }
+    }
+
     async load(isPartialRetry = false) {
         const generation = ++this._loadGeneration;
-        // Track whether Phase 2 has already written to the DOM so Phase 1 never clobbers it.
         this._fullFetchDone = false;
-        // Only reset the partial-retry counter on a fresh top-level load, not on retries triggered
-        // by a partial result — otherwise the counter resets every call and the retry loop never stops.
         if (!isPartialRetry) {
             this.partialReloads = 0;
+            this.showLoading();
+            this.startCachePolling(generation);
         }
 
-        // Phase 1: fire a cache-only request in the background — completes in < 100 ms.
-        // Skip on partial retries: the container already has content; Phase 1 would overwrite it.
-        if (!isPartialRetry) {
-            void this._showCachedVersion();
-        }
-
-        // Phase 2: full relay fetch — replaces Phase 1 output when it resolves.
         const t0 = performance.now();
         const perAttemptMs = 45_000;
         const maxAttempts = 3;
@@ -131,22 +261,36 @@ export default class extends Controller {
                 if (!this.hasContainerTarget || generation !== this._loadGeneration) {
                     return;
                 }
-                this._fullFetchDone = true;
-                this.containerTarget.innerHTML = html;
-                const isPartial = /data-comments-partial="1"/.test(html);
-                if (isPartial && this.partialReloads < 2) {
+
+                const complete = this.ingestCommentsHtml(html);
+                if (complete) {
+                    this._fullFetchDone = true;
+                    this.stopCachePolling();
+                    const ms = Math.round(performance.now() - t0);
+                    console.debug(
+                        `[article-comments] relay fetch complete in ${ms}ms${attempt > 1 ? ` (attempt ${attempt})` : ''}`,
+                        this.urlValue,
+                    );
+                    return;
+                }
+
+                if (this.partialReloads < 4) {
                     this.partialReloads += 1;
+                    const ms = Math.round(performance.now() - t0);
+                    console.debug(
+                        `[article-comments] partial thread (${ms}ms), waiting for more relays`,
+                        this.urlValue,
+                    );
                     window.setTimeout(() => {
-                        if (this.hasContainerTarget) {
+                        if (this.hasContainerTarget && generation === this._loadGeneration && !this._fullFetchDone) {
                             void this.load(true);
                         }
-                    }, 1200);
+                    }, 2000);
+                    return;
                 }
-                const ms = Math.round(performance.now() - t0);
-                console.debug(
-                    `[article-comments] relay fetch OK in ${ms}ms${attempt > 1 ? ` (attempt ${attempt})` : ''}`,
-                    this.urlValue,
-                );
+
+                this._fullFetchDone = true;
+                this.stopCachePolling();
                 return;
             } catch (err) {
                 window.clearTimeout(timer);
@@ -160,34 +304,36 @@ export default class extends Controller {
                 }
                 const ms = Math.round(performance.now() - t0);
                 console.warn(`[article-comments] relay fetch failed after ${ms}ms`, this.urlValue, err);
-                // Only show the error if Phase 1 hasn't already displayed something useful.
-                if (this.hasContainerTarget && !this._fullFetchDone) {
-                    this.containerTarget.innerHTML =
-                        '<p class="text-subtle">Comments could not be loaded.</p>';
+                this.stopCachePolling();
+                if (this.hasContainerTarget && !this._fullFetchDone && !this.containerTarget.querySelector('.card.comment')) {
+                    this.containerTarget.innerHTML = `<p class="text-subtle">${this.errorValue}</p>`;
+                    this.containerTarget.classList.remove('comments--pending');
                 }
             }
         }
     }
 
-    /** Phase 1: return the server's cached copy immediately, without doing any relay I/O. */
-    async _showCachedVersion() {
+    async _pollCachedVersion() {
         try {
             const res = await fetch(this.buildFetchUrl('cached=1'), {
                 cache: 'no-store',
                 credentials: 'same-origin',
                 headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
             });
-            if (!res.ok || !this.hasContainerTarget || this._fullFetchDone) {
+            if (res.status === 204 || !res.ok || !this.hasContainerTarget || this._fullFetchDone) {
                 return;
             }
             const html = await res.text();
-            // Re-check: Phase 2 may have landed while we were awaiting the body.
             if (!this.hasContainerTarget || this._fullFetchDone) {
                 return;
             }
-            this.containerTarget.innerHTML = html;
+            const complete = this.ingestCommentsHtml(html);
+            if (complete) {
+                this._fullFetchDone = true;
+                this.stopCachePolling();
+            }
         } catch {
-            // Ignore; Phase 2 will fill the container regardless.
+            // Ignore; relay fetch or next poll will continue.
         }
     }
 }

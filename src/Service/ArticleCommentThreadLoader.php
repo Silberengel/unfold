@@ -91,7 +91,7 @@ final readonly class ArticleCommentThreadLoader
      *
      * @see self::tryLoadFromCacheOnly() for list object enrichments
      */
-    public function load(string $coordinate, ?string $articleEventHexId = null): array
+    public function load(string $coordinate, ?string $articleEventHexId = null, bool $incrementalCache = false): array
     {
         $coordinate = $this->normalizeCoordinate($coordinate);
         $articleEventHexId = $this->normalizeArticleEventHexId($articleEventHexId);
@@ -101,38 +101,66 @@ final readonly class ArticleCommentThreadLoader
             'cache_key_suffix' => substr($cacheKey, -16),
             'coordinate' => $coordinate,
             'article_event_hex' => $articleEventHexId,
+            'incremental_cache' => $incrementalCache,
         ]);
 
         try {
-            $discussion = $this->cache->get($cacheKey, function (ItemInterface $item) use ($cacheKey, $coordinate, $articleEventHexId, $t0): array {
-                $this->logger->info('comments.loader.cache_miss', [
-                    'elapsed_since_load_start_ms' => (int) round((microtime(true) - $t0) * 1000),
-                ]);
-                $tNostr = microtime(true);
-                // On failure, let this throw: Symfony cache will not store a value, so a prior good thread is not replaced by [].
-                $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId);
-                $existing = $this->readRawDiscussion($cacheKey);
-                if ($existing !== null) {
-                    $out = $this->mergeDiscussionArrays($existing, $out);
-                }
-                $partial = (bool) ($out['partial'] ?? false);
-                // Partial: bounded TTL so late relays can still appear without re-fetching every few seconds.
-                $item->expiresAfter($partial ? self::PARTIAL_THREAD_CACHE_TTL_SEC : 86400);
-                $this->logger->info('comments.loader.nostr_ok', [
-                    'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
-                    'thread' => \count($out['thread']),
-                    'quotes' => \count($out['quotes']),
-                    'partial' => $partial,
-                ]);
+            $item = $this->appCachePool->getItem($cacheKey);
+            if ($item->isHit()) {
+                $cached = $item->get();
+                if (\is_array($cached) && !($cached['partial'] ?? false)) {
+                    $this->logger->info('comments.loader.cache_hit_complete', ['coordinate' => $coordinate]);
 
-                return $out;
-            });
+                    return $this->expandFromDiscussion($cached, $t0, $articleEventHexId);
+                }
+            }
+        } catch (InvalidArgumentException) {
+        }
+
+        $discussion = ['thread' => [], 'quotes' => []];
+        $existing = $this->readRawDiscussion($cacheKey);
+        $onProgress = null;
+        if ($incrementalCache) {
+            $onProgress = function (array $partial) use ($cacheKey, &$existing): void {
+                $merged = $existing !== null
+                    ? $this->mergeDiscussionArrays($existing, $partial)
+                    : $partial;
+                $merged['partial'] = true;
+                try {
+                    $this->saveRawDiscussion($cacheKey, $merged, self::PARTIAL_THREAD_CACHE_TTL_SEC);
+                    $existing = $merged;
+                } catch (\Throwable) {
+                }
+            };
+        }
+
+        try {
+            $this->logger->info('comments.loader.cache_miss', [
+                'elapsed_since_load_start_ms' => (int) round((microtime(true) - $t0) * 1000),
+            ]);
+            $tNostr = microtime(true);
+            $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId, $onProgress);
+            if ($existing !== null) {
+                $out = $this->mergeDiscussionArrays($existing, $out);
+            }
+            $partial = (bool) ($out['partial'] ?? false);
+            $ttl = $partial ? self::PARTIAL_THREAD_CACHE_TTL_SEC : 86400;
+            $this->saveRawDiscussion($cacheKey, $out, $ttl);
+            $this->logger->info('comments.loader.nostr_ok', [
+                'nostr_elapsed_ms' => (int) round((microtime(true) - $tNostr) * 1000),
+                'thread' => \count($out['thread']),
+                'quotes' => \count($out['quotes']),
+                'partial' => $partial,
+            ]);
+            $discussion = $out;
         } catch (\Throwable $e) {
             $this->logger->error('comments.loader.cache_or_nostr_failed', [
                 'message' => $e->getMessage(),
                 'exception_class' => \get_class($e),
             ]);
-            $discussion = ['thread' => [], 'quotes' => []];
+            if ($existing !== null) {
+                $discussion = $existing;
+            }
         }
 
         return $this->expandFromDiscussion($discussion, $t0, $articleEventHexId);

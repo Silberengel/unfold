@@ -131,15 +131,40 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
         $this->assertHighlightFragmentsPresent($out['html'], [$eid]);
     }
 
+    public function testInjectUsesStoredAuthorPictureWhenPresent(): void
+    {
+        $injector = $this->createInjectorWithPicture('https://cdn.example/avatar.jpg', 'Alice');
+        $h = $this->makeHighlight(
+            str_repeat('a', 64),
+            'highlighted text',
+            [],
+            1_700_000_000,
+        );
+        $h->setAuthorPictureUrl('https://cdn.example/stored.jpg');
+        $h->setAuthorDisplayName('Stored Name');
+
+        $html = '<p>Some highlighted text in the article.</p>';
+        $out = $injector->inject($html, [$h]);
+
+        $this->assertStringContainsString('https://cdn.example/stored.jpg', $out['html']);
+        $this->assertStringContainsString('user-highlight__author-avatar-img', $out['html']);
+    }
+
     private function createInjector(): ArticleBodyHighlightInjector
+    {
+        return $this->createInjectorWithPicture('', 'Test');
+    }
+
+    private function createInjectorWithPicture(string $picture, string $name): ArticleBodyHighlightInjector
     {
         $meta = $this->createMock(HighlightAuthorMetadataProvider::class);
         $meta->method('prefetchMetadataForNpubs');
+        $meta->method('prefetchMetadataForPubkeyHexes');
         $meta->method('getMetadata')->willReturn(
             (object) [
-                'display_name' => 'Test',
-                'name' => 'Test',
-                'picture' => '',
+                'display_name' => $name,
+                'name' => $name,
+                'picture' => $picture,
             ]
         );
 

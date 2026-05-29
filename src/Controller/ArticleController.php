@@ -80,10 +80,8 @@ class ArticleController extends AbstractController
         if ($request->query->getBoolean('cached')) {
             $cached = $loader->tryLoadFromCacheOnly($coordinate, $articleEventId);
             if ($cached === null) {
-                // Cache miss — return an empty shell; the full relay fetch is already in flight.
-                // The article template already shows "Loading comments…" as the initial DOM state,
-                // so there is no need to repeat it here.
-                return new Response('<div class="comments" data-comments-partial="1"></div>', Response::HTTP_OK, $headers);
+                // Cache miss — keep the client-side loading message; full relay fetch is in flight.
+                return new Response('', Response::HTTP_NO_CONTENT, $headers);
             }
             try {
                 $data = $this->commentReplyContextBuilder->enrich($cached, $coordinate, $articleEventId, $articleTitle);
@@ -100,7 +98,7 @@ class ArticleController extends AbstractController
         ]);
 
         try {
-            $data = $loader->load($coordinate, $articleEventId);
+            $data = $loader->load($coordinate, $articleEventId, incrementalCache: true);
             $data = $this->commentReplyContextBuilder->enrich(
                 $data,
                 $coordinate,

@@ -92,7 +92,12 @@
                 data-article-comments-wrapper
                 data-article-comments-url-value="{{ path('article_comments_fragment', comments_query)|e('html_attr') }}"
                 data-article-comments-preloaded-value="{{ (comments_preloaded|default(false)) ? 'true' : 'false' }}"
+                data-article-comments-error-value="{{ 'comments.load_error'|trans|e('html_attr') }}"
+                data-article-comments-empty-value="{{ 'comments.empty'|trans|e('html_attr') }}"
             >
+                <template data-article-comments-target="loadingTemplate">
+                    {% include 'components/Molecules/CommentsLoading.html.twig' %}
+                </template>
                 <div
                     data-article-comments-target="container"
                     class="comments {{ comments_preloaded|default(false) ? 'comments--from-cache' : 'comments--pending' }}"
@@ -100,7 +105,7 @@
                     {% if comments_preloaded|default(false) and comments_data is defined and comments_data is not null %}
                         {% include 'components/Organisms/Comments.html.twig' with comments_data %}
                     {% else %}
-                        <p class="text-subtle">Loading comments…</p>
+                        {% include 'components/Molecules/CommentsLoading.html.twig' %}
                     {% endif %}
                 </div>
             </div>

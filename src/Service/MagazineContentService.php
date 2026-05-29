@@ -647,11 +647,60 @@ final class MagazineContentService
     }
 
     /**
-     * Union of every article referenced by a category index (root 30040). Use this for magazine-wide
-     * Atom and comment prewarm so "newest" tracks the magazine, not the generic community list.
+     * Every long-form article listed on a category 30040 index, in index order. PUBLISHED/ARCHIVED only.
      *
-     * Each category contributes at most the first page from {@see getCategoryPageData} (default 25
-     * `a` tags). Dedupes by slug (newest {@see Article::getCreatedAt} wins). Only PUBLISHED/ARCHIVED.
+     * @return list<Article>
+     */
+    public function resolveAllArticlesForCategorySlug(string $slug): array
+    {
+        $this->warmCategoryIndexIfMissing($slug);
+        $coordinates = $this->findAllLongformCoordinatesForCategory($slug);
+        if ($coordinates === []) {
+            return [];
+        }
+        $pairs = [];
+        foreach ($coordinates as $coordinate) {
+            $parts = explode(':', (string) $coordinate, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $slugPart = \trim((string) $parts[2]);
+            if ($slugPart === '') {
+                continue;
+            }
+            $pairs[] = [
+                'pubkey' => \strtolower((string) $parts[1]),
+                'slug' => $slugPart,
+            ];
+        }
+        if ($pairs === []) {
+            return [];
+        }
+        $byAddress = $this->articleRepository->findByAuthorAndSlugIndexed($pairs);
+        $list = [];
+        foreach ($coordinates as $coordinate) {
+            $parts = explode(':', (string) $coordinate, 3);
+            if (\count($parts) < 3) {
+                continue;
+            }
+            $k = \strtolower((string) $parts[1])."\0".\trim((string) $parts[2]);
+            if (!isset($byAddress[$k])) {
+                continue;
+            }
+            $article = $byAddress[$k];
+            $s = $article->getEventStatus();
+            if ($s === null || ($s !== EventStatusEnum::PUBLISHED && $s !== EventStatusEnum::ARCHIVED)) {
+                continue;
+            }
+            $list[] = $article;
+        }
+
+        return $list;
+    }
+
+    /**
+     * Union of every article referenced by any category index (root 30040). Use for Atom syndication.
+     * Dedupes by slug (newest {@see Article::getCreatedAt} wins). Only PUBLISHED/ARCHIVED.
      *
      * @return list<Article> Newest first
      */
@@ -659,12 +708,7 @@ final class MagazineContentService
     {
         $bySlug = [];
         foreach ($this->getCategorySlugsFromStore() as $catSlug) {
-            $data = $this->getCategoryPageData($catSlug);
-            foreach ($data['list'] as $article) {
-                $s = $article->getEventStatus();
-                if ($s === null || ($s !== EventStatusEnum::PUBLISHED && $s !== EventStatusEnum::ARCHIVED)) {
-                    continue;
-                }
+            foreach ($this->resolveAllArticlesForCategorySlug($catSlug) as $article) {
                 $slug = \trim((string) $article->getSlug());
                 if ($slug === '') {
                     continue;
@@ -699,6 +743,50 @@ final class MagazineContentService
         });
 
         return $list;
+    }
+
+    /**
+     * Fair prewarm order: round-robin across category indices (index tag order within each category)
+     * so older listed articles (e.g. deep in Society) are warmed before only the globally newest ten.
+     *
+     * @return list<Article>
+     */
+    public function getMagazineCategoryArticlesRoundRobinForPrewarm(): array
+    {
+        $byCategory = [];
+        foreach ($this->getCategorySlugsFromStore() as $catSlug) {
+            $articles = $this->resolveAllArticlesForCategorySlug($catSlug);
+            if ($articles !== []) {
+                $byCategory[] = $articles;
+            }
+        }
+        if ($byCategory === []) {
+            return [];
+        }
+        $out = [];
+        $seenSlug = [];
+        $indices = \array_fill(0, \count($byCategory), 0);
+        $remaining = true;
+        while ($remaining) {
+            $remaining = false;
+            foreach ($byCategory as $i => $articles) {
+                $idx = $indices[$i];
+                if ($idx >= \count($articles)) {
+                    continue;
+                }
+                $article = $articles[$idx];
+                ++$indices[$i];
+                $remaining = true;
+                $slug = \trim((string) $article->getSlug());
+                if ($slug === '' || isset($seenSlug[$slug])) {
+                    continue;
+                }
+                $seenSlug[$slug] = true;
+                $out[] = $article;
+            }
+        }
+
+        return $out;
     }
 
     /**

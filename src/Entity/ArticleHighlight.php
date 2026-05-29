@@ -50,6 +50,14 @@ class ArticleHighlight
     #[ORM\Column(type: Types::STRING, length: 512, nullable: true)]
     private ?string $quoteExcerpt = null;
 
+    /** Kind-0 display name at last highlight sync (denormalized for fast avatar rendering). */
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $authorDisplayName = null;
+
+    /** Kind-0 picture URL at last highlight sync (denormalized for fast avatar rendering). */
+    #[ORM\Column(type: Types::STRING, length: 2048, nullable: true)]
+    private ?string $authorPictureUrl = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -135,6 +143,30 @@ class ArticleHighlight
     public function setQuoteExcerpt(?string $quoteExcerpt): static
     {
         $this->quoteExcerpt = $quoteExcerpt;
+
+        return $this;
+    }
+
+    public function getAuthorDisplayName(): ?string
+    {
+        return $this->authorDisplayName;
+    }
+
+    public function setAuthorDisplayName(?string $authorDisplayName): static
+    {
+        $this->authorDisplayName = $authorDisplayName;
+
+        return $this;
+    }
+
+    public function getAuthorPictureUrl(): ?string
+    {
+        return $this->authorPictureUrl;
+    }
+
+    public function setAuthorPictureUrl(?string $authorPictureUrl): static
+    {
+        $this->authorPictureUrl = $authorPictureUrl;
 
         return $this;
     }

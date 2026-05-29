@@ -15,4 +15,9 @@ interface HighlightAuthorMetadataProvider
      * @param list<string> $npubs
      */
     public function prefetchMetadataForNpubs(array $npubs): void;
+
+    /**
+     * @param list<string> $pubkeyHex 64-char hex pubkeys (any case)
+     */
+    public function prefetchMetadataForPubkeyHexes(array $pubkeyHex): void;
 }

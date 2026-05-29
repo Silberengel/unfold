@@ -75,10 +75,10 @@ final class PrewarmCommand extends Command
             ->addOption('magazine-budget', null, InputOption::VALUE_REQUIRED, 'Seconds wall time for the category 30040 phase only (root fetch is not counted; capped at 600s). If many slugs, raise this or set MAGAZINE_PREWARM_PREFER_SLUGS', '90')
             ->addOption('metadata-limit', null, InputOption::VALUE_REQUIRED, 'Max distinct author pubkeys to warm (0 = all)', '0')
             ->addOption('metadata-batch', null, InputOption::VALUE_REQUIRED, 'Kind-0 metadata: pubkeys per Nostr REQ (batched)', '50')
-            ->addOption('comments-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to warm comment cache for (0 = all, order: createdAt DESC; excludes generic /articles feed-only rows)', '10')
+            ->addOption('comments-max', null, InputOption::VALUE_REQUIRED, 'Max magazine category articles to warm comment cache for (0 = all listed in any category index; round-robin across categories)', '0')
             ->addOption('comments-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the whole comments phase (Nostr fetches are slow; a single long thread can exceed a short budget; use 1200+ if prewarming many articles)', '600')
             ->addOption('no-highlights', null, InputOption::VALUE_NONE, 'Skip kind-9802 highlight fetch → MySQL')
-            ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Newest N magazine category articles to sync highlights for (0 = all; each Nostr fetch is slow — default 25 keeps prewarm bounded)', '25')
+            ->addOption('highlights-max', null, InputOption::VALUE_REQUIRED, 'Max magazine category articles to sync highlights for (0 = all listed in any category index; round-robin across categories)', '0')
             ->addOption('highlights-budget', null, InputOption::VALUE_REQUIRED, 'Wall-clock seconds for the highlight sync phase', '600')
             ->addOption('no-publication-indices', null, InputOption::VALUE_NONE, 'Skip mass community kind-30040 publication index ingest')
             ->addOption('publication-index-budget', null, InputOption::VALUE_REQUIRED, 'Seconds for nested publication 30040 + section/profile warm', '300')
@@ -487,7 +487,7 @@ final class PrewarmCommand extends Command
             $commentBudgetSeconds = max(1, (int) $input->getOption('comments-budget'));
             $commentPhaseStart = microtime(true);
             $deadline = $commentPhaseStart + $commentBudgetSeconds;
-            $magazineList = $this->magazineContent->getAllMagazineCategoryArticlesForSyndication();
+            $magazineList = $this->magazineContent->getMagazineCategoryArticlesRoundRobinForPrewarm();
             if ($maxArticles > 0) {
                 $magazineList = \array_slice($magazineList, 0, $maxArticles);
             }
@@ -556,7 +556,7 @@ final class PrewarmCommand extends Command
         $hBudget = max(1, (int) $input->getOption('highlights-budget'));
         $hStart = microtime(true);
         $hDeadline = $hStart + $hBudget;
-        $hList = $this->magazineContent->getAllMagazineCategoryArticlesForSyndication();
+        $hList = $this->magazineContent->getMagazineCategoryArticlesRoundRobinForPrewarm();
         if ($maxH > 0) {
             $hList = \array_slice($hList, 0, $maxH);
         }

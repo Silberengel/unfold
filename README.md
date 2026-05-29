@@ -67,7 +67,7 @@ make prewarm
 | 1 | `docker compose up -d --wait` — starts **php**, **database**, and **cron** (the `cron` image runs a full `app:prewarm` on a 10 min schedule) |
 | 2 | `doctrine:migrations:migrate` — applies schema (including `event` columns for core Nostr rows) |
 | 3 | `articles:get -- '-2 month' 'now'` — sync long-form into the `article` table |
-| 4 | `app:prewarm` — NIP-09 kind-5 sync (for stored kinds), magazine **30040** → `event`, kind-0 **profiles** (and relay lists on demand) → `event`, **comment** thread cache → `cache.replies` (default **`--comments-max=10`**, newest by `createdAt`) |
+| 4 | `app:prewarm` — NIP-09 kind-5 sync (for stored kinds), magazine **30040** → `event`, kind-0 **profiles** (and relay lists on demand) → `event`, **comment** thread cache → `cache.replies` (default **`--comments-max=0`**: all articles listed in any category index, round-robin; bounded by **`--comments-budget`**) |
 
 `make prewarm` brings the stack (including `cron`) up so scheduled prewarm is active. **Optional** extra arguments for the **cron**-scheduled `app:prewarm` go in **`.env`** as **`PREWARM_FLAGS`** (same as you might pass to `php bin/console app:prewarm …`); Compose passes them into the `cron` container. Example: `PREWARM_FLAGS="--metadata-limit=50 --no-magazine"`. **Restart** the `cron` service after changing `PREWARM_FLAGS` so the container reloads the env. On the **hub** stack, the `prewarm` service reads the same `PREWARM_FLAGS`; use `docker compose -f compose.hub.yaml up -d --force-recreate prewarm` after changing it.
 
@@ -97,7 +97,7 @@ make prewarm
 | `--no-comments` | off | Skip comment thread prewarm (`cache.replies`) |
 | `--metadata-limit` | `0` (all authors) | Max distinct author pubkeys for the metadata phase |
 | `--metadata-batch` | `50` | Pubkeys per batched kind-0 Nostr `REQ` |
-| `--comments-max` | `10` | Newest **N** articles (by `createdAt` **DESC**); `0` = all (still bounded by budget) |
+| `--comments-max` | `0` (all indexed) | Max magazine category articles to warm (round-robin across categories; `0` = every `a` tag on every category 30040, still bounded by `--comments-budget`) |
 | `--comments-budget` | `600` | Max wall seconds for the whole comments phase (Nostr is slow; raise e.g. `1200` if you need more articles in one run) |
 | `--magazine-budget` | `90` | Max wall seconds for magazine **per-category** 30040 fetches (root is separate; cap 600s in code). If you have many categories, a **low** budget can stop before the last slug is refreshed. Set `MAGAZINE_PREWARM_PREFER_SLUGS` (comma-separated category `#d` slugs) to fetch those first after the root. |
 

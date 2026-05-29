@@ -39,6 +39,11 @@ login:
     amber_prompt: 'Paste a bunker:// or nostrconnect:// URL to connect.'
     amber_invalid_url: 'Could not connect. Use a bunker:// or nostrconnect:// URL from your remote signer.'
     amber_submit: 'Connect and log in'
+comments:
+    loading: 'Looking for comments…'
+    loading_hint: 'Searching Nostr relays. This may take a moment the first time this article is opened.'
+    load_error: 'Comments could not be loaded.'
+    empty: 'No comments yet.'
 heading:
     roles: 'Roles'
     logout: 'Log out'

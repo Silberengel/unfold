@@ -908,13 +908,16 @@ class NostrClient
      * @param string               $coordinate      kind:pubkey:d-identifier (e.g. longform address)
      * @param null|string          $rootEventHexId  Published article event id (hex) for #e / #q matching
      *
+     * @param null|callable(array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}): void $onProgress When set, relays are queried in small batches and this is called after each batch (for incremental comment cache).
+     *
      * @return array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}
      */
-    public function getArticleDiscussion(string $coordinate, ?string $rootEventHexId = null): array
+    public function getArticleDiscussion(string $coordinate, ?string $rootEventHexId = null, ?callable $onProgress = null): array
     {
         $this->logger->info('nostr.article_discussion.start', [
             'coordinate' => $coordinate,
             'root_event_hex' => $rootEventHexId,
+            'incremental' => $onProgress !== null,
         ]);
 
         $parts = explode(':', $coordinate, 3);
@@ -957,7 +960,19 @@ class NostrClient
             'relay_count' => \count($plannedRelayUrls),
         ]);
 
+        if ($onProgress !== null) {
+            return $this->fetchArticleDiscussionIncrementally(
+                $plannedRelayUrls,
+                $requestMessage,
+                $coordinate,
+                $rootEventHexId,
+                $pubkey,
+                $onProgress,
+            );
+        }
+
         $byId = [];
+        $respondedRelayCount = 0;
         try {
             $tSend = microtime(true);
             $workerPath = $this->projectDir.'/bin/nostr_relay_request_worker.php';
@@ -986,6 +1001,8 @@ class NostrClient
                 'subscription_id' => $subscriptionId,
             ]);
             $this->relayFanout->logWireResponseSummary('article_discussion', $response);
+            $respondedRelayCount = \count($response);
+            $this->mergeDiscussionEventsFromWireResponse($response, $byId);
         } catch (\Throwable $e) {
             $this->logger->error(sprintf(
                 'nostr.article_discussion.req_send_failed (relays: %s): %s',
@@ -998,14 +1015,84 @@ class NostrClient
                 'relays' => $plannedRelayUrls,
             ]);
 
-            // Do not return a successful empty shape: callers (e.g. comment cache) must not
-            // persist [] as if relays responded — that would clobber a previously good thread.
             throw new \RuntimeException('Nostr request failed for article discussion', 0, $e);
         }
 
-        $respondedRelayCount = \count($response);
         $partial = $respondedRelayCount < \count($plannedRelayUrls);
-        $tParse = microtime(true);
+
+        return $this->assembleArticleDiscussionFromEventMap(
+            $byId,
+            $coordinate,
+            $rootEventHexId,
+            $pubkey,
+            $partial,
+            \count($plannedRelayUrls),
+            $respondedRelayCount,
+        );
+    }
+
+    /**
+     * @param list<string> $plannedRelayUrls
+     * @param callable(array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}): void $onProgress
+     *
+     * @return array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}
+     */
+    private function fetchArticleDiscussionIncrementally(
+        array $plannedRelayUrls,
+        RequestMessage $requestMessage,
+        string $coordinate,
+        ?string $rootEventHexId,
+        string $pubkey,
+        callable $onProgress,
+    ): array {
+        /** @var array<string, object> $byId */
+        $byId = [];
+        $respondedRelayCount = 0;
+        $timeoutSec = $this->relayFanout->getRelayRequestTimeoutSec();
+        $batches = \array_chunk($plannedRelayUrls, 2);
+
+        foreach ($batches as $batch) {
+            try {
+                $response = $this->relayTransport->sendToUrls($batch, $requestMessage, $timeoutSec);
+                $respondedRelayCount += \count($response);
+                $this->relayFanout->logWireResponseSummary('article_discussion_batch', $response);
+                $this->mergeDiscussionEventsFromWireResponse($response, $byId);
+            } catch (\Throwable $e) {
+                $this->logger->warning('nostr.article_discussion.batch_failed', [
+                    'relays' => $batch,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+            $onProgress($this->assembleArticleDiscussionFromEventMap(
+                $byId,
+                $coordinate,
+                $rootEventHexId,
+                $pubkey,
+                true,
+                \count($plannedRelayUrls),
+                $respondedRelayCount,
+            ));
+        }
+
+        $partial = $respondedRelayCount < \count($plannedRelayUrls);
+
+        return $this->assembleArticleDiscussionFromEventMap(
+            $byId,
+            $coordinate,
+            $rootEventHexId,
+            $pubkey,
+            $partial,
+            \count($plannedRelayUrls),
+            $respondedRelayCount,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $response
+     * @param array<string, object> $byId
+     */
+    private function mergeDiscussionEventsFromWireResponse(array $response, array &$byId): void
+    {
         $this->nostrRelayQuery->processResponse($response, function ($event) use (&$byId) {
             if (\is_object($event) && isset($event->id)) {
                 $byId[(string) $event->id] = $event;
@@ -1013,6 +1100,23 @@ class NostrClient
 
             return null;
         });
+    }
+
+    /**
+     * @param array<string, object> $byId
+     *
+     * @return array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}
+     */
+    private function assembleArticleDiscussionFromEventMap(
+        array $byId,
+        string $coordinate,
+        ?string $rootEventHexId,
+        string $pubkey,
+        bool $partial,
+        int $plannedRelayCount,
+        int $respondedRelayCount,
+    ): array {
+        $tParse = microtime(true);
         $this->logger->info('nostr.article_discussion.events_collected', [
             'elapsed_ms' => (int) round((microtime(true) - $tParse) * 1000),
             'unique_events' => \count($byId),
@@ -1021,8 +1125,8 @@ class NostrClient
         $all = array_values($byId);
         $thread = [];
         $threadIds = [];
-        $attestRequiredSuperchats = []; // kind 9740 (Lightning payto) + kind 9736 (Monero zap receipt)
-        $selfAttestingSuperchats  = []; // kind 1814 (Garnet Monero tip, proof embedded)
+        $attestRequiredSuperchats = [];
+        $selfAttestingSuperchats = [];
         $attestations9741 = [];
 
         foreach ($all as $event) {
@@ -1093,10 +1197,15 @@ class NostrClient
             'superchat_count' => \count($superchats),
             'partial' => $partial,
             'responded_relays' => $respondedRelayCount,
-            'planned_relays' => \count($plannedRelayUrls),
+            'planned_relays' => $plannedRelayCount,
         ]);
 
-        return ['thread' => $thread, 'quotes' => $quotes, 'superchats' => $superchats, 'partial' => $partial];
+        $out = ['thread' => $thread, 'quotes' => $quotes, 'superchats' => $superchats];
+        if ($partial) {
+            $out['partial'] = true;
+        }
+
+        return $out;
     }
 
     /**

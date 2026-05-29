@@ -20,6 +20,7 @@ final class ArticleBodyHtmlRenderer
         private readonly ArticleBodyAsciidocRenderer $asciidocRenderer,
         private readonly ArticleHighlightRepository $articleHighlightRepository,
         private readonly ArticleBodyHighlightInjector $articleBodyHighlightInjector,
+        private readonly HighlightAuthorMetadataProvider $highlightAuthorMetadata,
         private readonly NostrContentLinkEnhancer $nostrContentLinkEnhancer,
     ) {
     }
@@ -39,6 +40,18 @@ final class ArticleBodyHtmlRenderer
             }
         }
         $highlights = $this->articleHighlightRepository->findByArticle($article);
+        if ($highlights !== []) {
+            $hexes = [];
+            foreach ($highlights as $h) {
+                $pk = $h->getAuthorPubkey();
+                if (64 === \strlen($pk) && ctype_xdigit($pk)) {
+                    $hexes[strtolower($pk)] = true;
+                }
+            }
+            if ($hexes !== []) {
+                $this->highlightAuthorMetadata->prefetchMetadataForPubkeyHexes(array_keys($hexes));
+            }
+        }
 
         return $this->articleBodyHighlightInjector->inject($html, $highlights)['html'];
     }

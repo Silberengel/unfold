@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\ArticleHighlight;
 use App\Util\HighlightEventTags;
+use App\Util\ProfileMetadataReader;
 use DOMDocument;
 use DOMElement;
 use DOMText;
@@ -363,21 +364,19 @@ final class ArticleBodyHighlightInjector
             if (isset($byNpub[$npub])) {
                 continue;
             }
-            $name = '';
-            $pic = '';
-            try {
-                $meta = $this->highlightAuthorMetadata->getMetadata($npub);
-                if (isset($meta->display_name) && \is_string($meta->display_name) && $meta->display_name !== '') {
-                    $name = $meta->display_name;
-                } elseif (isset($meta->name) && \is_string($meta->name) && $meta->name !== '') {
-                    $name = $meta->name;
+            $name = \trim((string) ($h->getAuthorDisplayName() ?? ''));
+            $pic = \trim((string) ($h->getAuthorPictureUrl() ?? ''));
+            if ($name === '' || $pic === '') {
+                try {
+                    $meta = $this->highlightAuthorMetadata->getMetadata($npub);
+                    if ($name === '') {
+                        $name = ProfileMetadataReader::displayName($meta);
+                    }
+                    if ($pic === '') {
+                        $pic = ProfileMetadataReader::pictureUrl($meta);
+                    }
+                } catch (\Throwable) {
                 }
-                if (isset($meta->picture) && \is_string($meta->picture) && $meta->picture !== '') {
-                    $pic = $meta->picture;
-                } elseif (isset($meta->image) && \is_string($meta->image) && $meta->image !== '') {
-                    $pic = $meta->image;
-                }
-            } catch (\Throwable) {
             }
             $created = $h->getEventCreatedAt();
             $row = [
