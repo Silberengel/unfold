@@ -8,6 +8,7 @@ use App\Entity\Article;
 use App\Enum\EventStatusEnum;
 use App\Repository\ArticleRepository;
 use App\Repository\FeaturedAuthorRepository;
+use App\Service\ArticleBodyHtmlRenderer;
 use App\Service\MagazineContentService;
 use App\Service\MagazineIndexStore;
 use App\Service\NostrPathHelper;
@@ -33,6 +34,7 @@ final class SeoController extends AbstractController
         private readonly ParameterBagInterface $params,
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
         private readonly NostrPathHelper $nostrPathHelper,
+        private readonly ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
     ) {
     }
 
@@ -294,6 +296,7 @@ final class SeoController extends AbstractController
             $plain = preg_replace('/\s+/', ' ', (string) $article->getContent()) ?? '';
             $sum = (string) mb_substr($plain, 0, 500);
         }
+        $bodyHtml = $this->articleBodyHtmlRenderer->renderForArticle($article);
         // One stable Atom <id> per row. Nostr eventId can repeat (revisions, duplicates); readers
         // merge on <id> and would only show a single entry if ids collided.
         $dbId = $article->getId();
@@ -307,6 +310,7 @@ final class SeoController extends AbstractController
         $out .= "\n    <id>".$this->xmlText($entryId).'</id>';
         $out .= "\n    <updated>".$this->xmlText($tArticle->format('c'))."</updated>\n    <published>".$this->xmlText($pub->format('c')).'</published>';
         $out .= "\n    <summary type=\"text\">".$this->xmlText($this->oneLine($sum))."</summary>";
+        $out .= "\n    <content type=\"html\">".$this->xmlText($bodyHtml).'</content>';
         $out .= "\n  </entry>";
 
         return $out;
