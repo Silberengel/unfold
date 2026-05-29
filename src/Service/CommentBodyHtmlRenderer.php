@@ -19,7 +19,7 @@ final class CommentBodyHtmlRenderer
     ) {
     }
 
-    public function render(string $markdown): string
+    public function render(string $markdown, bool $allowRelayFetch = true): string
     {
         $markdown = trim($markdown);
         if ($markdown === '') {
@@ -34,6 +34,6 @@ final class CommentBodyHtmlRenderer
 
         $html = $this->nostrContentLinkEnhancer->enhanceHtml($html);
 
-        return $this->nostrPreviewCardRenderer->resolveInlinePlaceholders($html);
+        return $this->nostrPreviewCardRenderer->resolveInlinePlaceholders($html, $allowRelayFetch);
     }
 }

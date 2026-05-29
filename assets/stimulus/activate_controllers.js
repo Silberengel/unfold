@@ -1,9 +1,9 @@
 /**
  * Connect Stimulus controllers inside HTML added via innerHTML.
  *
- * Symfony lazy-loads controller modules; application.load() on a subtree throws if any
- * data-controller module is still loading. Connect per-element only when every controller
- * on that element is fully registered.
+ * Symfony lazy-loads controller modules; application.load() walks the entire subtree
+ * and throws if any nested data-controller module is missing. Only activate outermost
+ * elements whose full descendant controller tree is registered.
  *
  * @param {import('@hotwired/stimulus').Application | undefined} application
  * @param {Element | Document | DocumentFragment} root
@@ -19,18 +19,43 @@ export function activateControllers(application, root) {
         return mod?.controllerConstructor != null;
     };
 
-    root.querySelectorAll('[data-controller]').forEach((el) => {
-        const names = (el.getAttribute('data-controller') || '')
+    const controllerNamesOn = (el) =>
+        (el.getAttribute('data-controller') || '')
             .trim()
             .split(/\s+/)
             .filter(Boolean);
-        if (names.length === 0 || !names.every(isReady)) {
-            return;
+
+    const isSubtreeReady = (el) => {
+        const nodes = [el, ...el.querySelectorAll('[data-controller]')];
+        for (const node of nodes) {
+            const names = controllerNamesOn(node);
+            if (names.length === 0 || !names.every(isReady)) {
+                return false;
+            }
         }
+        return true;
+    };
+
+    const hasReadyControllerAncestor = (el) => {
+        let parent = el.parentElement;
+        while (parent && parent !== root) {
+            if (parent.hasAttribute('data-controller') && isSubtreeReady(parent)) {
+                return true;
+            }
+            parent = parent.parentElement;
+        }
+        return false;
+    };
+
+    const candidates = [...root.querySelectorAll('[data-controller]')].filter(
+        (el) => isSubtreeReady(el) && !hasReadyControllerAncestor(el),
+    );
+
+    for (const el of candidates) {
         try {
             application.load(el);
         } catch (err) {
             console.debug('[stimulus] activateControllers element skipped', err);
         }
-    });
+    }
 }

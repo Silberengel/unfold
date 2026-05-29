@@ -78,9 +78,8 @@ final readonly class ArticleCommentThreadLoader
             ]);
         }
 
-        $this->embeddedEventPrewarmer->prewarmFromDiscussion($discussion);
-
-        return $this->expandFromDiscussion($discussion, microtime(true), $articleEventHexId);
+        // Fast path: no relay prewarm or blocking fetches — use cache-only SSR for embedded previews.
+        return $this->expandFromDiscussion($discussion, microtime(true), $articleEventHexId, allowRelayFetch: false);
     }
 
     /**
@@ -436,7 +435,7 @@ final readonly class ArticleCommentThreadLoader
      *     processedContent: array<string, string>
      * }
      */
-    private function expandFromDiscussion(array $discussion, float $t0, ?string $articleEventHexId = null): array
+    private function expandFromDiscussion(array $discussion, float $t0, ?string $articleEventHexId = null, bool $allowRelayFetch = true): array
     {
         $list = $discussion['thread'];
         $quotes = $discussion['quotes'];
@@ -450,7 +449,7 @@ final readonly class ArticleCommentThreadLoader
 
         $this->enrichThreadListForDisplay($list, $articleEventHexId);
         $this->stripRepostEventBodies($list, $quotes);
-        $this->attachRenderedBodies($list, $quotes);
+        $this->attachRenderedBodies($list, $quotes, $allowRelayFetch);
 
         $commentLinks = [];
         $quoteLinks = [];
@@ -520,18 +519,34 @@ final readonly class ArticleCommentThreadLoader
      * @param array<int, object> $list
      * @param array<int, object> $quotes
      */
-    private function attachRenderedBodies(array $list, array $quotes): void
+    private function attachRenderedBodies(array $list, array $quotes, bool $allowRelayFetch = true): void
     {
         foreach ($list as $ev) {
             $raw = trim((string) ($ev->unfold_body ?? $ev->content ?? ''));
-            if ($raw !== '') {
-                $ev->unfold_body_html = $this->commentBodyHtmlRenderer->render($raw);
+            if ($raw === '') {
+                continue;
+            }
+            try {
+                $ev->unfold_body_html = $this->commentBodyHtmlRenderer->render($raw, $allowRelayFetch);
+            } catch (\Throwable $e) {
+                $this->logger->warning('comments.loader.body_render_failed', [
+                    'event_id' => $ev->id ?? null,
+                    'message' => $e->getMessage(),
+                ]);
             }
         }
         foreach ($quotes as $ev) {
             $raw = trim((string) ($ev->content ?? ''));
-            if ($raw !== '') {
-                $ev->unfold_body_html = $this->commentBodyHtmlRenderer->render($raw);
+            if ($raw === '') {
+                continue;
+            }
+            try {
+                $ev->unfold_body_html = $this->commentBodyHtmlRenderer->render($raw, $allowRelayFetch);
+            } catch (\Throwable $e) {
+                $this->logger->warning('comments.loader.body_render_failed', [
+                    'event_id' => $ev->id ?? null,
+                    'message' => $e->getMessage(),
+                ]);
             }
         }
     }

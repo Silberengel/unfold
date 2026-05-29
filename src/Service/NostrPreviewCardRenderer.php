@@ -30,7 +30,7 @@ final class NostrPreviewCardRenderer
     /**
      * @param array<string, mixed> $link from {@see NostrLinkParser::parseLinks()}
      */
-    public function renderFromLink(array $link): string
+    public function renderFromLink(array $link, bool $allowRelayFetch = true): string
     {
         $type = (string) ($link['type'] ?? '');
         $identifier = (string) ($link['identifier'] ?? '');
@@ -56,13 +56,13 @@ final class NostrPreviewCardRenderer
         $decoded = $link['data'] ?? null;
         $decodedJson = $this->encodeDecoded($decoded);
 
-        return $this->renderEventCard($type, $identifier, $decodedJson);
+        return $this->renderEventCard($type, $identifier, $decodedJson, $allowRelayFetch);
     }
 
     /**
      * Replace client-side nostr-preview placeholders with SSR cards.
      */
-    public function resolveInlinePlaceholders(string $html): string
+    public function resolveInlinePlaceholders(string $html, bool $allowRelayFetch = true): string
     {
         if ($html === '' || !str_contains($html, 'data-controller="nostr-preview"')) {
             return $html;
@@ -96,7 +96,12 @@ final class NostrPreviewCardRenderer
                     return $chunk;
                 }
 
-                return $this->renderEventCard($type, $identifier, html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                return $this->renderEventCard(
+                    $type,
+                    $identifier,
+                    html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                    $allowRelayFetch,
+                );
             },
             $html,
         );
@@ -129,14 +134,14 @@ final class NostrPreviewCardRenderer
         }
     }
 
-    private function renderEventCard(string $type, string $identifier, string $decodedJson): string
+    private function renderEventCard(string $type, string $identifier, string $decodedJson, bool $allowRelayFetch = true): string
     {
         if ($decodedJson === '') {
             return '<span class="text-subtle">Preview unavailable (missing data).</span>';
         }
 
         try {
-            $previewData = $this->fetchEvent($type, $identifier, $decodedJson);
+            $previewData = $this->fetchEvent($type, $identifier, $decodedJson, $allowRelayFetch);
         } catch (\Throwable $e) {
             return '<span class="text-subtle">Error fetching preview: '
                 .htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
@@ -152,6 +157,7 @@ final class NostrPreviewCardRenderer
         if (isset($previewData->content) && \is_string($previewData->content) && trim($previewData->content) !== '') {
             $previewData->content_html = $this->resolveInlinePlaceholders(
                 $this->nostrPreviewBodyRenderer->render($previewData->content),
+                $allowRelayFetch,
             );
         }
 
@@ -160,7 +166,7 @@ final class NostrPreviewCardRenderer
         ]);
     }
 
-    private function fetchEvent(string $type, string $identifier, string $decodedJson): ?\stdClass
+    private function fetchEvent(string $type, string $identifier, string $decodedJson, bool $allowRelayFetch = true): ?\stdClass
     {
         $cacheKey = 'nostr_preview_ev_'.hash('sha256', $type."\0".$identifier."\0".$decodedJson);
         try {
@@ -171,6 +177,10 @@ final class NostrPreviewCardRenderer
                 return $cached instanceof \stdClass ? $cached : null;
             }
         } catch (\Psr\Cache\InvalidArgumentException) {
+        }
+
+        if (!$allowRelayFetch) {
+            return null;
         }
 
         $descriptor = (object) [

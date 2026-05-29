@@ -334,7 +334,6 @@ final class ProfilePaymentLinksBuilder
     private function labelForPaytoUri(string $u): string
     {
         if (1 === preg_match('#^payto://([a-z0-9-]+)/(.+)$#i', $u, $m)) {
-            $t = $this->stylizePaytoTypeName($m[1]);
             $path = rawurldecode((string) $m[2]);
             if (str_contains($path, '/')) {
                 $a = (string) strstr($path, '/', true);
@@ -345,7 +344,7 @@ final class ProfilePaymentLinksBuilder
                 $a = substr($a, 0, 20).'…'.substr($a, -10);
             }
 
-            return $t.' · '.$a;
+            return $a;
         }
         if (strlen($u) > 64) {
             return substr($u, 0, 36).'…';

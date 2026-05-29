@@ -79,7 +79,16 @@ class ArticleController extends AbstractController
         // The JS fires this in parallel with the full relay request so readers see cached comments
         // immediately (< 100 ms) while the relay fetch continues in the background.
         if ($request->query->getBoolean('cached')) {
-            $cached = $loader->tryLoadFromCacheOnly($coordinate, $articleEventId);
+            try {
+                $cached = $loader->tryLoadFromCacheOnly($coordinate, $articleEventId);
+            } catch (\Throwable $e) {
+                $logger->warning('http.fragment.comments_cache_failed', [
+                    'coordinate' => $coordinate,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return new Response('', Response::HTTP_NO_CONTENT, $headers);
+            }
             if ($cached === null) {
                 // Cache miss — keep the client-side loading message; full relay fetch is in flight.
                 return new Response('', Response::HTTP_NO_CONTENT, $headers);
