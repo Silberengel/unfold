@@ -82,7 +82,11 @@
             {% endif %}
             {% if not is_nip18_repost %}
             <div class="card-body">
-                <twig:Atoms:Content content="{{ item.unfold_body|default(item.content|default('')) }}" />
+                {% if item.unfold_body_html|default('')|trim != '' %}
+                    <div class="comment-body-html">{{ item.unfold_body_html|raw }}</div>
+                {% else %}
+                    <twig:Atoms:Content content="{{ item.unfold_body|default(item.content|default('')) }}" />
+                {% endif %}
             </div>
             {% endif %}
             {% if not is_nip18_repost and cid != '' and commentLinks[cid] is defined and commentLinks[cid]|length > 0 %}
@@ -192,7 +196,11 @@
                 </div>
                 {% if not q_repost %}
                 <div class="card-body">
-                    <twig:Atoms:Content content="{{ item.content|default('') }}" />
+                    {% if item.unfold_body_html|default('')|trim != '' %}
+                        <div class="comment-body-html">{{ item.unfold_body_html|raw }}</div>
+                    {% else %}
+                        <twig:Atoms:Content content="{{ item.content|default('') }}" />
+                    {% endif %}
                 </div>
                 {% endif %}
                 {% if not q_repost and cid != '' and quoteLinks[cid] is defined and quoteLinks[cid]|length > 0 %}

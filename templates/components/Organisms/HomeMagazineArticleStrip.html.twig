@@ -17,12 +17,12 @@
                         {% set _no_cover = item.image|default('')|trim == '' %}
                         <div class="curation-article-display__media{{ _no_cover ? ' card-header--no-cover' : '' }}">
                             <a href="{{ article_href }}" tabindex="-1" aria-hidden="true">
-                                <img
-                                    src="{{ article_card_cover(item.image, item.pubkey) }}"
-                                    alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
-                                    loading="{{ loop.first ? 'eager' : 'lazy' }}"
-                                    decoding="async"
-                                >
+                                {% include 'partial/article_card_cover_img.html.twig' with {
+                                    image: item.image,
+                                    pubkey: item.pubkey,
+                                    alt: 'Illustration for ' ~ item.title,
+                                    loading: loop.first ? 'eager' : 'lazy',
+                                } only %}
                             </a>
                         </div>
                         <div class="curation-article-display__body">

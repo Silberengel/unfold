@@ -18,14 +18,13 @@
                         </div>
                         {% set _no_cover = item.image|default('')|trim == '' %}
                         <div class="featured-tile__media featured-tile__media--ar{{ loop.index0 % 4 }}{{ _no_cover ? ' card-header--no-cover' : '' }}">
-                            <img
-                                src="{{ article_card_cover(item.image, item.pubkey) }}"
-                                alt="{{ ('Illustration for ' ~ item.title)|e('html_attr') }}"
-                                width="1200"
-                                height="675"
-                                loading="lazy"
-                                decoding="async"
-                            >
+                            {% include 'partial/article_card_cover_img.html.twig' with {
+                                image: item.image,
+                                pubkey: item.pubkey,
+                                alt: 'Illustration for ' ~ item.title,
+                                width: 1200,
+                                height: 675,
+                            } only %}
                         </div>
                         <div class="card-body">
                             <h2 class="card-title">{{ item.title }}</h2>

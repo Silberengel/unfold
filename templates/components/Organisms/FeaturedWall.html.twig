@@ -20,13 +20,12 @@
                 >
                     {% set _no_cover = item.image|default('')|trim == '' %}
                     <div class="featured-tile__picture{{ _no_cover ? ' card-header--no-cover' : '' }}">
-                        <img
-                            class="featured-tile__picture-img"
-                            src="{{ article_card_cover(item.image, item.pubkey) }}"
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                        >
+                        {% include 'partial/article_card_cover_img.html.twig' with {
+                            image: item.image,
+                            pubkey: item.pubkey,
+                            alt: '',
+                            img_class: 'featured-tile__picture-img',
+                        } only %}
                         <div class="featured-tile__picture-scrim" aria-hidden="true"></div>
                         <div class="featured-tile__picture-overlay">
                             <span class="featured-tile__picture-cat">{{ tile.categoryTitle|e }}</span>

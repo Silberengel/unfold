@@ -1,0 +1,13 @@
+{# Article / publication card hero. Params: image, pubkey, alt; optional: img_class, loading, width, height #}
+<img
+    src="{{ article_card_cover(image, pubkey) }}"
+    alt="{{ alt|e('html_attr') }}"
+    {% if img_class|default('') != '' %}class="{{ img_class|e('html_attr') }}"{% endif %}
+    {% if width|default(null) %}width="{{ width }}"{% endif %}
+    {% if height|default(null) %}height="{{ height }}"{% endif %}
+    loading="{{ loading|default('lazy') }}"
+    decoding="async"
+    data-card-cover-fallback="{{ article_card_cover(null, pubkey)|e('html_attr') }}"
+    data-card-cover-default="{{ article_card_cover_site_default()|e('html_attr') }}"
+    onerror="window.unfoldCardCoverFallback&&window.unfoldCardCoverFallback(this)"
+>

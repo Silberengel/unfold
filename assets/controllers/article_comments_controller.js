@@ -33,6 +33,7 @@ export default class extends Controller {
             return;
         }
         if (this.preloadedValue) {
+            activateControllers(this.application, this.containerTarget);
             return;
         }
         void this.load();
@@ -242,6 +243,12 @@ export default class extends Controller {
         }
     }
 
+    markRelayFetchComplete() {
+        this._fullFetchDone = true;
+        this._loadGeneration += 1;
+        this.stopCachePolling();
+    }
+
     async load(isPartialRetry = false) {
         const generation = ++this._loadGeneration;
         this._fullFetchDone = false;
@@ -252,8 +259,8 @@ export default class extends Controller {
         }
 
         const t0 = performance.now();
-        const perAttemptMs = 45_000;
-        const maxAttempts = 3;
+        const perAttemptMs = 20_000;
+        const maxAttempts = 2;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
             const controller = new AbortController();
             const timer = window.setTimeout(() => controller.abort(), perAttemptMs);
@@ -275,8 +282,7 @@ export default class extends Controller {
 
                 const complete = this.ingestCommentsHtml(html);
                 if (complete) {
-                    this._fullFetchDone = true;
-                    this.stopCachePolling();
+                    this.markRelayFetchComplete();
                     const ms = Math.round(performance.now() - t0);
                     console.debug(
                         `[article-comments] relay fetch complete in ${ms}ms${attempt > 1 ? ` (attempt ${attempt})` : ''}`,
@@ -340,8 +346,7 @@ export default class extends Controller {
             }
             const complete = this.ingestCommentsHtml(html);
             if (complete) {
-                this._fullFetchDone = true;
-                this.stopCachePolling();
+                this.markRelayFetchComplete();
             }
         } catch {
             // Ignore; relay fetch or next poll will continue.

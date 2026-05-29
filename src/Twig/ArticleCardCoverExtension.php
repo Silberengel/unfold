@@ -45,6 +45,7 @@ final class ArticleCardCoverExtension extends AbstractExtension
     {
         return [
             new TwigFunction('article_card_cover', $this->articleCardCover(...)),
+            new TwigFunction('article_card_cover_site_default', $this->articleCardCoverSiteDefault(...)),
             new TwigFunction('publication_card_cover', $this->publicationCardCover(...)),
             new TwigFunction('prefetch_article_card_covers', $this->prefetchArticleCardCovers(...)),
             new TwigFunction('article_og_image', $this->articleOgImage(...)),
@@ -154,6 +155,11 @@ final class ArticleCardCoverExtension extends AbstractExtension
     public function publicationCardCover(?string $articleImage, ?string $pubkeyHex): string
     {
         return $this->resolveCardCover($articleImage, $pubkeyHex, self::PUBLICATION_FALLBACK_PACKAGE_IMAGE);
+    }
+
+    public function articleCardCoverSiteDefault(): string
+    {
+        return $this->packageImageUrl(self::DEFAULT_PACKAGE_IMAGE);
     }
 
     private function resolveCardCover(?string $articleImage, ?string $pubkeyHex, string $fallbackPackageImage): string

@@ -15,15 +15,13 @@
             {% set _no_cover = article.image|default('')|trim == '' %}
             <div class="card-header{{ _no_cover ? ' card-header--no-cover' : '' }}">
                 {% if category %}<small class="text-uppercase">{{ category }}</small>{% endif %}
-                <img
-                    src="{{ article_card_cover(article.image, article.pubkey) }}"
-                    alt="{{ ('Illustration for ' ~ (card_title != '' ? card_title : (article.slug|default('')|replace({'-': ' '})|title)))|e('html_attr') }}"
-                    width="800"
-                    height="450"
-                    loading="lazy"
-                    decoding="async"
-                    onerror="this.onerror=null;this.style.display='none';"
-                >
+                {% include 'partial/article_card_cover_img.html.twig' with {
+                    image: article.image,
+                    pubkey: article.pubkey,
+                    alt: 'Illustration for ' ~ (card_title != '' ? card_title : (article.slug|default('')|replace({'-': ' '})|title)),
+                    width: 800,
+                    height: 450,
+                } only %}
             </div>
             <div class="card-body">
                     <h2 class="card-title">{% if card_title != '' %}{{ card_title }}{% else %}{{ article.slug|default('')|replace({'-': ' '})|title }}{% endif %}</h2>

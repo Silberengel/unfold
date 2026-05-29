@@ -32,6 +32,8 @@ final readonly class ArticleCommentThreadLoader
         private NostrArticleDiscussionSupport $articleDiscussion,
         private CacheInterface $cache,
         private CacheItemPoolInterface $appCachePool,
+        private CommentBodyHtmlRenderer $commentBodyHtmlRenderer,
+        private CommentEmbeddedEventPrewarmer $embeddedEventPrewarmer,
         private LoggerInterface $logger,
     ) {
     }
@@ -75,6 +77,8 @@ final readonly class ArticleCommentThreadLoader
                 'thread' => \count($discussion['thread'] ?? []),
             ]);
         }
+
+        $this->embeddedEventPrewarmer->prewarmFromDiscussion($discussion);
 
         return $this->expandFromDiscussion($discussion, microtime(true), $articleEventHexId);
     }
@@ -162,6 +166,8 @@ final readonly class ArticleCommentThreadLoader
                 $discussion = $existing;
             }
         }
+
+        $this->embeddedEventPrewarmer->prewarmFromDiscussion($discussion);
 
         return $this->expandFromDiscussion($discussion, $t0, $articleEventHexId);
     }
@@ -444,6 +450,7 @@ final readonly class ArticleCommentThreadLoader
 
         $this->enrichThreadListForDisplay($list, $articleEventHexId);
         $this->stripRepostEventBodies($list, $quotes);
+        $this->attachRenderedBodies($list, $quotes);
 
         $commentLinks = [];
         $quoteLinks = [];
@@ -504,6 +511,28 @@ final readonly class ArticleCommentThreadLoader
         }
         foreach ($quotes as $ev) {
             $strip($ev);
+        }
+    }
+
+    /**
+     * Server-render markdown bodies so comment fragments do not rely on client-side /preview/.
+     *
+     * @param array<int, object> $list
+     * @param array<int, object> $quotes
+     */
+    private function attachRenderedBodies(array $list, array $quotes): void
+    {
+        foreach ($list as $ev) {
+            $raw = trim((string) ($ev->unfold_body ?? $ev->content ?? ''));
+            if ($raw !== '') {
+                $ev->unfold_body_html = $this->commentBodyHtmlRenderer->render($raw);
+            }
+        }
+        foreach ($quotes as $ev) {
+            $raw = trim((string) ($ev->content ?? ''));
+            if ($raw !== '') {
+                $ev->unfold_body_html = $this->commentBodyHtmlRenderer->render($raw);
+            }
         }
     }
 

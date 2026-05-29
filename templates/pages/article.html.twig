@@ -101,7 +101,11 @@
 
         {% if article.image %}
             <div class="article__image">
-                <img src="{{ article.image }}" alt="{{ article.title }}">
+                {% include 'partial/article_card_cover_img.html.twig' with {
+                    image: article.image,
+                    pubkey: article.pubkey,
+                    alt: article.title,
+                } only %}
             </div>
         {% endif %}
 

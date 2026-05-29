@@ -247,6 +247,15 @@ svg.icon {
     background: var(--color-bg-light);
 }
 
+.curation-article-display__media.card-header--no-cover img,
+.featured-tile__picture.card-header--no-cover .featured-tile__picture-img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 8rem;
+}
+
 .curation-article-display__media img {
     display: block;
     max-width: 100%;
@@ -738,22 +747,31 @@ svg.icon {
 }
 
 /* Fallback hero: portrait painting at low opacity with a diagonal stripe overlay.
-   Applied to any card container (.card-header, .featured-tile__media, etc.) when
-   the article has no cover image. The painting is cropped to the face — same
-   object-position as .header__logo-banner. */
-.card-header--no-cover {
+   Applied when the article has no cover image or the remote URL failed to load. */
+.card-header--no-cover,
+.curation-article-display__media.card-header--no-cover,
+.featured-tile__picture.card-header--no-cover,
+.featured-tile__media.card-header--no-cover,
+.article__image.card-header--no-cover {
     position: relative;
     overflow: hidden;
     background-color: var(--color-bg-light);
 }
 
-.card-header--no-cover img {
+.card-header--no-cover img,
+.curation-article-display__media.card-header--no-cover img,
+.featured-tile__picture.card-header--no-cover img,
+.featured-tile__media.card-header--no-cover img,
+.article__image.card-header--no-cover img {
     opacity: 0.18;
     object-fit: cover;
     object-position: 50% 14%;
 }
 
-.card-header--no-cover img[src*='favicon-96x96'] {
+.card-header--no-cover img[src*='favicon-96x96'],
+.curation-article-display__media.card-header--no-cover img[src*='favicon-96x96'],
+.featured-tile__picture.card-header--no-cover img[src*='favicon-96x96'],
+.featured-tile__media.card-header--no-cover img[src*='favicon-96x96'] {
     opacity: 1;
     object-fit: contain;
     object-position: center;
@@ -767,7 +785,10 @@ svg.icon {
     box-sizing: border-box;
 }
 
-.card-header--no-cover::after {
+.card-header--no-cover::after,
+.curation-article-display__media.card-header--no-cover::after,
+.featured-tile__picture.card-header--no-cover::after,
+.featured-tile__media.card-header--no-cover::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -1493,15 +1514,16 @@ a.tag:focus-visible {
 }
 
 .author-profile__payment-value {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
     min-width: 0;
     max-width: 100%;
 }
 
 .author-profile__payment-addr {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     color: inherit;
     text-decoration: none;
 }
@@ -1547,20 +1569,18 @@ html[data-color-scheme="dark"] .author-profile__copy-btn.btn.btn-secondary:hover
     height: 1rem;
 }
 
-/* NIP-05: full addresses wrap; keep ✓ after the link text. */
+/* NIP-05: full addresses wrap; keep ✓ immediately after the link text. */
 .author-profile__nip05-value {
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
+    display: inline-flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: 0.25rem;
     min-width: 0;
     max-width: 100%;
-    width: 100%;
 }
 
 .author-profile__nip05-link {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;

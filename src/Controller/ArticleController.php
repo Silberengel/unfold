@@ -6,7 +6,6 @@ use App\Entity\Article;
 use App\Http\PhpExecutionTime;
 use App\Repository\ArticleHighlightRepository;
 use App\Repository\ArticleRepository;
-use App\Dto\UserBadgeOptions;
 use App\Service\ArticleBodyHtmlRenderer;
 use App\Service\MagazineContentService;
 use App\Enum\KindsEnum;
@@ -18,8 +17,7 @@ use App\Service\NostrKeyHelper;
 use App\Service\CacheService;
 use App\Nostr\Nip19Codec;
 use App\Util\CommonMark\Converter;
-use App\Service\NostrPreviewBodyRenderer;
-use App\Service\UserBadgeHtmlRenderer;
+use App\Service\NostrPreviewCardRenderer;
 use Doctrine\ORM\EntityManagerInterface;
 use League\CommonMark\Exception\CommonMarkException;
 use Psr\Log\LoggerInterface;
@@ -329,9 +327,7 @@ class ArticleController extends AbstractController
     #[Route('/preview/', name: 'article-preview-event', methods: ['POST'])]
     public function articlePreviewEvent(
         Request $request,
-        NostrClient $nostrClient,
-        UserBadgeHtmlRenderer $userBadgeHtmlRenderer,
-        NostrPreviewBodyRenderer $nostrPreviewBodyRenderer,
+        NostrPreviewCardRenderer $nostrPreviewCardRenderer,
     ): Response {
         $data = $request->getContent();
         $descriptor = json_decode($data);
@@ -344,50 +340,33 @@ class ArticleController extends AbstractController
             );
         }
 
-        $html = '';
+        $type = (string) $descriptor->type;
+        $identifier = isset($descriptor->identifier) && \is_string($descriptor->identifier)
+            ? $descriptor->identifier
+            : '';
 
-        try {
-            if ($descriptor->type === 'npub' || $descriptor->type === 'nprofile') {
-                $ident = '';
-                if ($descriptor->type === 'npub' && isset($descriptor->identifier) && \is_string($descriptor->identifier)) {
-                    $ident = $descriptor->identifier;
-                } elseif ($descriptor->type === 'nprofile' && isset($descriptor->decoded) && \is_string($descriptor->decoded)) {
-                    $hint = json_decode($descriptor->decoded);
-                    if (\is_object($hint) && isset($hint->pubkey)) {
-                        $ident = (string) $hint->pubkey;
-                    }
-                }
-                if ($ident === '') {
-                    $html = '<span class="text-subtle">Profile preview unavailable.</span>';
-                } else {
-                    $html = $userBadgeHtmlRenderer->render($ident, UserBadgeOptions::inline());
-                }
-            } elseif (!isset($descriptor->decoded)) {
+        if ($type === 'npub' || $type === 'nprofile') {
+            $link = [
+                'type' => $type,
+                'identifier' => $identifier,
+                'data' => isset($descriptor->decoded) && \is_string($descriptor->decoded)
+                    ? json_decode($descriptor->decoded)
+                    : null,
+            ];
+            $html = $nostrPreviewCardRenderer->renderFromLink($link);
+        } elseif ($type === 'nevent' || $type === 'naddr') {
+            $decoded = isset($descriptor->decoded) && \is_string($descriptor->decoded) ? $descriptor->decoded : '';
+            if ($decoded === '' || $identifier === '') {
                 $html = '<span class="text-subtle">Preview unavailable (missing data).</span>';
             } else {
-                try {
-                    $previewData = $nostrClient->getEventFromDescriptor($descriptor);
-                } catch (\Throwable $e) {
-                    $previewData = null;
-                    $html = '<span class="text-subtle">Error fetching preview: '.htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</span>';
-                }
-                if ($html === '' && $previewData === null) {
-                    $html = '<span class="text-subtle">No event found on the default relay for this preview.</span>';
-                } elseif ($html === '') {
-                    $previewData->type = $descriptor->type;
-                    if (isset($descriptor->identifier) && \is_string($descriptor->identifier)) {
-                        $previewData->identifier = $descriptor->identifier;
-                    }
-                    if (isset($previewData->content) && \is_string($previewData->content) && trim($previewData->content) !== '') {
-                        $previewData->content_html = $nostrPreviewBodyRenderer->render($previewData->content);
-                    }
-                    $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
-                        'preview' => $previewData,
-                    ]);
-                }
+                $html = $nostrPreviewCardRenderer->renderFromLink([
+                    'type' => $type,
+                    'identifier' => $identifier,
+                    'data' => json_decode($decoded),
+                ]);
             }
-        } catch (\Throwable $e) {
-            $html = '<span class="text-subtle">Preview error: '.htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</span>';
+        } else {
+            $html = '<span class="text-subtle">Preview unavailable.</span>';
         }
 
         return new Response(

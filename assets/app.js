@@ -1,4 +1,5 @@
 import './bootstrap.js';
+import './card_cover_fallback.js';
 /*
  * Welcome to your app's main JavaScript file!
  *
