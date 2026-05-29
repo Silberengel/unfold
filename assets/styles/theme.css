@@ -1,9 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Montserrat&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Lobster&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap');
-
-
 :root {
     --color-bg: #1a1a1a;        /* Deep charcoal background */
     --color-bg-light: #2a2a2a;  /* Slightly lighter charcoal */
@@ -26,11 +20,11 @@
     --color-link-hover: var(--color-text);
     --color-focus-ring: var(--color-secondary);
     --color-shadow: color-mix(in srgb, var(--color-text) 16%, transparent);
-    --font-family: 'Montserrat', serif; /* Set the Montserrat font as default */
-    --main-body-font: 'Newsreader', serif; /* Set the font for the main body */
-    --heading-font: 'EB Garamond', serif; /* Set the font for headings */
-    --brand-font: 'Lobster', serif; /* A classic, refined branding font */
+    /* Tier-2 fonts: system UI for chrome; self-hosted Newsreader for reading (see fonts.css). */
+    --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --main-body-font: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --heading-font: var(--main-body-font);
+    --brand-font: var(--font-family);
     --brand-color: white;
     --accent-color: var(--color-secondary);
 }
-

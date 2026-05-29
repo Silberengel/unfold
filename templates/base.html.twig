@@ -37,6 +37,7 @@
     <meta name="apple-mobile-web-app-title" content="{{ website_short_name }}" />
 
     <link rel="manifest" href="{{ path('pwa_manifest') }}">
+    <link rel="preload" href="{{ asset('fonts/newsreader/newsreader-400-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
 
     {% block ogtags %}
         {% set _og = site_og_image() %}

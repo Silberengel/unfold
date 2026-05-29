@@ -198,20 +198,6 @@
     margin-left: 0;
 }
 
-.heading-permalink {
-    float: left;
-    padding-right: 0;
-    margin-left: -30px;
-    line-height: 1.2;
-    color: var(--color-secondary);
-    text-decoration: none;
-}
-
-.heading-permalink:hover {
-    text-decoration: none;
-    font-weight: bold;
-}
-
 .embedded-content iframe {
     width: 100%;
     height: auto;

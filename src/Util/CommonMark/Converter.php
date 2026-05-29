@@ -51,7 +51,8 @@ readonly class Converter
                 'max_heading_level' => 2,
             ],
             'heading_permalink' => [
-                'symbol' => '§',
+                'insert' => 'none',
+                'apply_id_to_heading' => true,
             ],
             'autolink' => [
                 'allowed_protocols' => ['https', 'http'],
