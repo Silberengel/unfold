@@ -22,10 +22,14 @@ export default class extends Controller {
 
     connect() {
         this.partialReloads = 0;
+        this._loadGeneration = 0;
         // Stable reference across reconnects: rebinding each connect() would strand old listeners.
         this.boundOnAuth ??= this.onAuthChanged.bind(this);
+        this.boundOnCommentPublished ??= this.onCommentPublished.bind(this);
         window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
         window.addEventListener('unfold:auth-changed', this.boundOnAuth);
+        window.removeEventListener('unfold:comment-published', this.boundOnCommentPublished);
+        window.addEventListener('unfold:comment-published', this.boundOnCommentPublished);
         if (!this.hasContainerTarget || !this.urlValue) {
             return;
         }
@@ -41,6 +45,37 @@ export default class extends Controller {
         if (this.boundOnAuth) {
             window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
         }
+        if (this.boundOnCommentPublished) {
+            window.removeEventListener('unfold:comment-published', this.boundOnCommentPublished);
+        }
+    }
+
+    onCommentPublished(event) {
+        const detail = event?.detail;
+        if (!detail || !this.hasContainerTarget || !this.urlValue) {
+            return;
+        }
+        const coord = typeof detail.coordinate === 'string' ? detail.coordinate : '';
+        if (coord !== '') {
+            try {
+                const pageCoord = new URL(this.urlValue, window.location.origin).searchParams.get('coordinate');
+                if (pageCoord !== null && pageCoord !== coord) {
+                    return;
+                }
+            } catch {
+                if (!this.urlValue.includes(coord)) {
+                    return;
+                }
+            }
+        }
+        // Abort an in-flight relay fetch so it cannot overwrite the freshly merged thread.
+        this._loadGeneration += 1;
+        this._fullFetchDone = true;
+        if (detail.merged === true) {
+            void this._showCachedVersion();
+            return;
+        }
+        void this.load();
     }
 
     onAuthChanged() {
@@ -59,6 +94,7 @@ export default class extends Controller {
     }
 
     async load(isPartialRetry = false) {
+        const generation = ++this._loadGeneration;
         // Track whether Phase 2 has already written to the DOM so Phase 1 never clobbers it.
         this._fullFetchDone = false;
         // Only reset the partial-retry counter on a fresh top-level load, not on retries triggered
@@ -92,7 +128,7 @@ export default class extends Controller {
                 }
                 const html = await res.text();
                 window.clearTimeout(timer);
-                if (!this.hasContainerTarget) {
+                if (!this.hasContainerTarget || generation !== this._loadGeneration) {
                     return;
                 }
                 this._fullFetchDone = true;

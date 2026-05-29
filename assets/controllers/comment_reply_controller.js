@@ -145,6 +145,15 @@ export default class extends Controller {
             const publishedId =
                 typeof data.id === 'string' && data.id ? data.id.toLowerCase() : '';
             const merged = data.merged === true;
+            window.dispatchEvent(
+                new CustomEvent('unfold:comment-published', {
+                    detail: {
+                        eventId: publishedId,
+                        merged,
+                        coordinate: this.expectedCoordinateValue,
+                    },
+                }),
+            );
             void this.refreshThread(publishedId, merged);
         }
     }
@@ -179,14 +188,15 @@ export default class extends Controller {
         }
         const wantId =
             expectedEventIdHex && /^[0-9a-f]{64}$/.test(expectedEventIdHex) ? expectedEventIdHex : '';
-        const maxRounds = wantId ? (seededInCache ? 3 : 14) : 1;
+        const maxRounds = wantId ? (seededInCache ? 2 : 14) : 1;
         for (let round = 0; round < maxRounds; round += 1) {
             if (round > 0) {
-                const delay = Math.min(1400, 200 * 2 ** (round - 1));
+                const delay = seededInCache ? 120 : Math.min(1400, 200 * 2 ** (round - 1));
                 await new Promise((r) => setTimeout(r, delay));
             }
             const bust = `cb=${Date.now()}`;
-            const u = url.includes('?') ? `${url}&${bust}` : `${url}?${bust}`;
+            const cacheOnly = seededInCache ? 'cached=1&' : '';
+            const u = url.includes('?') ? `${url}&${cacheOnly}${bust}` : `${url}?${cacheOnly}${bust}`;
             try {
                 const res = await fetch(u, {
                     cache: 'no-store',

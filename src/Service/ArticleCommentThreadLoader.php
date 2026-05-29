@@ -52,6 +52,8 @@ final readonly class ArticleCommentThreadLoader
      */
     public function tryLoadFromCacheOnly(string $coordinate, ?string $articleEventHexId = null): ?array
     {
+        $coordinate = $this->normalizeCoordinate($coordinate);
+        $articleEventHexId = $this->normalizeArticleEventHexId($articleEventHexId);
         $key = $this->cacheKeyForThread($coordinate, $articleEventHexId);
         try {
             $item = $this->appCachePool->getItem($key);
@@ -91,6 +93,8 @@ final readonly class ArticleCommentThreadLoader
      */
     public function load(string $coordinate, ?string $articleEventHexId = null): array
     {
+        $coordinate = $this->normalizeCoordinate($coordinate);
+        $articleEventHexId = $this->normalizeArticleEventHexId($articleEventHexId);
         $t0 = microtime(true);
         $cacheKey = $this->cacheKeyForThread($coordinate, $articleEventHexId);
         $this->logger->info('comments.loader.start', [
@@ -100,13 +104,17 @@ final readonly class ArticleCommentThreadLoader
         ]);
 
         try {
-            $discussion = $this->cache->get($cacheKey, function (ItemInterface $item) use ($coordinate, $articleEventHexId, $t0): array {
+            $discussion = $this->cache->get($cacheKey, function (ItemInterface $item) use ($cacheKey, $coordinate, $articleEventHexId, $t0): array {
                 $this->logger->info('comments.loader.cache_miss', [
                     'elapsed_since_load_start_ms' => (int) round((microtime(true) - $t0) * 1000),
                 ]);
                 $tNostr = microtime(true);
                 // On failure, let this throw: Symfony cache will not store a value, so a prior good thread is not replaced by [].
                 $out = $this->nostrClient->getArticleDiscussion($coordinate, $articleEventHexId);
+                $existing = $this->readRawDiscussion($cacheKey);
+                if ($existing !== null) {
+                    $out = $this->mergeDiscussionArrays($existing, $out);
+                }
                 $partial = (bool) ($out['partial'] ?? false);
                 // Partial: bounded TTL so late relays can still appear without re-fetching every few seconds.
                 $item->expiresAfter($partial ? self::PARTIAL_THREAD_CACHE_TTL_SEC : 86400);
@@ -135,6 +143,8 @@ final readonly class ArticleCommentThreadLoader
      */
     public function invalidateThread(string $coordinate, ?string $articleEventHexId): void
     {
+        $coordinate = $this->normalizeCoordinate($coordinate);
+        $articleEventHexId = $this->normalizeArticleEventHexId($articleEventHexId);
         $key = $this->cacheKeyForThread($coordinate, $articleEventHexId);
         try {
             $this->cache->delete($key);
@@ -154,6 +164,8 @@ final readonly class ArticleCommentThreadLoader
      */
     public function mergePublishedThreadEvent(string $coordinate, ?string $articleEventHexId, array $rawEvent): bool
     {
+        $coordinate = $this->normalizeCoordinate($coordinate);
+        $articleEventHexId = $this->normalizeArticleEventHexId($articleEventHexId);
         try {
             $wire = json_decode(
                 json_encode($rawEvent, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
@@ -216,10 +228,7 @@ final readonly class ArticleCommentThreadLoader
         unset($discussion['partial']);
 
         try {
-            $this->cache->delete($key);
-            $item->set($discussion);
-            $item->expiresAfter(86400);
-            $this->appCachePool->save($item);
+            $this->saveRawDiscussion($key, $discussion, 86400);
         } catch (\Throwable $e) {
             $this->logger->warning('comments.loader.merge_published_failed', [
                 'coordinate' => $coordinate,
@@ -245,7 +254,140 @@ final readonly class ArticleCommentThreadLoader
      */
     private function cacheKeyForThread(string $coordinate, ?string $articleEventHexId): string
     {
-        return 'comments_v6_'.hash('sha256', $coordinate."\0".($articleEventHexId ?? ''));
+        $coord = $this->normalizeCoordinate($coordinate);
+        $eid = $articleEventHexId !== null && $articleEventHexId !== ''
+            ? strtolower($articleEventHexId)
+            : '';
+
+        return 'comments_v6_'.hash('sha256', $coord."\0".$eid);
+    }
+
+    private function normalizeCoordinate(string $coordinate): string
+    {
+        $parts = explode(':', $coordinate, 3);
+        if (\count($parts) !== 3) {
+            return $coordinate;
+        }
+        $parts[1] = strtolower(trim($parts[1]));
+
+        return implode(':', $parts);
+    }
+
+    private function normalizeArticleEventHexId(?string $articleEventHexId): ?string
+    {
+        if ($articleEventHexId === null || $articleEventHexId === '') {
+            return null;
+        }
+        $id = strtolower(trim($articleEventHexId));
+        if (64 !== \strlen($id) || !ctype_xdigit($id)) {
+            return null;
+        }
+
+        return $id;
+    }
+
+    /**
+     * @return array{thread?: array<int, mixed>, quotes?: array<int, mixed>, superchats?: list<array<string,mixed>>, partial?: bool}|null
+     */
+    private function readRawDiscussion(string $key): ?array
+    {
+        try {
+            $item = $this->appCachePool->getItem($key);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+        if (!$item->isHit()) {
+            return null;
+        }
+        $discussion = $item->get();
+
+        return \is_array($discussion) ? $discussion : null;
+    }
+
+    /**
+     * @param array{thread?: array<int, mixed>, quotes?: array<int, mixed>, superchats?: list<array<string,mixed>>, partial?: bool} $discussion
+     */
+    private function saveRawDiscussion(string $key, array $discussion, int $ttlSec): void
+    {
+        try {
+            $item = $this->appCachePool->getItem($key);
+            $item->set($discussion);
+            $item->expiresAfter($ttlSec);
+            $this->appCachePool->save($item);
+        } catch (InvalidArgumentException $e) {
+            throw new \RuntimeException($e->getMessage(), 0, $e);
+        }
+
+        try {
+            $this->cache->delete($key);
+            $this->cache->get($key, function (ItemInterface $item) use ($discussion, $ttlSec): array {
+                $item->expiresAfter($ttlSec);
+
+                return $discussion;
+            });
+        } catch (\Throwable $e) {
+            throw new \RuntimeException($e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * Keep locally merged / optimistic thread events when a relay fetch has not caught up yet.
+     *
+     * @param array{thread?: array<int, mixed>, quotes?: array<int, mixed>, superchats?: list<array<string,mixed>>, partial?: bool} $base
+     * @param array{thread?: array<int, mixed>, quotes?: array<int, mixed>, superchats?: list<array<string,mixed>>, partial?: bool} $incoming
+     *
+     * @return array{thread: array<int, object>, quotes: array<int, object>, superchats: list<array<string,mixed>>, partial?: bool}
+     */
+    private function mergeDiscussionArrays(array $base, array $incoming): array
+    {
+        $merged = $incoming;
+        $merged['thread'] = $this->mergeWireEventLists($base['thread'] ?? [], $incoming['thread'] ?? [], true);
+        $merged['quotes'] = $this->mergeWireEventLists($base['quotes'] ?? [], $incoming['quotes'] ?? [], false);
+        if (!isset($merged['superchats']) || !\is_array($merged['superchats'])) {
+            $merged['superchats'] = \is_array($base['superchats'] ?? null) ? $base['superchats'] : [];
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param array<int, mixed> $base
+     * @param array<int, mixed> $incoming
+     *
+     * @return array<int, object>
+     */
+    private function mergeWireEventLists(array $base, array $incoming, bool $ascCreatedAt): array
+    {
+        /** @var array<string, object> $byId */
+        $byId = [];
+        foreach ($incoming as $ev) {
+            if (!\is_object($ev) || !isset($ev->id)) {
+                continue;
+            }
+            $id = strtolower((string) $ev->id);
+            if (64 === \strlen($id) && ctype_xdigit($id)) {
+                $byId[$id] = $ev;
+            }
+        }
+        foreach ($base as $ev) {
+            if (!\is_object($ev) || !isset($ev->id)) {
+                continue;
+            }
+            $id = strtolower((string) $ev->id);
+            if (64 !== \strlen($id) || !ctype_xdigit($id) || isset($byId[$id])) {
+                continue;
+            }
+            $byId[$id] = $ev;
+        }
+        $out = array_values($byId);
+        usort(
+            $out,
+            static fn ($a, $b): int => $ascCreatedAt
+                ? ((int) ($a->created_at ?? 0)) <=> ((int) ($b->created_at ?? 0))
+                : ((int) ($b->created_at ?? 0)) <=> ((int) ($a->created_at ?? 0)),
+        );
+
+        return $out;
     }
 
     /**
