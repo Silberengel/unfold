@@ -18,6 +18,7 @@ use App\Service\NostrKeyHelper;
 use App\Service\CacheService;
 use App\Nostr\Nip19Codec;
 use App\Util\CommonMark\Converter;
+use App\Service\NostrPreviewBodyRenderer;
 use App\Service\UserBadgeHtmlRenderer;
 use Doctrine\ORM\EntityManagerInterface;
 use League\CommonMark\Exception\CommonMarkException;
@@ -330,6 +331,7 @@ class ArticleController extends AbstractController
         Request $request,
         NostrClient $nostrClient,
         UserBadgeHtmlRenderer $userBadgeHtmlRenderer,
+        NostrPreviewBodyRenderer $nostrPreviewBodyRenderer,
     ): Response {
         $data = $request->getContent();
         $descriptor = json_decode($data);
@@ -375,6 +377,9 @@ class ArticleController extends AbstractController
                     $previewData->type = $descriptor->type;
                     if (isset($descriptor->identifier) && \is_string($descriptor->identifier)) {
                         $previewData->identifier = $descriptor->identifier;
+                    }
+                    if (isset($previewData->content) && \is_string($previewData->content) && trim($previewData->content) !== '') {
+                        $previewData->content_html = $nostrPreviewBodyRenderer->render($previewData->content);
                     }
                     $html = $this->renderView('components/Molecules/NostrPreviewContent.html.twig', [
                         'preview' => $previewData,

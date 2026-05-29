@@ -1808,6 +1808,47 @@ label.search {
     align-items: center;
     flex-wrap: wrap;
     gap: 0.5rem;
+    overflow: visible;
+    position: relative;
+    z-index: 2;
+}
+
+.nostr-preview .nostr-event-preview,
+.nostr-preview .nostr-highlight-preview,
+.nostr-preview .nostr-address-preview {
+    overflow: visible;
+}
+
+.nostr-preview-card__body-html {
+    font-size: inherit;
+    line-height: 1.45;
+}
+
+.nostr-preview-card__body-html > :first-child {
+    margin-top: 0;
+}
+
+.nostr-preview-card__body-html > :last-child {
+    margin-bottom: 0;
+}
+
+.nostr-preview-card__body-html .nostr-preview--inline {
+    margin: 0.65rem 0;
+}
+
+.comments .card-body .nostr-preview,
+.comments-quotes__list .card-body .nostr-preview {
+    position: relative;
+    z-index: 2;
+}
+
+.comments .card-body .nostr-preview .nostr-share-menu__list,
+.comments-quotes__list .card-body .nostr-preview .nostr-share-menu__list {
+    z-index: 30;
+}
+
+.nostr-preview--loaded > .nostr-preview-link {
+    display: none;
 }
 
 .nostr-card-header__actions {

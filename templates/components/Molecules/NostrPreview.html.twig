@@ -16,7 +16,7 @@
             <span class="nostr-preview__loading-text ms-2">Loading preview…</span>
         </div>
         {% if preview.full_match is defined and preview.full_match %}
-            <div class="nostr-preview-link mt-2">
+            <div class="nostr-preview-link mt-2" data-nostr-preview-fallback-link>
                 <a href="{{ preview.full_match }}" target="_blank" rel="noopener noreferrer">{{ preview.full_match }}</a>
             </div>
         {% endif %}

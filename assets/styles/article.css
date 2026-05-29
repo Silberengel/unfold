@@ -370,6 +370,7 @@
 .comments .card.comment .card-body,
 .comments-quotes__list .card.comment .card-body {
     line-height: 1.52;
+    overflow: visible;
 }
 
 .comment__reply-blurb blockquote,

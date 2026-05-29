@@ -66,7 +66,6 @@ final class NostrPreviewPlaceholderRenderer
             .'<span class="nostr-preview__spinner" role="status" aria-label="Loading"></span>'
             .'<span class="nostr-preview__loading-text ms-2">Loading preview…</span>'
             .'</div>'
-            .'<div class="nostr-preview-link mt-2"><a href="'.$safeNostr.'" target="_blank" rel="noopener noreferrer">'.$safeNostr.'</a></div>'
             .'</div>'
             .'</div>';
     }

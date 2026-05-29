@@ -107,7 +107,7 @@ export default class extends Controller {
                 if (!res.ok) {
                     throw new Error(`HTTP ${res.status}`);
                 }
-                this.containerTarget.innerHTML = await res.text();
+                this.setPreviewHtml(await res.text());
                 return;
             }
             const res = await fetch('/preview/', {
@@ -122,13 +122,27 @@ export default class extends Controller {
             if (!res.ok) {
                 throw new Error(`HTTP ${res.status}`);
             }
-            this.containerTarget.innerHTML = await res.text();
+            this.setPreviewHtml(await res.text());
         } catch (e) {
-            // NetworkError / offline: avoid console.error noise; one inline fallback per block
             console.debug('nostr_preview: fetch failed', e);
             this.containerTarget.innerHTML = this.typeValue === 'url' && this.fullMatchValue
                 ? `<div class="alert alert-warning my-2" role="status">Unable to load link preview for ${this.fullMatchValue}.</div>`
                 : UNAVAILABLE_HTML;
+        }
+    }
+
+  /**
+   * @param {string} html
+   */
+    setPreviewHtml(html) {
+        this.containerTarget.innerHTML = html;
+        this.element.classList.add('nostr-preview--loaded');
+        const fallbackLink = this.element.querySelector(':scope > .nostr-preview-link');
+        if (fallbackLink) {
+            fallbackLink.remove();
+        }
+        if (this.application?.load) {
+            this.application.load(this.containerTarget);
         }
     }
 }
