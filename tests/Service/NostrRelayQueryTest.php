@@ -35,7 +35,7 @@ final class NostrRelayQueryTest extends TestCase
         $persister = $this->createMock(RelayFetchedEventPersister::class);
         $tokenStorage = $this->createMock(TokenStorageInterface::class);
         $tokenStorage->method('getToken')->willReturn(null);
-        $listFactory = new NostrRelayListFactory([], [], [], $tokenStorage, new NullLogger());
+        $listFactory = new NostrRelayListFactory([], [], [], [], $tokenStorage, new NullLogger());
         $fanout = new NostrRelayFanoutTransport(new NullLogger(), $factory, \dirname(__DIR__, 2));
         $mercury = new MercuryHttpRelayClient(new MockHttpClient(), new NullLogger(), 12);
         $transport = new NostrRelayTransport($listFactory, $fanout, $mercury);

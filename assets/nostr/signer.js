@@ -45,6 +45,9 @@ function saveNip46Stored(secretKey, bunkerUrl) {
     );
 }
 
+/** Wait for Amber / another signer to complete nostrconnect:// pairing (no default in nostr-tools when using AbortSignal). */
+const NOSTR_CONNECT_WAIT_MS = 120_000;
+
 function randomConnectSecret() {
     return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
 }
@@ -135,6 +138,11 @@ export async function waitForNostrConnect(secretKey, uri, signal) {
     const nip46 = await getNip46Module();
     const controller = new AbortController();
     nostrConnectAbort = controller;
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, NOSTR_CONNECT_WAIT_MS);
     if (signal) {
         if (signal.aborted) {
             controller.abort();
@@ -149,7 +157,13 @@ export async function waitForNostrConnect(secretKey, uri, signal) {
         persistConnectedSigner(nip46, secretKey, signer);
 
         return signer.getPublicKey();
+    } catch (e) {
+        if (timedOut) {
+            throw new Error('Timed out waiting for Amber to connect. Approve the connection in Amber, then scan again—or paste the bunker:// URL below.');
+        }
+        throw e;
     } finally {
+        window.clearTimeout(timeoutId);
         if (nostrConnectAbort === controller) {
             nostrConnectAbort = null;
         }

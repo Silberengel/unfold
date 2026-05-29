@@ -52,6 +52,7 @@ services:
             $communityRelayUrls: '%community_relays%'
             $searchRelayUrls: '%search_relays%'
             $profileRelayUrls: '%profile_relays%'
+            $nip46ClientRelayUrls: '%nip46_client_relays%'
     App\Service\NostrAuthorRelayCache:
         lazy: true
         arguments:

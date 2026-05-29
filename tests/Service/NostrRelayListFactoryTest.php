@@ -19,6 +19,7 @@ final class NostrRelayListFactoryTest extends TestCase
             ['wss://forest'],
             ['wss://forest', 'wss://citadel', 'http://mercury.example'],
             ['wss://profile'],
+            ['wss://damus', 'wss://nos'],
             $tokenStorage,
             new NullLogger(),
         );
@@ -29,7 +30,7 @@ final class NostrRelayListFactoryTest extends TestCase
         $this->assertSame(['wss://forest', 'wss://citadel'], $f->getSearchWssUrlList());
         $this->assertSame(['http://mercury.example'], $f->getSearchHttpUrlList());
         $this->assertSame(
-            ['wss://forest', 'wss://citadel'],
+            ['wss://damus', 'wss://nos'],
             $f->getNip46ClientRelayUrlList(),
         );
     }
@@ -38,7 +39,7 @@ final class NostrRelayListFactoryTest extends TestCase
     {
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
-        $f = new NostrRelayListFactory(['wss://forest'], [], [], $ts, new NullLogger());
+        $f = new NostrRelayListFactory(['wss://forest'], [], [], [], $ts, new NullLogger());
         $this->assertSame('wss://forest', $f->getCommunityRelayUrl());
         $this->assertSame(['wss://forest'], $f->getCommunityRelayUrlList());
     }
@@ -50,6 +51,7 @@ final class NostrRelayListFactoryTest extends TestCase
         $f = new NostrRelayListFactory(
             ['wss://forest', 'http://mercury.example'],
             ['wss://citadel'],
+            [],
             [],
             $ts,
             new NullLogger(),
@@ -64,7 +66,7 @@ final class NostrRelayListFactoryTest extends TestCase
     {
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
-        $f = new NostrRelayListFactory([], [], [], $ts, new NullLogger());
+        $f = new NostrRelayListFactory([], [], [], [], $ts, new NullLogger());
         $this->assertSame(
             [
                 'wss' => ['wss://a', 'wss://b'],
@@ -82,6 +84,7 @@ final class NostrRelayListFactoryTest extends TestCase
             ['wss://forest', 'http://mercury.example'],
             ['wss://citadel', 'http://mercury.example'],
             ['wss://profile'],
+            [],
             $ts,
             new NullLogger(),
         );
@@ -99,6 +102,7 @@ final class NostrRelayListFactoryTest extends TestCase
             ['wss://forest'],
             ['wss://citadel', 'http://mercury.example'],
             ['wss://profile'],
+            [],
             $ts,
             new NullLogger(),
         );

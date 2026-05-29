@@ -45,6 +45,12 @@ parameters:
     profile_relays: [
       'wss://profiles.nostr1.com',
     ]
+    # WSS relays for browser NIP-46 (nostrconnect:// QR login). See config/sites/imwald.yaml.
+    nip46_client_relays: [
+      'wss://relay.nsec.app',
+      'wss://relays.primal.net',
+      'wss://theforest.nostr1.com'
+    ]
 
     # Magazine identity for data-theme=… (CSS hooks). Unrelated to light/dark color scheme.
     theme: 'gitcitadel'

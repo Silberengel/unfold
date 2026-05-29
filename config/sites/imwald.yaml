@@ -47,6 +47,14 @@ parameters:
       'wss://relay.damus.io',
       'wss://relay.primal.net',
     ]
+    # WSS relays for browser NIP-46 (nostrconnect:// QR login). Not used for article ingest.
+    # Amber and the browser must both reach these for the kind-24133 handshake; use widely
+    # available signer-friendly relays, not magazine/indexer relays.
+    nip46_client_relays: [
+      'wss://relay.nsec.app',
+      'wss://relays.primal.net',
+      'wss://theforest.nostr1.com'
+    ]
 
     # Magazine identity for data-theme=… (CSS hooks). Unrelated to light/dark color scheme.
     theme: 'imwald'

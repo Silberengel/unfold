@@ -35,11 +35,13 @@ final readonly class NostrRelayListFactory
      * @param list<string> $communityRelayUrls
      * @param list<string> $searchRelayUrls
      * @param list<string> $profileRelayUrls
+     * @param list<string> $nip46ClientRelayUrls
      */
     public function __construct(
         private array $communityRelayUrls,
         private array $searchRelayUrls,
         private array $profileRelayUrls,
+        private array $nip46ClientRelayUrls,
         private TokenStorageInterface $tokenStorage,
         private LoggerInterface $logger,
     ) {
@@ -111,10 +113,7 @@ final readonly class NostrRelayListFactory
      */
     public function getNip46ClientRelayUrlList(): array
     {
-        return $this->dedupeWssUrls(array_merge(
-            $this->communityRelayUrls,
-            $this->searchRelayUrls,
-        ));
+        return $this->dedupeWssUrls($this->nip46ClientRelayUrls);
     }
 
     /**
