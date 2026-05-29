@@ -44,9 +44,31 @@ final class NostrPathHelper
             return '';
         }
 
-        return $this->router->generate('article', [
-            'npub' => $this->npubFromPubkeyHex((string) $article->getPubkey()),
-            'slug' => $slug,
-        ], UrlGeneratorInterface::ABSOLUTE_URL);
+        try {
+            return $this->router->generate('article', [
+                'npub' => $this->npubFromPubkeyHex((string) $article->getPubkey()),
+                'slug' => $slug,
+            ], UrlGeneratorInterface::ABSOLUTE_URL);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    public function publicationAbsoluteUrl(string $npub, string $slug): string
+    {
+        $npub = trim($npub);
+        $slug = trim($slug);
+        if ($npub === '' || $slug === '' || str_contains($slug, '/')) {
+            return '';
+        }
+
+        try {
+            return $this->router->generate('publication', [
+                'npub' => $npub,
+                'slug' => $slug,
+            ], UrlGeneratorInterface::ABSOLUTE_URL);
+        } catch (\Throwable) {
+            return '';
+        }
     }
 }

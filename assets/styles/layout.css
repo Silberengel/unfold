@@ -366,10 +366,28 @@
     text-transform: none;
     color: var(--color-text, inherit);
     text-decoration: none;
-    background: none;
+    background: transparent;
     border: none;
     cursor: pointer;
     border-radius: 0;
+}
+
+html[data-color-scheme="dark"] .nostr-share-menu__list {
+    background: var(--color-bg-light);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+html[data-color-scheme="dark"] button.nostr-share-menu__action {
+    color: var(--color-text);
+    background: transparent;
+    border: none;
+}
+
+html[data-color-scheme="dark"] button.nostr-share-menu__action:hover,
+html[data-color-scheme="dark"] button.nostr-share-menu__action:focus-visible {
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    border: none;
 }
 
 .nostr-share-menu__action:hover,
@@ -589,6 +607,13 @@ main {
     border-top: 1px solid var(--color-border);
 }
 
+/* display:flex above beats the UA [hidden] rule — keep Amber collapsed until toggled open. */
+.user-menu__amber-panel[hidden],
+.user-menu__amber-status[hidden],
+.user-menu__login-error[hidden] {
+    display: none !important;
+}
+
 .user-menu__amber-help {
     font-family: var(--font-family), sans-serif;
     font-size: 0.78rem;
@@ -675,6 +700,16 @@ main {
         margin-top: var(--site-fixed-header-offset);
         /* Default: do not stretch — avoids a full-height empty column on pages with blank <aside> (e.g. article). */
         align-self: flex-start;
+    }
+
+    /* Publication reader: stretch highlights column alongside the ToC + section layout. */
+    .layout:has(.publication-reader) > aside {
+        align-self: stretch;
+    }
+
+    /* Article reader: stretch highlights column when this article has highlights. */
+    .layout:has(.article-page-root) > aside {
+        align-self: stretch;
     }
 
     /* Home: stretch the aside to the same row height as <main> so the highlights column isn’t a short box; list flows with the page. */

@@ -22,10 +22,10 @@ class NostrSchemeExtension  implements ExtensionInterface
             ->addInlineParser(new NostrBareBech32Parser($this->nip19), 202)
             ->addInlineParser(new NostrMentionParser($this->cacheService), 200)
             ->addInlineParser(new NostrSchemeParser($this->nip19), 199)
-            ->addInlineParser(new NostrRawNpubParser($this->cacheService), 198)
+            ->addInlineParser(new NostrRawNpubParser(), 198)
 
             ->addRenderer(NostrSchemeData::class, new NostrEventRenderer($this->nip19), 2)
-            ->addRenderer(NostrMentionLink::class, new NostrMentionRenderer(), 1)
+            ->addRenderer(NostrMentionLink::class, new NostrMentionRenderer($this->cacheService), 1)
         ;
     }
 }

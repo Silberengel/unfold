@@ -128,4 +128,69 @@ class ArticleHighlightRepository extends ServiceEntityRepository
 
         return $out;
     }
+
+    /**
+     * Highlights on any section of a publication (NIP-33 addresses from section coordinates).
+     *
+     * @param list<string> $sectionCoordinates e.g. `30041:pubkey:section-d`
+     *
+     * @return list<ArticleHighlight>
+     */
+    public function findForPublicationSections(array $sectionCoordinates, int $limit = 100): array
+    {
+        if ($limit <= 0 || $sectionCoordinates === []) {
+            return [];
+        }
+
+        $pairs = [];
+        foreach ($sectionCoordinates as $coordinate) {
+            $parts = explode(':', trim($coordinate), 3);
+            if (\count($parts) !== 3) {
+                continue;
+            }
+            $pubkey = strtolower($parts[1]);
+            $slug = trim($parts[2]);
+            if ($slug === '' || 64 !== \strlen($pubkey) || !ctype_xdigit($pubkey)) {
+                continue;
+            }
+            $key = $pubkey.':'.$slug;
+            $pairs[$key] = ['pubkey' => $pubkey, 'slug' => $slug];
+        }
+        if ($pairs === []) {
+            return [];
+        }
+
+        $fetchLimit = min($limit * 20, 2000);
+        $qb = $this->createQueryBuilder('h')
+            ->innerJoin('h.article', 'a')
+            ->orderBy('h.eventCreatedAt', 'DESC')
+            ->addOrderBy('h.id', 'DESC')
+            ->setMaxResults($fetchLimit);
+
+        $orX = $qb->expr()->orX();
+        $i = 0;
+        foreach ($pairs as $pair) {
+            $orX->add($qb->expr()->andX(
+                $qb->expr()->eq('LOWER(a.pubkey)', ':pk'.$i),
+                $qb->expr()->eq('a.slug', ':sl'.$i),
+            ));
+            $qb->setParameter('pk'.$i, $pair['pubkey']);
+            $qb->setParameter('sl'.$i, $pair['slug']);
+            ++$i;
+        }
+        $qb->andWhere($orX);
+
+        /** @var list<ArticleHighlight> $rows */
+        $rows = $qb->getQuery()->getResult();
+
+        $out = [];
+        foreach ($rows as $h) {
+            $out[] = $h;
+            if (\count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
 }

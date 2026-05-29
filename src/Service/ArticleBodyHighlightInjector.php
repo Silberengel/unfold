@@ -562,18 +562,25 @@ final class ArticleBodyHighlightInjector
         if ($segments === []) {
             return false;
         }
+        $trailingMark = null;
         for ($i = \count($segments) - 1; $i >= 0; --$i) {
             [$n, $off, $nLen] = $segments[$i];
-            if (! $this->wrapTextSlice(
+            $mark = $this->wrapTextSlice(
                 $n,
                 $off,
                 $nLen,
                 $eventId,
                 0 === $i,
-                $authorJson
-            )) {
+            );
+            if (null === $mark) {
                 return false;
             }
+            if ($i === \count($segments) - 1) {
+                $trailingMark = $mark;
+            }
+        }
+        if (null !== $trailingMark && $authorJson !== '') {
+            $this->appendAuthorAvatarsAfter($trailingMark, $authorJson);
         }
 
         return true;
@@ -677,15 +684,15 @@ final class ArticleBodyHighlightInjector
         return true;
     }
 
-    private function wrapTextSlice(DOMText $textNode, int $uOffset, int $uLength, string $eventId, bool $firstInReadingOrder, string $authorJson = ''): bool
+    private function wrapTextSlice(DOMText $textNode, int $uOffset, int $uLength, string $eventId, bool $firstInReadingOrder): ?DOMElement
     {
         if ($uLength < 1) {
-            return false;
+            return null;
         }
         $t = (string) $textNode->data;
         $nLen = \mb_strlen($t, 'UTF-8');
         if ($uOffset < 0 || $uOffset + $uLength > $nLen) {
-            return false;
+            return null;
         }
         $before = $uOffset > 0 ? \mb_substr($t, 0, $uOffset, 'UTF-8') : '';
         $match = \mb_substr($t, $uOffset, $uLength, 'UTF-8');
@@ -694,7 +701,7 @@ final class ArticleBodyHighlightInjector
 
         $parent = $textNode->parentNode;
         if (null === $parent) {
-            return false;
+            return null;
         }
 
         $ref = $textNode;
@@ -706,9 +713,6 @@ final class ArticleBodyHighlightInjector
         if ($firstInReadingOrder) {
             $mark->setAttribute('id', 'highlight-'.$eventId);
         }
-        if ($authorJson !== '') {
-            $mark->setAttribute('data-hl', $authorJson);
-        }
         $mark->appendChild($this->dom->createTextNode($match));
         $parent->insertBefore($mark, $ref);
         if ($after === '') {
@@ -717,6 +721,85 @@ final class ArticleBodyHighlightInjector
             $ref->data = $after;
         }
 
-        return true;
+        return $mark;
+    }
+
+    /**
+     * Inline profile avatars immediately after the highlighted passage (replaces hover tooltip).
+     *
+     * @param non-empty-string $authorJson from {@see buildHighlightAuthorsJson}
+     */
+    private function appendAuthorAvatarsAfter(DOMElement $mark, string $authorJson): void
+    {
+        try {
+            /** @var mixed $rows */
+            $rows = \json_decode($authorJson, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return;
+        }
+        if (! \is_array($rows) || $rows === []) {
+            return;
+        }
+
+        $wrap = $this->dom->createElement('span');
+        $wrap->setAttribute('class', 'user-highlight__authors');
+        $labels = [];
+
+        foreach ($rows as $row) {
+            if (! \is_array($row)) {
+                continue;
+            }
+            $npub = $row['n'] ?? null;
+            if (! \is_string($npub) || ! \str_starts_with($npub, 'npub1')) {
+                continue;
+            }
+            $label = '';
+            if (isset($row['a']) && \is_string($row['a']) && \trim($row['a']) !== '') {
+                $label = \trim($row['a']);
+            }
+            if ($label === '') {
+                $label = $npub;
+            }
+            $labels[] = $label;
+
+            $link = $this->dom->createElement('a');
+            $link->setAttribute('class', 'user-highlight__author');
+            $link->setAttribute('href', '/p/'.\rawurlencode($npub));
+            $link->setAttribute('title', $label);
+
+            $avatar = $this->dom->createElement('span');
+            $avatar->setAttribute('class', 'user-highlight__author-avatar');
+            $pic = isset($row['p']) && \is_string($row['p']) ? \trim($row['p']) : '';
+            if ($pic !== '') {
+                $img = $this->dom->createElement('img');
+                $img->setAttribute('class', 'user-highlight__author-avatar-img');
+                $img->setAttribute('src', $pic);
+                $img->setAttribute('alt', '');
+                $img->setAttribute('loading', 'lazy');
+                $img->setAttribute('decoding', 'async');
+                $img->setAttribute('onerror', 'this.classList.add(\'is-broken\')');
+                $avatar->appendChild($img);
+            }
+            $fallback = $this->dom->createElement('span');
+            $fallback->setAttribute('class', 'user-highlight__author-avatar-fallback');
+            $initial = \mb_strtoupper(\mb_substr($label, 0, 1, 'UTF-8'), 'UTF-8');
+            $fallback->appendChild($this->dom->createTextNode($initial !== '' ? $initial : '…'));
+            $avatar->appendChild($fallback);
+            $link->appendChild($avatar);
+            $wrap->appendChild($link);
+        }
+
+        if (!$wrap->hasChildNodes()) {
+            return;
+        }
+        if ($labels !== []) {
+            $wrap->setAttribute('aria-label', 'Highlighted by '.\implode(', ', $labels));
+        }
+
+        $parent = $mark->parentNode;
+        if (null === $parent) {
+            return;
+        }
+        $parent->insertBefore($wrap, $mark->nextSibling);
     }
 }

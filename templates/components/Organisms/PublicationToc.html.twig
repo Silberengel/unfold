@@ -2,7 +2,12 @@
     {% for item in items %}
         <li class="publication-toc__item">
             {% if item.coordinate %}
-                <a href="{{ path('publication', { npub: npub, slug: publication_slug }) ~ '?section=' ~ item.coordinate|url_encode }}">{{ item.label }}</a>
+                {% if view_mode|default('section') == 'full' %}
+                    {% set _anchor = 'section-' ~ item.coordinate|lower|replace({':': '-'}) %}
+                    <a href="#{{ _anchor|e('html_attr') }}">{{ item.label }}</a>
+                {% else %}
+                    <a href="{{ path('publication', { npub: npub, slug: publication_slug }) ~ '?section=' ~ item.coordinate|url_encode }}">{{ item.label }}</a>
+                {% endif %}
             {% elseif item.nested_d and item.nested_npub %}
                 <a href="{{ path('publication', { npub: item.nested_npub, slug: item.nested_d }) }}">{{ item.label }}</a>
             {% else %}
@@ -13,6 +18,7 @@
                     items: item.children,
                     npub: item.nested_npub|default(npub),
                     publication_slug: item.nested_d|default(publication_slug),
+                    view_mode: view_mode|default('section'),
                 } only %}
             {% endif %}
         </li>

@@ -157,6 +157,7 @@ final class ArticleBodyHighlightInjectorTest extends TestCase
             'In-article highlights must include at least one <mark> (see ArticleBodyHighlightInjector).'
         );
         $this->assertStringContainsString('user-highlight__marker', $html);
+        $this->assertStringContainsString('user-highlight__authors', $html);
         foreach ($eventIds as $eid) {
             $eid = strtolower($eid);
             $this->assertMatchesRegularExpression(

@@ -8,11 +8,15 @@
                 {% if art %}
                     {% set _np = npub_from_hex(art.pubkey|default('')) %}
                     {% if _np != '' and art.slug|default('') != '' %}
+                        {% set _section_coord = (art.kind ? art.kind.value : 30023) ~ ':' ~ (art.pubkey|lower) ~ ':' ~ art.slug %}
+                        {% set _highlight_href = publication_npub|default('') != '' and publication_slug|default('') != ''
+                            ? path('publication', { npub: publication_npub, slug: publication_slug }) ~ '?section=' ~ _section_coord|url_encode ~ '#highlight-' ~ h.eventId|lower
+                            : path('article', { npub: _np, slug: art.slug }) ~ '#highlight-' ~ h.eventId|lower %}
                         <li class="home-aside-highlights__item">
                             <div class="home-aside-highlights__item-inner">
                                 <a
                                     class="home-aside-highlights__hit"
-                                    href="{{ path('article', { npub: _np, slug: art.slug }) ~ '#highlight-' ~ h.eventId|lower }}"
+                                    href="{{ _highlight_href }}"
                                     aria-label="{{ 'sidebar.highlight_view'|trans({ '%title%': art.title|default('') })|e('html_attr') }}"
                                 >
                                     <span class="visually-hidden">{{ 'sidebar.highlight_view'|trans({ '%title%': art.title|default('') }) }}</span>

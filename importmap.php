@@ -50,19 +50,16 @@ return [
         'version' => '4.5.0',
     ],
     'nostr-tools' => [
-        'version' => '2.10.4',
+        'version' => '2.23.5',
     ],
     'nostr-tools/nip19' => [
-        'version' => '2.10.4',
+        'version' => '2.23.5',
     ],
     '@noble/hashes' => [
-        'version' => '1.3.1',
+        'version' => '2.2.0',
     ],
     '@noble/hashes/utils' => [
-        'version' => '1.3.1',
-    ],
-    '@noble/hashes/crypto' => [
-        'version' => '1.3.1',
+        'version' => '2.2.0',
     ],
     '@scure/base' => [
         'version' => '2.0.0',
@@ -79,13 +76,13 @@ return [
         'version' => '2.23.5',
     ],
     '@noble/curves/secp256k1.js' => [
-        'version' => '2.0.1',
+        'version' => '2.2.0',
     ],
     '@noble/hashes/utils.js' => [
-        'version' => '2.0.1',
+        'version' => '2.2.0',
     ],
     '@noble/hashes/sha2.js' => [
-        'version' => '2.0.1',
+        'version' => '2.2.0',
     ],
     '@noble/ciphers/chacha.js' => [
         'version' => '2.1.1',
@@ -94,15 +91,24 @@ return [
         'version' => '2.1.1',
     ],
     '@noble/hashes/hkdf.js' => [
-        'version' => '2.0.1',
+        'version' => '2.2.0',
     ],
     '@noble/hashes/hmac.js' => [
-        'version' => '2.0.1',
+        'version' => '2.2.0',
     ],
     'qrcode' => [
         'version' => '1.5.4',
     ],
     'dijkstrajs' => [
         'version' => '1.0.3',
+    ],
+    '@noble/curves/secp256k1' => [
+        'version' => '2.2.0',
+    ],
+    '@noble/ciphers/aes.js' => [
+        'version' => '2.1.1',
+    ],
+    '@noble/curves' => [
+        'version' => '2.2.0',
     ],
 ];

@@ -15,7 +15,7 @@ text:
     search: 'Search...'
     searching: 'Searching...'
     noResults: 'No results.'
-.login:
+login:
     error_no_extension: 'No Nostr signer found. Install a browser extension (e.g. Alby, nos2x) or connect Amber below.'
     error_cancelled: 'Signing was cancelled or failed. Try again when you are ready.'
     error_failed: 'Login was rejected. Check that your signer is unlocked and try again.'

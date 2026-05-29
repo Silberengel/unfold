@@ -39,15 +39,27 @@ export default class extends Controller {
     siteUrl: String,
   };
 
-  async initialize() {
-    this.component = await getComponent(this.element);
+  connect() {
     this._nostrConnectUri = '';
     this._nostrConnectSecretKey = null;
     this._nostrConnectAbort = null;
+    this._liveComponent = null;
   }
 
   disconnect() {
     this.abortNostrConnectFlow();
+  }
+
+  async liveComponent() {
+    if (this._liveComponent !== null) {
+      return this._liveComponent;
+    }
+    try {
+      this._liveComponent = await getComponent(this.element);
+    } catch {
+      this._liveComponent = false;
+    }
+    return this._liveComponent || null;
   }
 
   authLogout() {
@@ -288,7 +300,10 @@ export default class extends Controller {
 
       if (response.ok && data?.npub) {
         this.abortNostrConnectFlow();
-        void this.component.render();
+        const component = await this.liveComponent();
+        if (component) {
+          void component.render();
+        }
         window.dispatchEvent(
           new CustomEvent('unfold:auth-changed', {
             detail: {

@@ -19,36 +19,102 @@
                 <p class="lede">{{ summary }}</p>
             {% endif %}
             <p class="text-subtle">by <twig:Molecules:UserFromNpub ident="{{ index.pubkey }}" /></p>
-            {% if export_available|default(false) %}
-                <form class="publication-download" method="get" action="{{ path('publication-download', { npub: npub, slug: slug }) }}">
-                    <label for="publication-download-format">Download as</label>
-                    <select id="publication-download-format" name="format">
-                        <option value="epub3">EPUB</option>
-                        <option value="pdf">PDF</option>
-                        <option value="html5">HTML</option>
-                    </select>
-                    <button type="submit">Download</button>
-                </form>
-            {% endif %}
+            <div
+                class="publication-actions"
+                data-controller="publication-export"
+                data-publication-export-publication-url-value="{{ path('publication', { npub: npub, slug: slug })|e('html_attr') }}"
+                data-publication-export-download-url-value="{{ path('publication-download', { npub: npub, slug: slug })|e('html_attr') }}"
+            >
+                <label class="visually-hidden" for="publication-action-select">Publication format</label>
+                <select
+                    id="publication-action-select"
+                    class="publication-actions__select"
+                    data-publication-export-target="select"
+                >
+                    <option value="view"{% if view_mode|default('section') == 'full' %} selected{% endif %}>View the publication as HTML</option>
+                    <option value="asciidoc">Download as Asciidoc file</option>
+                    {% if export_available|default(false) %}
+                        <option value="epub3">Download as EPUB file</option>
+                        <option value="pdf">Download as PDF file</option>
+                    {% endif %}
+                </select>
+                <button
+                    type="button"
+                    class="btn btn-primary publication-actions__go"
+                    data-action="click->publication-export#go"
+                    aria-label="Go"
+                    title="Go"
+                ><span aria-hidden="true">→</span></button>
+            </div>
         </div>
     </header>
 
     <div class="publication-reader__layout">
         <nav class="publication-reader__toc" aria-label="Table of contents">
             <h2 class="h6">Contents</h2>
-            {% include 'components/Organisms/PublicationToc.html.twig' with { items: toc, npub: npub, publication_slug: slug } only %}
+            {% include 'components/Organisms/PublicationToc.html.twig' with {
+                items: toc,
+                npub: npub,
+                publication_slug: slug,
+                view_mode: view_mode|default('section'),
+            } only %}
         </nav>
         <main class="publication-reader__main article-main">
-            {% if section_coordinate|default('') != '' %}
+            {% if view_mode|default('section') == 'full' %}
+                {% if full_html|default('')|trim != '' %}
+                    <div class="publication-full">{{ full_html|raw }}</div>
+                {% else %}
+                    <p class="alert alert-warning">Publication could not be loaded from relays.</p>
+                {% endif %}
+            {% elseif section_coordinate|default('') != '' %}
                 {% if section_html %}
                     {{ section_html|raw }}
                 {% else %}
                     <p class="alert alert-warning">Section could not be loaded from relays.</p>
                 {% endif %}
             {% else %}
-                <p class="text-subtle">Select a section from the table of contents above.</p>
+                <p class="text-subtle">Select a section from the table of contents, or choose “View the publication as HTML” above.</p>
             {% endif %}
         </main>
     </div>
+
+    {% if view_mode|default('section') == 'section' %}
+        <hr class="divider publication-reader__comments-divider" />
+        {% set comments_query = {
+            coordinate: publication_coordinate|default(''),
+            title: title|default('')
+        }|merge(publication_event_id|default(null) ? { e: publication_event_id } : {}) %}
+        {% set _reply_ctx = comments_data.comment_reply_context|default(comment_reply_context|default(null)) %}
+        {% include 'components/Molecules/ArticleReplyComposer.html.twig' with { comment_reply_context: _reply_ctx } only %}
+        <section class="article-comments-async publication-reader__comments" id="publication-comments" aria-label="Comments">
+            <div
+                data-controller="article-comments"
+                data-article-comments-wrapper
+                data-article-comments-url-value="{{ path('article_comments_fragment', comments_query)|e('html_attr') }}"
+                data-article-comments-preloaded-value="{{ (comments_preloaded|default(false)) ? 'true' : 'false' }}"
+            >
+                <div
+                    data-article-comments-target="container"
+                    class="comments {{ comments_preloaded|default(false) ? 'comments--from-cache' : 'comments--pending' }}"
+                >
+                    {% if comments_preloaded|default(false) and comments_data is defined and comments_data is not null %}
+                        {% include 'components/Organisms/Comments.html.twig' with comments_data %}
+                    {% else %}
+                        <p class="text-subtle">Loading comments…</p>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block aside %}
+    {% if view_mode|default('section') == 'section' %}
+        {% include 'components/Organisms/HomeHighlightsAside.html.twig' with {
+            highlights: sidebar_highlights|default([]),
+            publication_npub: npub,
+            publication_slug: slug,
+        } only %}
+    {% endif %}
 {% endblock %}

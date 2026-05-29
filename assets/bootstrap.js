@@ -7,6 +7,8 @@ import NostrShareMenuController from './controllers/nostr_share_menu_controller.
 import ColorSchemeController from './controllers/color_scheme_controller.js';
 import MagazineHierarchyEditorController from './controllers/magazine_hierarchy_editor_controller.js';
 import FooterMagazineEditController from './controllers/footer_magazine_edit_controller.js';
+import PublicationExportController from './controllers/publication_export_controller.js';
+import LoginController from './controllers/login_controller.js';
 const app = startStimulusApp();
 if (typeof app.debug === 'boolean') {
     app.debug = false;
@@ -50,6 +52,16 @@ try {
 }
 try {
     app.register('footer-magazine-edit', FooterMagazineEditController);
+} catch {
+    /* already registered by the bundle */
+}
+try {
+    app.register('publication-export', PublicationExportController);
+} catch {
+    /* already registered by the bundle */
+}
+try {
+    app.register('login', LoginController);
 } catch {
     /* already registered by the bundle */
 }

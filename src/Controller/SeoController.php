@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\Article;
+use App\Entity\Event;
 use App\Enum\EventStatusEnum;
 use App\Repository\ArticleRepository;
 use App\Repository\FeaturedAuthorRepository;
@@ -12,6 +13,9 @@ use App\Service\ArticleBodyHtmlRenderer;
 use App\Service\MagazineContentService;
 use App\Service\MagazineIndexStore;
 use App\Service\NostrPathHelper;
+use App\Service\PublicationFeature;
+use App\Service\PublicationIndexStore;
+use App\Service\NostrKeyHelper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -35,6 +39,9 @@ final class SeoController extends AbstractController
         private readonly FeaturedAuthorRepository $featuredAuthorRepository,
         private readonly NostrPathHelper $nostrPathHelper,
         private readonly ArticleBodyHtmlRenderer $articleBodyHtmlRenderer,
+        private readonly PublicationFeature $publicationFeature,
+        private readonly PublicationIndexStore $publicationIndexStore,
+        private readonly NostrKeyHelper $nostrKeyHelper,
     ) {
     }
 
@@ -52,10 +59,36 @@ final class SeoController extends AbstractController
         $urls[] = ['loc' => $this->absoluteUrlForRoute('featured_authors'), 'lastmod' => null];
 
         foreach ($this->magazineContent->getCategorySlugsFromStore() as $slug) {
-            $urls[] = [
-                'loc' => $this->absoluteUrlForRoute('magazine-category', ['slug' => $slug]),
-                'lastmod' => null,
-            ];
+            $loc = $this->safeAbsoluteUrlForRoute('magazine-category', ['slug' => $slug]);
+            if ($loc !== '') {
+                $urls[] = ['loc' => $loc, 'lastmod' => null];
+            }
+        }
+
+        if ($this->publicationFeature->isEnabled()) {
+            $loc = $this->safeAbsoluteUrlForRoute('publications');
+            if ($loc !== '') {
+                $urls[] = ['loc' => $loc, 'lastmod' => null];
+            }
+            foreach ($this->publicationIndexStore->findNewestPaginated(8000, 0) as $index) {
+                $dTag = trim((string) ($index->getSlug() ?? ''));
+                if ($dTag === '' || str_contains($dTag, '/')) {
+                    continue;
+                }
+                try {
+                    $npub = $this->nostrKeyHelper->convertPublicKeyToBech32($index->getPubkey());
+                } catch (\Throwable) {
+                    continue;
+                }
+                $loc = $this->nostrPathHelper->publicationAbsoluteUrl($npub, $dTag);
+                if ($loc === '') {
+                    continue;
+                }
+                $urls[] = [
+                    'loc' => $loc,
+                    'lastmod' => $this->eventLastMod($index),
+                ];
+            }
         }
 
         $articles = $this->articleRepository->findPublishedForSyndication(8000);
@@ -76,6 +109,9 @@ final class SeoController extends AbstractController
             .'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
 
         foreach ($urls as $row) {
+            if (($row['loc'] ?? '') === '') {
+                continue;
+            }
             $body .= "\n  <url>\n    <loc>".$this->xmlText($row['loc']).'</loc>';
             if ($row['lastmod'] instanceof \DateTimeInterface) {
                 $body .= "\n    <lastmod>".$row['lastmod']->format('Y-m-d').'</lastmod>';
@@ -238,7 +274,26 @@ final class SeoController extends AbstractController
 
     private function absoluteUrlForRoute(string $name, array $params = []): string
     {
-        return $this->generateUrl($name, $params, UrlGeneratorInterface::ABSOLUTE_URL);
+        return $this->safeAbsoluteUrlForRoute($name, $params);
+    }
+
+    private function safeAbsoluteUrlForRoute(string $name, array $params = []): string
+    {
+        try {
+            return $this->generateUrl($name, $params, UrlGeneratorInterface::ABSOLUTE_URL);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function eventLastMod(Event $event): ?\DateTimeInterface
+    {
+        $created = $event->getCreatedAt();
+        if ($created <= 0) {
+            return null;
+        }
+
+        return \DateTimeImmutable::createFromFormat('U', (string) $created) ?: null;
     }
 
     private function urlHostId(Request $request): string
@@ -327,25 +382,27 @@ final class SeoController extends AbstractController
      */
     private function dedupeArticlesByLatestRevision(array $articles): array
     {
-        $bySlug = [];
+        $byKey = [];
         foreach ($articles as $article) {
             $slug = \trim((string) $article->getSlug());
-            if ($slug === '') {
+            $pk = strtolower(trim((string) ($article->getPubkey() ?? '')));
+            if ($slug === '' || $pk === '') {
                 continue;
             }
+            $key = $pk.':'.$slug;
             $c = $article->getCreatedAt();
-            if (!isset($bySlug[$slug])) {
-                $bySlug[$slug] = $article;
+            if (!isset($byKey[$key])) {
+                $byKey[$key] = $article;
 
                 continue;
             }
-            $prev = $bySlug[$slug]->getCreatedAt();
+            $prev = $byKey[$key]->getCreatedAt();
             if ($c !== null && (null === $prev || $c > $prev)) {
-                $bySlug[$slug] = $article;
+                $byKey[$key] = $article;
             }
         }
 
-        return $bySlug;
+        return $byKey;
     }
 
     /**

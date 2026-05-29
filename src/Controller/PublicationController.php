@@ -6,6 +6,9 @@ namespace App\Controller;
 
 use App\Http\PhpExecutionTime;
 use App\Nostr\Nip19Codec;
+use App\Repository\ArticleHighlightRepository;
+use App\Service\ArticleCommentReplyContextBuilder;
+use App\Service\ArticleCommentThreadLoader;
 use App\Service\NostrKeyHelper;
 use App\Service\PublicationFeature;
 use App\Service\PublicationIndexStore;
@@ -29,6 +32,9 @@ final class PublicationController extends AbstractController
         private readonly PublicationIndexStore $publicationIndexStore,
         private readonly PublicationExportService $export,
         private readonly NostrKeyHelper $nostrKeyHelper,
+        private readonly ArticleHighlightRepository $articleHighlightRepository,
+        private readonly ArticleCommentThreadLoader $commentThreadLoader,
+        private readonly ArticleCommentReplyContextBuilder $commentReplyContextBuilder,
     ) {
     }
 
@@ -83,7 +89,7 @@ final class PublicationController extends AbstractController
     #[Route(
         '/publication/p/{npub}/d/{slug}',
         name: 'publication',
-        requirements: ['npub' => '^npub1.*', 'slug' => '.+'],
+        requirements: ['npub' => '^npub1.*', 'slug' => '[^/]+'],
         options: ['utf8' => true],
     )]
     public function reader(Request $request, string $npub, string $slug): Response
@@ -100,52 +106,114 @@ final class PublicationController extends AbstractController
             throw new NotFoundHttpException('Publication not found');
         }
 
-        $this->reader->ensurePublicationTreeWarm($index, $npub, $slug);
+        $viewMode = $request->query->getString('view');
+        if ($viewMode === 'full') {
+            @set_time_limit(120);
+            @ini_set('max_execution_time', '120');
+            $this->reader->ensurePublicationTreeWarmForExport($index);
+        } else {
+            $this->reader->ensurePublicationTreeWarm($index, $npub, $slug);
+        }
 
         $sectionCoord = $request->query->getString('section');
         $sectionHtml = null;
-        if ($sectionCoord !== '') {
+        $fullHtml = null;
+        if ($viewMode === 'full') {
+            $fullHtml = $this->reader->renderFullPublicationHtml($index);
+        } elseif ($sectionCoord !== '') {
             $sectionHtml = $this->reader->renderSectionHtml($sectionCoord);
+        }
+
+        $viewModeResolved = $viewMode === 'full' ? 'full' : 'section';
+        $publicationTitle = $this->reader->titleFromIndex($index);
+        $publicationCoordinate = '30040:'.strtolower((string) $index->getPubkey()).':'.$slug;
+        $publicationEventId = $index->getEventId() ?? '';
+        if ($publicationEventId === '') {
+            $publicationEventId = $index->getId();
+        }
+        $publicationEventId = self::isValidHexEventId($publicationEventId) ? strtolower($publicationEventId) : null;
+
+        $sidebarHighlights = [];
+        $commentsData = null;
+        $commentsPreloaded = false;
+        $commentReplyContext = $this->commentReplyContextBuilder->buildArticleReplyContext(
+            $publicationCoordinate,
+            $publicationEventId,
+            $publicationTitle,
+        );
+
+        if ($viewModeResolved === 'section') {
+            $sectionCoordinates = $this->reader->collectSectionCoordinates($index);
+            $sidebarHighlights = $this->articleHighlightRepository->findForPublicationSections($sectionCoordinates);
+
+            $cachedComments = $this->commentThreadLoader->tryLoadFromCacheOnly($publicationCoordinate, $publicationEventId);
+            if ($cachedComments !== null) {
+                $commentsData = $this->commentReplyContextBuilder->enrich(
+                    $cachedComments,
+                    $publicationCoordinate,
+                    $publicationEventId,
+                    $publicationTitle,
+                );
+                $commentReplyContext = $commentsData['comment_reply_context'];
+                $commentsPreloaded = true;
+            }
         }
 
         return $this->render('pages/publication.html.twig', [
             'index' => $index,
             'npub' => $npub,
             'slug' => $slug,
-            'title' => $this->reader->titleFromIndex($index),
+            'title' => $publicationTitle,
             'summary' => $this->reader->summaryFromIndex($index),
             'image' => $this->reader->imageFromIndex($index),
             'toc' => $this->reader->buildToc($index),
+            'view_mode' => $viewModeResolved,
             'section_coordinate' => $sectionCoord,
             'section_html' => $sectionHtml,
+            'full_html' => $fullHtml,
             'export_available' => $this->export->isAvailable(),
             'export_formats' => $this->export->supportedFormats(),
+            'sidebar_highlights' => $sidebarHighlights,
+            'publication_coordinate' => $publicationCoordinate,
+            'publication_event_id' => $publicationEventId,
+            'comments_data' => $commentsData,
+            'comments_preloaded' => $commentsPreloaded,
+            'comment_reply_context' => $commentReplyContext,
         ]);
+    }
+
+    private static function isValidHexEventId(string $id): bool
+    {
+        return \strlen($id) === 64 && ctype_xdigit($id);
     }
 
     #[Route(
         '/publication/p/{npub}/d/{slug}/download',
         name: 'publication-download',
-        requirements: ['npub' => '^npub1.*', 'slug' => '.+'],
+        requirements: ['npub' => '^npub1.*', 'slug' => '[^/]+'],
         options: ['utf8' => true],
         methods: ['GET'],
+        priority: 10,
     )]
     public function download(Request $request, string $npub, string $slug): Response
     {
         if (!$this->publicationFeature->isEnabled()) {
             throw $this->createNotFoundException();
         }
-        if (!$this->export->isAvailable()) {
-            throw new ServiceUnavailableHttpException(null, 'Publication export is not configured.');
-        }
-
         $format = $request->query->getString('format', 'epub3');
 
         @set_time_limit(120);
         @ini_set('max_execution_time', '120');
 
         try {
-            $file = $this->export->export($npub, $slug, $format);
+            if (\in_array($format, ['asciidoc', 'adoc'], true)) {
+                $file = $this->export->exportAsciidoc($npub, $slug);
+            } else {
+                if (!$this->export->isAvailable()) {
+                    throw new ServiceUnavailableHttpException(null, 'Publication export is not configured.');
+                }
+                $file = $this->export->export($npub, $slug, $format);
+            }
         } catch (PublicationExportException $e) {
             throw new NotFoundHttpException($e->getMessage(), $e);
         } catch (\InvalidArgumentException $e) {

@@ -51,15 +51,19 @@
         </div>
         <p class="notice error user-menu__login-error" data-login-target="error" role="alert" hidden></p>
         <div class="user-menu__login-actions">
-            <twig:Atoms:Button
+            <button
+                type="button"
+                class="btn btn-primary"
                 data-login-target="submitButton"
-                {{ ...stimulus_action('login', 'loginAct') }}
-            >{{ 'login.extension'|trans }}</twig:Atoms:Button>
-            <twig:Atoms:Button
+                data-action="click->login#loginAct"
+            >{{ 'login.extension'|trans }}</button>
+            <button
+                type="button"
+                class="btn btn-primary"
                 data-login-target="amberToggleButton"
                 aria-expanded="false"
-                {{ ...stimulus_action('login', 'toggleAmberPanel') }}
-            >{{ 'login.amber_toggle'|trans }}</twig:Atoms:Button>
+                data-action="click->login#toggleAmberPanel"
+            >{{ 'login.amber_toggle'|trans }}</button>
         </div>
         <div class="user-menu__amber-panel" data-login-target="amberPanel" hidden>
             <p class="user-menu__section-label">{{ 'login.amber_scan_heading'|trans }}</p>
@@ -82,7 +86,7 @@
                         type="button"
                         class="user-menu__amber-copy"
                         data-login-target="copyUriButton"
-                        {{ stimulus_action('login', 'copyConnectUriAct') }}
+                        data-action="click->login#copyConnectUriAct"
                     >{{ 'login.amber_copy_link'|trans }}</button>
                 </div>
                 <p class="user-menu__amber-status" data-login-target="amberStatus" role="status" hidden></p>
@@ -100,10 +104,12 @@
                 spellcheck="false"
                 inputmode="url"
             >
-            <twig:Atoms:Button
+            <button
+                type="button"
+                class="btn btn-primary"
                 data-login-target="amberSubmitButton"
-                {{ ...stimulus_action('login', 'loginWithAmberAct') }}
-            >{{ 'login.amber_submit'|trans }}</twig:Atoms:Button>
+                data-action="click->login#loginWithAmberAct"
+            >{{ 'login.amber_submit'|trans }}</button>
         </div>
     {% endif %}
     <div>

@@ -89,7 +89,7 @@ export default class extends Controller {
                 return;
             }
         }
-        this.fetchPreview();
+        void this.fetchPreview();
     }
 
     async fetchPreview() {

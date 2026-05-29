@@ -34,6 +34,30 @@ final class PublicationExportService
     /**
      * @return array{body: string, mimeType: string, filename: string}
      */
+    public function exportAsciidoc(string $npub, string $slug): array
+    {
+        $index = $this->reader->resolveRootIndex($npub, $slug);
+        if ($index === null) {
+            throw new PublicationExportException('Publication not found.');
+        }
+
+        $this->reader->ensurePublicationTreeWarmForExport($index);
+
+        $assembled = $this->assembler->assemble($index);
+        if (trim($assembled['content']) === '') {
+            throw new PublicationExportException('Publication has no exportable content.');
+        }
+
+        return [
+            'body' => $assembled['content'],
+            'mimeType' => 'text/plain; charset=utf-8',
+            'filename' => $this->safeFilename($assembled['title'], 'adoc'),
+        ];
+    }
+
+    /**
+     * @return array{body: string, mimeType: string, filename: string}
+     */
     public function export(string $npub, string $slug, string $format): array
     {
         $index = $this->reader->resolveRootIndex($npub, $slug);

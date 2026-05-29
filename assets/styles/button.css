@@ -65,14 +65,12 @@ button:focus-visible, .btn:focus-visible, a.btn:focus-visible {
     text-decoration: none;
 }
 
-/* Filled primary buttons only — do not override secondary/outline variants. */
-html[data-color-scheme="dark"] button:not(.btn-secondary):not(.btn-outline-secondary),
+/* Filled primary .btn only — plain <button> elements (menus, forms) keep their own colors. */
 html[data-color-scheme="dark"] .btn:not(.btn-secondary):not(.btn-outline-secondary),
 html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-secondary) {
     color: #121212;
 }
 
-html[data-color-scheme="dark"] button:not(.btn-secondary):not(.btn-outline-secondary):hover,
 html[data-color-scheme="dark"] .btn:not(.btn-secondary):not(.btn-outline-secondary):hover,
 html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-secondary):hover {
     color: var(--color-primary);
@@ -80,7 +78,6 @@ html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-second
     border-color: var(--color-primary);
 }
 
-html[data-color-scheme="dark"] button:not(.btn-secondary):not(.btn-outline-secondary):active,
 html[data-color-scheme="dark"] .btn:not(.btn-secondary):not(.btn-outline-secondary):active,
 html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-secondary):active {
     color: #121212;
