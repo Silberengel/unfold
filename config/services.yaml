@@ -65,6 +65,7 @@ services:
             $projectDir: '%kernel.project_dir%'
     App\Service\ArticleCommentThreadLoader:
         arguments:
+            $cache: '@cache.replies'
             $appCachePool: '@cache.replies'
     App\Twig\FooterLinksExtension:
         arguments:

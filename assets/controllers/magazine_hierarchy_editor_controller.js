@@ -914,15 +914,26 @@ export default class MagazineHierarchyEditorController extends Controller {
             }
             if (Number.isFinite(n) && Number.isFinite(ingested) && ingested > 0) {
                 this.setStatus(
-                    `Published and stored ${n} index event(s); synced ${ingested} article/wiki address(es) from relays.`,
+                    `Published and stored ${n} index event(s); synced ${ingested} article/wiki address(es) from relays. Open the site to see updates.`,
                     { tone: 'success', scroll: true },
                 );
             } else {
-                this.setStatus(Number.isFinite(n) ? `Published and stored ${n} index event(s).` : 'Published.', {
-                    tone: 'success',
-                    scroll: true,
-                });
+                this.setStatus(
+                    Number.isFinite(n)
+                        ? `Published and stored ${n} index event(s). Open the site to see updates.`
+                        : 'Published.',
+                    { tone: 'success', scroll: true },
+                );
             }
+            window.dispatchEvent(
+                new CustomEvent('unfold:magazine-published', {
+                    detail: {
+                        published: Number.isFinite(n) ? n : 0,
+                        stored: Number(data.stored),
+                        longformIngestAddresses: Number(data.longform_ingest_addresses),
+                    },
+                }),
+            );
         } finally {
             this._publishInFlight = false;
             this.setPublishBusy(false);

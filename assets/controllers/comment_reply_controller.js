@@ -144,7 +144,8 @@ export default class extends Controller {
         if (this.refreshAfterValue) {
             const publishedId =
                 typeof data.id === 'string' && data.id ? data.id.toLowerCase() : '';
-            void this.refreshThread(publishedId);
+            const merged = data.merged === true;
+            void this.refreshThread(publishedId, merged);
         }
     }
 
@@ -162,8 +163,9 @@ export default class extends Controller {
      * (connect/disconnect storms) while relays were still behind.
      *
      * @param {string} [expectedEventIdHex] lowercase 64-char hex
+     * @param {boolean} [seededInCache] server merged the publish into cache.replies — one fetch is enough
      */
-    async refreshThread(expectedEventIdHex = '') {
+    async refreshThread(expectedEventIdHex = '', seededInCache = false) {
         const wrap = this.element.closest('[data-article-comments-wrapper]');
         const url =
             wrap?.getAttribute('data-article-comments-url-value') ||
@@ -177,7 +179,7 @@ export default class extends Controller {
         }
         const wantId =
             expectedEventIdHex && /^[0-9a-f]{64}$/.test(expectedEventIdHex) ? expectedEventIdHex : '';
-        const maxRounds = wantId ? 14 : 1;
+        const maxRounds = wantId ? (seededInCache ? 3 : 14) : 1;
         for (let round = 0; round < maxRounds; round += 1) {
             if (round > 0) {
                 const delay = Math.min(1400, 200 * 2 ** (round - 1));

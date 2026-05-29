@@ -29,6 +29,7 @@ final readonly class ArticleCommentThreadLoader
     public function __construct(
         private NostrClient $nostrClient,
         private NostrLinkParser $nostrLinkParser,
+        private NostrArticleDiscussionSupport $articleDiscussion,
         private CacheInterface $cache,
         private CacheItemPoolInterface $appCachePool,
         private LoggerInterface $logger,
@@ -136,9 +137,106 @@ final readonly class ArticleCommentThreadLoader
     {
         $key = $this->cacheKeyForThread($coordinate, $articleEventHexId);
         try {
+            $this->cache->delete($key);
+        } catch (\Throwable) {
+        }
+        try {
             $this->appCachePool->deleteItem($key);
         } catch (InvalidArgumentException) {
         }
+    }
+
+    /**
+     * Merge a just-published thread reply into the filesystem cache so the UI can show it immediately
+     * without waiting for relays to echo the event back.
+     *
+     * @param array<string, mixed> $rawEvent Verified signed event JSON (same shape as the publish POST body)
+     */
+    public function mergePublishedThreadEvent(string $coordinate, ?string $articleEventHexId, array $rawEvent): bool
+    {
+        try {
+            $wire = json_decode(
+                json_encode($rawEvent, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
+                false,
+                512,
+                \JSON_THROW_ON_ERROR,
+            );
+        } catch (\JsonException) {
+            return false;
+        }
+        if (!\is_object($wire)) {
+            return false;
+        }
+        $id = isset($wire->id) ? strtolower((string) $wire->id) : '';
+        if (64 !== \strlen($id) || !ctype_xdigit($id)) {
+            return false;
+        }
+
+        $kind = (int) ($wire->kind ?? 0);
+        $isThread = false;
+        if ($kind === KindsEnum::COMMENTS->value && $this->articleDiscussion->eventIsNip22ArticleThreadReply($wire, $coordinate)) {
+            $isThread = true;
+        } elseif ($kind === KindsEnum::TEXT_NOTE->value && $this->articleDiscussion->eventIsLegacyThreadReply($wire, $coordinate, $articleEventHexId)) {
+            $isThread = true;
+        }
+        if (!$isThread) {
+            return false;
+        }
+
+        $key = $this->cacheKeyForThread($coordinate, $articleEventHexId);
+        $discussion = ['thread' => [], 'quotes' => [], 'superchats' => []];
+        try {
+            $item = $this->appCachePool->getItem($key);
+            if ($item->isHit()) {
+                $cached = $item->get();
+                if (\is_array($cached)) {
+                    $discussion['thread'] = \is_array($cached['thread'] ?? null) ? $cached['thread'] : [];
+                    $discussion['quotes'] = \is_array($cached['quotes'] ?? null) ? $cached['quotes'] : [];
+                    $discussion['superchats'] = \is_array($cached['superchats'] ?? null) ? $cached['superchats'] : [];
+                }
+            }
+        } catch (InvalidArgumentException) {
+            return false;
+        }
+
+        foreach ($discussion['thread'] as $ev) {
+            if (!\is_object($ev) || !isset($ev->id)) {
+                continue;
+            }
+            if (hash_equals($id, strtolower((string) $ev->id))) {
+                return true;
+            }
+        }
+
+        $discussion['thread'][] = $wire;
+        usort(
+            $discussion['thread'],
+            static fn ($a, $b): int => ((int) ($a->created_at ?? 0)) <=> ((int) ($b->created_at ?? 0)),
+        );
+        unset($discussion['partial']);
+
+        try {
+            $this->cache->delete($key);
+            $item->set($discussion);
+            $item->expiresAfter(86400);
+            $this->appCachePool->save($item);
+        } catch (\Throwable $e) {
+            $this->logger->warning('comments.loader.merge_published_failed', [
+                'coordinate' => $coordinate,
+                'event_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        $this->logger->info('comments.loader.merge_published', [
+            'coordinate' => $coordinate,
+            'event_id' => $id,
+            'thread_count' => \count($discussion['thread']),
+        ]);
+
+        return true;
     }
 
     /**

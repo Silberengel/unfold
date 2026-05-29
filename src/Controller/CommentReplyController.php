@@ -49,9 +49,17 @@ final class CommentReplyController extends AbstractController
         $out = $commentReply->publishFromRequestPayload($user, $data);
         if ($out['ok'] === true) {
             $coord = $data['expected_coordinate'] ?? null;
+            $merged = false;
             if (\is_string($coord) && $coord !== '') {
                 $eid = isset($data['article_event_id']) && \is_string($data['article_event_id']) && $data['article_event_id'] !== '' ? $data['article_event_id'] : null;
-                $commentThreadLoader->invalidateThread($coord, 64 === \strlen((string) $eid) && ctype_xdigit((string) $eid) ? $eid : null);
+                $articleEventHex = 64 === \strlen((string) $eid) && ctype_xdigit((string) $eid) ? $eid : null;
+                $rawEvent = $data['event'] ?? null;
+                if (\is_array($rawEvent)) {
+                    $merged = $commentThreadLoader->mergePublishedThreadEvent($coord, $articleEventHex, $rawEvent);
+                }
+                if (!$merged) {
+                    $commentThreadLoader->invalidateThread($coord, $articleEventHex);
+                }
             }
 
             return $this->json([
@@ -59,6 +67,7 @@ final class CommentReplyController extends AbstractController
                 'id' => $out['id'],
                 'ok_relays' => $out['ok_relays'],
                 'total_relays' => $out['total_relays'],
+                'merged' => $merged,
             ]);
         }
 
