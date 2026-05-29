@@ -35,6 +35,7 @@ final class PublicationController extends AbstractController
         private readonly ArticleHighlightRepository $articleHighlightRepository,
         private readonly ArticleCommentThreadLoader $commentThreadLoader,
         private readonly ArticleCommentReplyContextBuilder $commentReplyContextBuilder,
+        private readonly PublicationIndexMetadataBuilder $publicationIndexMetadataBuilder,
     ) {
     }
 
@@ -165,6 +166,7 @@ final class PublicationController extends AbstractController
             'slug' => $slug,
             'title' => $publicationTitle,
             'summary' => $this->reader->summaryFromIndex($index),
+            'publication_meta' => $this->publicationIndexMetadataBuilder->build($index),
             'image' => $this->reader->imageFromIndex($index),
             'toc' => $this->reader->buildToc($index),
             'view_mode' => $viewModeResolved,

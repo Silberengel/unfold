@@ -15,10 +15,7 @@
             {% if _pub_share %}{% include 'components/Molecules/NostrShareMenu.html.twig' with { share: _pub_share, event_menu: true } only %}{% endif %}
         </div>
         <div class="card-body">
-            {% if summary|trim != '' %}
-                <p class="lede">{{ summary }}</p>
-            {% endif %}
-            <p class="text-subtle">by <twig:Molecules:UserFromNpub ident="{{ index.pubkey }}" /></p>
+            {% include 'components/Molecules/PublicationIndexMeta.html.twig' with { publication_meta: publication_meta } only %}
             <div
                 class="publication-actions"
                 data-controller="publication-export"

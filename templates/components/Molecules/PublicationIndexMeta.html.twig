@@ -1,0 +1,139 @@
+{# Kind-30040 index metadata (NKBIP-01). Expects publication_meta: App\Dto\PublicationIndexMetadata #}
+{% set meta = publication_meta %}
+<dl class="publication-meta">
+    {% if meta.summary|default('')|trim != '' %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Summary</dt>
+            <dd class="publication-meta__value publication-meta__value--prose">{{ meta.summary }}</dd>
+        </div>
+    {% endif %}
+
+    <div class="publication-meta__group">
+        <dt class="publication-meta__label">Published by</dt>
+        <dd class="publication-meta__value">
+            {% if meta.publisherNpub|default('') != '' %}
+                <twig:Molecules:UserFromNpub ident="{{ meta.publisherNpub }}" />
+            {% else %}
+                <span class="text-subtle">{{ meta.publisherPubkeyHex|default('') }}</span>
+            {% endif %}
+        </dd>
+    </div>
+
+    {% if meta.authors|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Author{{ meta.authors|length > 1 ? 's' : '' }}</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list">
+                    {% for name in meta.authors %}
+                        <li>{{ name }}</li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.nostrAuthorHexes|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Nostr author{{ meta.nostrAuthorHexes|length > 1 ? 's' : '' }}</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list publication-meta__list--npub">
+                    {% for hex in meta.nostrAuthorHexes %}
+                        <li><twig:Molecules:UserFromNpub ident="{{ hex }}" /></li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.type|default(null) %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Type</dt>
+            <dd class="publication-meta__value">{{ meta.type }}</dd>
+        </div>
+    {% endif %}
+
+    {% if meta.version|default(null) %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Version</dt>
+            <dd class="publication-meta__value">{{ meta.version }}</dd>
+        </div>
+    {% endif %}
+
+    {% if meta.publishedOn|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Published on</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list">
+                    {% for row in meta.publishedOn %}
+                        <li>{{ row }}</li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.publishedBy|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Publisher</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list">
+                    {% for row in meta.publishedBy %}
+                        <li>{{ row }}</li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.topics|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Topics</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list publication-meta__topics">
+                    {% for topic in meta.topics %}
+                        <li><span class="ui-badge ui-badge--neutral">{{ topic }}</span></li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.identifiers|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Identifier{{ meta.identifiers|length > 1 ? 's' : '' }}</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list">
+                    {% for id in meta.identifiers %}
+                        <li><code class="publication-meta__code">{{ id }}</code></li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.sources|default([]) is not empty %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Source{{ meta.sources|length > 1 ? 's' : '' }}</dt>
+            <dd class="publication-meta__value">
+                <ul class="publication-meta__list">
+                    {% for src in meta.sources %}
+                        <li>
+                            {% if src starts with 'http://' or src starts with 'https://' %}
+                                <a href="{{ src|e('html_attr') }}" target="_blank" rel="nofollow noopener noreferrer">{{ src }}</a>
+                            {% else %}
+                                {{ src }}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+    {% endif %}
+
+    {% if meta.autoUpdate|default(null) %}
+        <div class="publication-meta__group">
+            <dt class="publication-meta__label">Auto-update</dt>
+            <dd class="publication-meta__value">{{ meta.autoUpdate }}</dd>
+        </div>
+    {% endif %}
+</dl>
