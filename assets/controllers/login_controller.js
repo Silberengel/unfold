@@ -13,6 +13,9 @@ import {
 
 const NIP46_RELAY_STORAGE_KEY = 'unfold.nostr.nip46.client_relays';
 
+/** Ping logged-in Symfony session while the tab is open (well under 24 h gc_maxlifetime). */
+const SESSION_KEEPALIVE_MS = 10 * 60 * 1000;
+
 export default class extends Controller {
   static targets = [
     'error',
@@ -42,6 +45,8 @@ export default class extends Controller {
     nip46Relays: Array,
     siteName: String,
     siteUrl: String,
+    loggedIn: { type: Boolean, default: false },
+    sessionPingUrl: { type: String, default: '/session/ping' },
   };
 
   connect() {
@@ -49,10 +54,52 @@ export default class extends Controller {
     this._nostrConnectSecretKey = null;
     this._nostrConnectAbort = null;
     this._liveComponent = null;
+    this._sessionKeepaliveTimer = null;
+    this.boundOnAuth ??= this.onAuthChanged.bind(this);
+    window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
+    window.addEventListener('unfold:auth-changed', this.boundOnAuth);
+    if (this.loggedInValue) {
+      this.startSessionKeepalive();
+    }
   }
 
   disconnect() {
     this.abortNostrConnectFlow();
+    this.stopSessionKeepalive();
+    window.removeEventListener('unfold:auth-changed', this.boundOnAuth);
+  }
+
+  onAuthChanged(event) {
+    const loggedIn = Boolean(event?.detail?.loggedIn);
+    if (loggedIn) {
+      this.startSessionKeepalive();
+    } else {
+      this.stopSessionKeepalive();
+    }
+  }
+
+  startSessionKeepalive() {
+    this.stopSessionKeepalive();
+    const url = this.sessionPingUrlValue || '/session/ping';
+    const ping = () => {
+      void fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      }).catch(() => {
+        /* ignore; next interval retries */
+      });
+    };
+    ping();
+    this._sessionKeepaliveTimer = window.setInterval(ping, SESSION_KEEPALIVE_MS);
+  }
+
+  stopSessionKeepalive() {
+    if (this._sessionKeepaliveTimer !== null) {
+      window.clearInterval(this._sessionKeepaliveTimer);
+      this._sessionKeepaliveTimer = null;
+    }
   }
 
   async liveComponent() {

@@ -8,7 +8,9 @@ framework:
         handler_id: Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler
         cookie_secure: auto
         cookie_samesite: lax
-        cookie_lifetime: 0 # integer, lifetime in seconds, 0 means 'valid for the length of the browser session'
+        # 24 h site login (Amber/NIP-46 signing is separate; see assets/nostr/signer.js).
+        cookie_lifetime: 86400
+        gc_maxlifetime: 86400
     trusted_headers: ['forwarded', 'x-forwarded-for', 'x-forwarded-proto']
     #trusted_proxies: 'symfony,REMOTE_ADDR'
     #esi: true

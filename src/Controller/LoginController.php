@@ -27,4 +27,17 @@ class LoginController extends AbstractController
             'message' => 'Unauthenticated',
         ], 401);
     }
+
+    /**
+     * Lightweight session touch for logged-in keepalive (see login Stimulus controller).
+     */
+    #[Route('/session/ping', name: 'session_ping', methods: ['GET'])]
+    public function ping(#[CurrentUser] ?User $user): Response
+    {
+        if (null === $user) {
+            return new Response('', Response::HTTP_UNAUTHORIZED);
+        }
+
+        return new Response('', Response::HTTP_NO_CONTENT);
+    }
 }

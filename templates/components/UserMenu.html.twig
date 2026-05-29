@@ -14,6 +14,8 @@
         nip46Relays: nip46_client_relays,
         siteName: website_name,
         siteUrl: app.request.schemeAndHttpHost,
+        loggedIn: app.user ? true : false,
+        sessionPingUrl: path('session_ping'),
     })) }}
 >
     {% if app.user %}

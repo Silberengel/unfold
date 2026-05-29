@@ -33,7 +33,7 @@ login:
     amber_copied: 'Copied'
     amber_waiting: 'Waiting for Amber to connect…'
     amber_connected: 'Connected. Signing in…'
-    amber_help: 'Paste a bunker:// or nostrconnect:// URL from Amber or another NIP-46 remote signer, then connect.'
+    amber_help: 'Paste a bunker:// URL from Amber for a lasting connection, or a one-time nostrconnect:// URL while pairing. After scanning the QR code, Unfold stores bunker:// automatically.'
     amber_url_label: 'Remote signer URL'
     amber_url_placeholder: 'bunker://… or nostrconnect://…'
     amber_prompt: 'Paste a bunker:// or nostrconnect:// URL to connect.'

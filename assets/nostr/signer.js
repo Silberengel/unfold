@@ -174,6 +174,8 @@ async function openNip46Signer(stored) {
     const nip46 = await getNip46Module();
     const secretKey = hexToBytes(stored.secretKey);
     const trimmed = stored.bunkerUrl.trim();
+    // nostrconnect:// is one-time pairing metadata for the QR handshake only; after connect we
+    // persist bunker:// (remote signer pubkey + relays). Re-opening nostrconnect:// cannot reconnect.
     if (trimmed.startsWith('nostrconnect://')) {
         throw new Error('Remote signer session expired. Scan the QR code or paste a bunker URL again.');
     }
