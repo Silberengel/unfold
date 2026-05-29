@@ -173,7 +173,7 @@ Articles and kind-0 profiles are stored once and shared; **search** spans all in
 
 ## Production / Hub (remote server)
 
-Each site uses a **pre-built** image (site baked in at build time via **`UNFOLD_SITE`**). On the server, copy into one directory per stack (e.g. `~/unfold-imwald`): **`compose.hub.yaml`**, **`.env`** (from `.env.dist`), **`Makefile.hub`** from **`deploy/imwald/`** or **`deploy/gitcitadel/`**, and **`hub-app.mk`** from **`deploy/hub-app.mk`**. Do **not** copy the repo-root **`Makefile.hub`** (that file is for running from a full git checkout).
+Each site uses a **pre-built** image (site baked in at build time via **`UNFOLD_SITE`**). On the server, copy into one directory per stack (e.g. `~/unfold-imwald`): **`compose.hub.yaml`**, **`.env`** (from `.env.dist`), **`Makefile.hub`** and optional **`Makefile`** (enables plain **`make prewarm`**) from **`deploy/imwald/`** or **`deploy/gitcitadel/`**, and **`hub-app.mk`** from **`deploy/hub-app.mk`**. Do **not** copy the repo-root **`Makefile.hub`** (that file is for running from a full git checkout).
 
 | Site / role | Hub directory | Default image | HTTP (default) |
 |-------------|---------------|---------------|----------------|
@@ -242,14 +242,14 @@ After code changes: **`make -f Makefile.hub pull`** and **`up`** per app stack; 
 
 ### `Makefile.hub` (on the server)
 
-Per app directory (`unfold-imwald`, `unfold-gitcitadel`), you need **`Makefile.hub`**, **`hub-app.mk`**, **`compose.hub.yaml`**, and **`.env`** in the same folder. **`deploy/unfold-db/Makefile.hub`** is self-contained (no `hub-app.mk`).
+Per app directory (`unfold-imwald`, `unfold-gitcitadel`), you need **`Makefile.hub`**, **`hub-app.mk`**, **`compose.hub.yaml`**, and **`.env`** in the same folder. Copy **`Makefile`** too if you want **`make prewarm`** without **`-f Makefile.hub`**. **`deploy/unfold-db/Makefile.hub`** is self-contained (no `hub-app.mk`).
 
 ```bash
 make -f Makefile.hub help
 make -f Makefile.hub pull
 make -f Makefile.hub up
 make -f Makefile.hub migrate          # imwald only (runs migrations)
-make -f Makefile.hub backfill         # articles:get + prewarm-once
+make -f Makefile.hub backfill         # articles:get + prewarm-once (or: make prewarm if Makefile copied)
 ```
 
 **From a full git checkout** (repo root), use the root **`Makefile.hub`** (`HUB_COMPOSE=deploy/imwald/compose.hub.yaml` by default):

@@ -7,10 +7,10 @@ COMPOSE := docker compose -f $(HUB_COMPOSE)
 # Set DB_DIR in the including Makefile (e.g. ../unfold-db).
 DB_DIR ?= ../unfold-db
 
-.PHONY: help pull up down ps restart restart-app up-app down-app migrate prewarm-once articles-get backfill shell logs-php logs-prewarm logs-db
+.PHONY: help pull up down ps restart restart-app up-app down-app migrate prewarm prewarm-once articles-get backfill shell logs-php logs-prewarm logs-db
 
 help:
-	@echo "Hub app stack (make -f Makefile.hub <target>)"
+	@echo "Hub app stack (make prewarm | make -f Makefile.hub <target>)"
 	@echo "  pull          - docker compose pull (php, prewarm)"
 	@echo "  up            - start php + prewarm (requires unfold-db up)"
 	@echo "  down          - stop php + prewarm (MySQL keeps running)"
@@ -20,9 +20,10 @@ help:
 	@echo "  down-app      - stop php + prewarm"
 	@echo "  ps            - service status"
 	@echo "  migrate       - Doctrine migrations in php"
+	@echo "  prewarm       - same as backfill (dev `make prewarm` equivalent)"
 	@echo "  prewarm-once  - one-shot app:prewarm"
 	@echo "  articles-get  - Nostr backfill (ARTICLES_FROM / ARTICLES_TO)"
-	@echo "  backfill      - migrate + articles:get + prewarm-once"
+	@echo "  backfill      - up + migrate + articles:get + prewarm-once"
 	@echo "  shell         - shell in php"
 	@echo "  logs-php      - php logs"
 	@echo "  logs-prewarm  - prewarm logs"
@@ -61,6 +62,9 @@ articles-get:
 
 backfill: up-app migrate articles-get prewarm-once
 	@echo "Backfill done."
+
+# Alias for repo-root `make prewarm` / scripts/docker-prewarm.sh (hub has no bind-mounted cron stack).
+prewarm: backfill
 
 shell:
 	$(COMPOSE) exec php sh
