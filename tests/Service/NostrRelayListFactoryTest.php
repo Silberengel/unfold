@@ -11,25 +11,30 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 
 final class NostrRelayListFactoryTest extends TestCase
 {
-    public function testGetSearchRelayUrlListDeduplicates(): void
+    public function testGetSearchRelayUrlListDeduplicatesAndKeepsHttp(): void
     {
         $tokenStorage = $this->createMock(TokenStorageInterface::class);
         $tokenStorage->method('getToken')->willReturn(null);
         $f = new NostrRelayListFactory(
-            'wss://forest',
-            ['wss://forest', 'wss://citadel'],
+            ['wss://forest'],
+            ['wss://forest', 'wss://citadel', 'http://mercury.example'],
             ['wss://profile'],
             $tokenStorage,
             new NullLogger(),
         );
-        $this->assertSame(['wss://forest', 'wss://citadel'], $f->getSearchRelayUrlList());
+        $this->assertSame(
+            ['wss://forest', 'wss://citadel', 'http://mercury.example'],
+            $f->getSearchRelayUrlList(),
+        );
+        $this->assertSame(['wss://forest', 'wss://citadel'], $f->getSearchWssUrlList());
+        $this->assertSame(['http://mercury.example'], $f->getSearchHttpUrlList());
     }
 
     public function testGetCommunityRelayUrl(): void
     {
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
-        $f = new NostrRelayListFactory('wss://forest', [], [], $ts, new NullLogger());
+        $f = new NostrRelayListFactory(['wss://forest'], [], [], $ts, new NullLogger());
         $this->assertSame('wss://forest', $f->getCommunityRelayUrl());
         $this->assertSame(['wss://forest'], $f->getCommunityRelayUrlList());
     }
@@ -39,13 +44,47 @@ final class NostrRelayListFactoryTest extends TestCase
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
         $f = new NostrRelayListFactory(
-            'wss://forest',
+            ['wss://forest', 'http://mercury.example'],
             ['wss://citadel'],
             [],
             $ts,
             new NullLogger(),
         );
-        $this->assertSame(['wss://forest', 'wss://citadel'], $f->getPublishRelayUrlList());
+        $this->assertSame(
+            ['wss://forest', 'http://mercury.example', 'wss://citadel'],
+            $f->getPublishRelayUrlList(),
+        );
+    }
+
+    public function testPartitionRelayUrlsByScheme(): void
+    {
+        $ts = $this->createMock(TokenStorageInterface::class);
+        $ts->method('getToken')->willReturn(null);
+        $f = new NostrRelayListFactory([], [], [], $ts, new NullLogger());
+        $this->assertSame(
+            [
+                'wss' => ['wss://a', 'wss://b'],
+                'http' => ['https://mercury.example'],
+            ],
+            $f->partitionRelayUrlsByScheme(['wss://a', 'https://mercury.example', 'wss://b', 'wss://a']),
+        );
+    }
+
+    public function testProfileMetadataQueryUsesWssOnly(): void
+    {
+        $ts = $this->createMock(TokenStorageInterface::class);
+        $ts->method('getToken')->willReturn(null);
+        $f = new NostrRelayListFactory(
+            ['wss://forest', 'http://mercury.example'],
+            ['wss://citadel', 'http://mercury.example'],
+            ['wss://profile'],
+            $ts,
+            new NullLogger(),
+        );
+        $this->assertSame(
+            ['wss://profile', 'wss://forest', 'wss://citadel'],
+            $f->getProfileMetadataQueryRelayUrlList(),
+        );
     }
 
     public function testIsTenantConfiguredRelay(): void
@@ -53,13 +92,14 @@ final class NostrRelayListFactoryTest extends TestCase
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
         $f = new NostrRelayListFactory(
-            'wss://forest',
-            ['wss://citadel'],
+            ['wss://forest'],
+            ['wss://citadel', 'http://mercury.example'],
             ['wss://profile'],
             $ts,
             new NullLogger(),
         );
         $this->assertTrue($f->isTenantConfiguredRelay('wss://forest/'));
+        $this->assertTrue($f->isTenantConfiguredRelay('http://mercury.example'));
         $this->assertTrue($f->isTenantConfiguredRelay('wss://profile'));
         $this->assertFalse($f->isTenantConfiguredRelay('wss://other'));
     }

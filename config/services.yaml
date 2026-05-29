@@ -44,9 +44,12 @@ services:
     App\Service\NostrRelayFanoutTransport:
         arguments:
             $projectDir: '%kernel.project_dir%'
+    App\Service\MercuryHttpRelayClient:
+        arguments:
+            $relayRequestTimeoutSec: '%nostr_relay_request_timeout_sec%'
     App\Service\NostrRelayListFactory:
         arguments:
-            $communityRelayUrl: '%community_relay%'
+            $communityRelayUrls: '%community_relays%'
             $searchRelayUrls: '%search_relays%'
             $profileRelayUrls: '%profile_relays%'
     App\Service\NostrAuthorRelayCache:

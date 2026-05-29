@@ -11,7 +11,7 @@ use swentel\nostr\Relay\RelaySet;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 /**
- * Relay lists from site YAML ({@code community_relay}, {@code search_relays}, {@code profile_relays}).
+ * Relay lists from site YAML ({@code community_relays}, {@code search_relays}, {@code profile_relays}).
  * Use-case comments live in {@see config/sites/*.yaml}.
  */
 final readonly class NostrRelayListFactory
@@ -32,11 +32,12 @@ final readonly class NostrRelayListFactory
     private const MAX_PROFILE_SEQUENTIAL_RELAY_URLS = 3;
 
     /**
+     * @param list<string> $communityRelayUrls
      * @param list<string> $searchRelayUrls
      * @param list<string> $profileRelayUrls
      */
     public function __construct(
-        private string $communityRelayUrl,
+        private array $communityRelayUrls,
         private array $searchRelayUrls,
         private array $profileRelayUrls,
         private TokenStorageInterface $tokenStorage,
@@ -44,45 +45,89 @@ final readonly class NostrRelayListFactory
     ) {
     }
 
+    /**
+     * @deprecated Use {@see getCommunityRelayUrlList()}
+     */
     public function getCommunityRelayUrl(): string
     {
-        return $this->communityRelayUrl;
+        $list = $this->getCommunityRelayUrlList();
+
+        return $list[0] ?? '';
     }
 
     /**
+     * All configured community relays (wss + http), deduplicated.
+     *
      * @return list<string>
      */
     public function getCommunityRelayUrlList(): array
     {
-        return $this->communityRelayUrl !== '' ? [$this->communityRelayUrl] : [];
-    }
-
-    public function getCommunityRelaySet(): RelaySet
-    {
-        return $this->relaySetFromDistinctUrlList($this->getCommunityRelayUrlList());
+        return $this->dedupeRelayUrls($this->communityRelayUrls);
     }
 
     /**
      * @return list<string>
      */
+    public function getCommunityWssUrlList(): array
+    {
+        return $this->dedupeWssUrls($this->communityRelayUrls);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getCommunityHttpUrlList(): array
+    {
+        return $this->dedupeHttpRelayUrls($this->communityRelayUrls);
+    }
+
+    public function getCommunityRelaySet(): RelaySet
+    {
+        return $this->relaySetFromDistinctUrlList($this->getCommunityWssUrlList());
+    }
+
+    /**
+     * All configured search relays (wss + http), deduplicated.
+     *
+     * @return list<string>
+     */
     public function getSearchRelayUrlList(): array
+    {
+        return $this->dedupeRelayUrls($this->searchRelayUrls);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getSearchWssUrlList(): array
     {
         return $this->dedupeWssUrls($this->searchRelayUrls);
     }
 
+    /**
+     * @return list<string>
+     */
+    public function getSearchHttpUrlList(): array
+    {
+        return $this->dedupeHttpRelayUrls($this->searchRelayUrls);
+    }
+
     public function getSearchRelaySet(): RelaySet
     {
-        return $this->relaySetFromDistinctUrlList($this->getSearchRelayUrlList());
+        return $this->relaySetFromDistinctUrlList($this->getSearchWssUrlList());
     }
 
     /**
-     * community_relay + search_relays (deduplicated). Used for publishing comments and similar “use any configured relay” paths.
+     * community_relays + search_relays (deduplicated). Used for publishing comments and similar paths.
      *
      * @return list<string>
      */
     public function getPublishRelayUrlList(): array
     {
-        return $this->dedupeWssUrls(array_merge($this->getCommunityRelayUrlList(), $this->getSearchRelayUrlList()));
+        return $this->dedupeRelayUrls(array_merge(
+            $this->getCommunityRelayUrlList(),
+            $this->getSearchRelayUrlList(),
+        ));
     }
 
     /** @deprecated Use {@see getSearchRelayUrlList()} */
@@ -100,7 +145,7 @@ final readonly class NostrRelayListFactory
     /** @deprecated Use {@see getCommunityRelayUrl()} */
     public function getDefaultRelayUrl(): string
     {
-        return $this->communityRelayUrl !== '' ? $this->communityRelayUrl : ($this->getSearchRelayUrlList()[0] ?? '');
+        return $this->getCommunityRelayUrl() !== '' ? $this->getCommunityRelayUrl() : ($this->getSearchRelayUrlList()[0] ?? '');
     }
 
     /**
@@ -133,11 +178,19 @@ final readonly class NostrRelayListFactory
     }
 
     /**
-     * Prepends {@see getSearchRelayUrlList()}, then extra URLs, deduped.
+     * Prepends {@see getSearchWssUrlList()}, then extra URLs, deduped (wss only for RelaySet).
      */
     public function createRelaySetMergedWithSearchList(array $relayUrls): RelaySet
     {
-        return $this->relaySetFromDistinctUrlList(array_merge($this->getSearchRelayUrlList(), $relayUrls));
+        return $this->relaySetFromDistinctUrlList(array_merge($this->getSearchWssUrlList(), $relayUrls));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function mergeSearchRelayUrlList(array $relayUrls): array
+    {
+        return $this->dedupeRelayUrls(array_merge($this->getSearchRelayUrlList(), $relayUrls));
     }
 
     /** @deprecated Use {@see createRelaySetMergedWithSearchList()} */
@@ -230,6 +283,26 @@ final readonly class NostrRelayListFactory
     /**
      * @param list<string> $urls
      *
+     * @return array{wss: list<string>, http: list<string>}
+     */
+    public function partitionRelayUrlsByScheme(array $urls): array
+    {
+        $wss = [];
+        $http = [];
+        foreach ($this->dedupeRelayUrls($urls) as $url) {
+            if (str_starts_with($url, 'wss:')) {
+                $wss[] = $url;
+            } elseif (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+                $http[] = $url;
+            }
+        }
+
+        return ['wss' => $wss, 'http' => $http];
+    }
+
+    /**
+     * @param list<string> $urls
+     *
      * @return list<string>
      */
     public function capSequentialRelaysForProfileFetches(array $urls): array
@@ -251,7 +324,7 @@ final readonly class NostrRelayListFactory
      */
     public function getTenantConfiguredRelayUrlList(): array
     {
-        return $this->dedupeWssUrls(array_merge(
+        return $this->dedupeRelayUrls(array_merge(
             $this->getCommunityRelayUrlList(),
             $this->getSearchRelayUrlList(),
             $this->getProfileRelayUrlList(),
@@ -287,7 +360,7 @@ final readonly class NostrRelayListFactory
     }
 
     /**
-     * profile_relays first, then community + search (deduped).
+     * profile_relays first, then community + search wss only (no HTTP index relays for kind-0).
      *
      * @return list<string>
      */
@@ -295,8 +368,8 @@ final readonly class NostrRelayListFactory
     {
         $ordered = $this->dedupeWssUrls(array_merge(
             $this->getProfileRelayUrlList(),
-            $this->getCommunityRelayUrlList(),
-            $this->getSearchRelayUrlList(),
+            $this->getCommunityWssUrlList(),
+            $this->getSearchWssUrlList(),
         ));
         if ($ordered === []) {
             return [];
@@ -315,6 +388,31 @@ final readonly class NostrRelayListFactory
      *
      * @return list<string>
      */
+    private function dedupeRelayUrls(array $urls): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($urls as $url) {
+            if (!\is_string($url) || $url === '' || isset($seen[$url])) {
+                continue;
+            }
+            if (!str_starts_with($url, 'wss:')
+                && !str_starts_with($url, 'http://')
+                && !str_starts_with($url, 'https://')) {
+                continue;
+            }
+            $seen[$url] = true;
+            $out[] = $url;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $urls
+     *
+     * @return list<string>
+     */
     private function dedupeWssUrls(array $urls): array
     {
         $seen = [];
@@ -324,6 +422,29 @@ final readonly class NostrRelayListFactory
                 continue;
             }
             if (!str_starts_with($url, 'wss:')) {
+                continue;
+            }
+            $seen[$url] = true;
+            $out[] = $url;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $urls
+     *
+     * @return list<string>
+     */
+    private function dedupeHttpRelayUrls(array $urls): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($urls as $url) {
+            if (!\is_string($url) || $url === '' || isset($seen[$url])) {
+                continue;
+            }
+            if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
                 continue;
             }
             $seen[$url] = true;

@@ -25,7 +25,7 @@ final class NostrAuthorRelayCacheTest extends TestCase
 
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
-        $listFactory = new NostrRelayListFactory('wss://default', [], [], $ts, new NullLogger());
+        $listFactory = new NostrRelayListFactory(['wss://default'], [], [], $ts, new NullLogger());
 
         $c = new NostrAuthorRelayCache(
             new ArrayAdapter(),
@@ -46,7 +46,7 @@ final class NostrAuthorRelayCacheTest extends TestCase
 
         $ts = $this->createMock(TokenStorageInterface::class);
         $ts->method('getToken')->willReturn(null);
-        $listFactory = new NostrRelayListFactory('wss://main', [], [], $ts, new NullLogger());
+        $listFactory = new NostrRelayListFactory(['wss://main'], [], [], $ts, new NullLogger());
 
         $c = new NostrAuthorRelayCache(
             new ArrayAdapter(),

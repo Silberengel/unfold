@@ -21,7 +21,10 @@ parameters:
     # - On-demand publication reader (index/section/profile warm on miss)
     # - articles:get / app:prewarm long-form + publication-index phases on this relay only
     # - Publishing user comments (merged with author NIP-65 relays)
-    community_relay: 'wss://theforest.nostr1.com'
+    community_relays: [
+      'wss://theforest.nostr1.com',
+      'http://mercury-relay.imwald.eu'
+    ]
     # Indexer-scale relays (larger corpus). Used for:
     # - /search article backfill (time-window long-form ingest; search reads MySQL)
     # - Site magazine tree: root + category kind-30040 (MagazineRefresher, editor, prewarm)
@@ -32,12 +35,13 @@ parameters:
     search_relays: [
       'wss://theforest.nostr1.com',
       'wss://thecitadel.nostr1.com',
+      'http://mercury-relay.imwald.eu'
     ]
     # Profile metadata relays. Used for:
     # - Kind-0 / NIP-05 (author pages, featured authors, bylines, prewarm profiles)
     # - Kind 10002 relay lists, 10133 payto, NIP-30 emoji on profile rows
     # - Second pass when search_relays return no site-magazine 30040 or category long-form for author+#d
-    # - Profile metadata query order: these first, then community_relay + search_relays (deduped)
+    # - Profile metadata query order: these first, then community_relays + search_relays (deduped)
     profile_relays: [
       'wss://profiles.nostr1.com',
     ]
