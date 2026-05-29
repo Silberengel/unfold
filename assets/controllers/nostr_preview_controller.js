@@ -104,6 +104,10 @@ export default class extends Controller {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: this.fullMatchValue }),
                 });
+                if (res.status === 204) {
+                    this.setPreviewHtml('');
+                    return;
+                }
                 if (!res.ok) {
                     throw new Error(`HTTP ${res.status}`);
                 }
@@ -125,9 +129,11 @@ export default class extends Controller {
             this.setPreviewHtml(await res.text());
         } catch (e) {
             console.debug('nostr_preview: fetch failed', e);
-            this.containerTarget.innerHTML = this.typeValue === 'url' && this.fullMatchValue
-                ? `<div class="alert alert-warning my-2" role="status">Unable to load link preview for ${this.fullMatchValue}.</div>`
-                : UNAVAILABLE_HTML;
+            if (this.typeValue === 'url') {
+                this.setPreviewHtml('');
+                return;
+            }
+            this.containerTarget.innerHTML = UNAVAILABLE_HTML;
         }
     }
 
@@ -135,6 +141,15 @@ export default class extends Controller {
    * @param {string} html
    */
     setPreviewHtml(html) {
+        if (!html || !String(html).trim()) {
+            this.element.setAttribute('hidden', '');
+            this.element.setAttribute('data-nostr-preview-suppressed', 'no-preview');
+            if (this.hasContainerTarget) {
+                this.containerTarget.innerHTML = '';
+            }
+            return;
+        }
+        this.element.removeAttribute('hidden');
         this.containerTarget.innerHTML = html;
         this.element.classList.add('nostr-preview--loaded');
         const fallbackLink = this.element.querySelector(':scope > .nostr-preview-link');

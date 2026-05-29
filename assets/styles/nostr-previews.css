@@ -145,6 +145,14 @@
     padding-right: 10px;
 }
 
+.nostr-previews .nostr-preview[hidden] {
+    display: none !important;
+}
+
+.card-footer.nostr-previews:not(:has(.nostr-preview:not([hidden]))) {
+    display: none;
+}
+
 .nostr-link {
     color: var(--color-link);
     background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);

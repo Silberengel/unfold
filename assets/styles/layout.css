@@ -1600,42 +1600,20 @@ footer .footer-links {
     width: 100%;
 }
 
-/* Same first-column width for section blocks and per-row fields so dividers don’t “jump” between cards */
+/* Featured-author cards: same vertical meta layout as /p/ profile */
 .author-profile--featured .author-profile__section--label-value,
 .author-profile--featured .author-profile__meta-line,
 .author-profile--featured .author-profile__identity-row,
-.author-profile--featured .author-profile__payment {
-    grid-template-columns: minmax(5.25rem, 8.5rem) minmax(0, 1fr);
-    align-items: start;
-    column-gap: 0.65rem;
+.author-profile--featured .author-profile__payment,
+.author-profile--featured .author-profile__payment-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
 }
 
 .author-profile--featured .author-profile__title {
     font-size: 1.5rem;
-}
-
-/* Very narrow: single column so tiny two-column cells don’t look skewed */
-@media (max-width: 30rem) {
-    .author-profile--featured .author-profile__section--label-value,
-    .author-profile--featured .author-profile__meta-line,
-    .author-profile--featured .author-profile__identity-row,
-    .author-profile--featured .author-profile__payment {
-        grid-template-columns: 1fr;
-        row-gap: 0.2rem;
-    }
-
-    .author-profile--featured .author-profile__meta-line,
-    .author-profile--featured .author-profile__identity-row,
-    .author-profile--featured .author-profile__payment {
-        margin: 0.5rem 0;
-    }
-
-    .author-profile--featured .author-profile__meta-value,
-    .author-profile--featured .author-profile__identity-link,
-    .author-profile--featured .author-profile__payment-addr {
-        white-space: normal;
-        word-break: break-word;
-    }
 }
 
 .featured-authors__actions {

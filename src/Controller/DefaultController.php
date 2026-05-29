@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Repository\ArticleHighlightRepository;
 use App\Service\MagazineContentService;
+use App\Service\OpenGraphPreviewChecker;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -18,6 +19,7 @@ class DefaultController extends AbstractController
     public function __construct(
         private readonly MagazineContentService $magazineContent,
         private readonly ArticleHighlightRepository $articleHighlightRepository,
+        private readonly OpenGraphPreviewChecker $openGraphPreviewChecker,
     ) {
     }
 
@@ -65,17 +67,24 @@ class DefaultController extends AbstractController
         try {
             $embed = new \Embed\Embed();
             $info = $embed->get($url);
+            $title = $info->title ?? null;
+            $description = $info->description ?? null;
+            $image = $info->image ?? null;
+
+            if (! $this->openGraphPreviewChecker->hasMeaningfulMetadata($title, $description, $image, $url)) {
+                return new Response('', Response::HTTP_NO_CONTENT);
+            }
 
             return $this->render('components/Molecules/OgPreview.html.twig', [
                 'og' => [
-                    'title' => $info->title,
-                    'description' => $info->description,
-                    'image' => $info->image,
+                    'title' => $title,
+                    'description' => $description,
+                    'image' => $image,
                     'url' => $url,
                 ],
             ]);
-        } catch (Exception $e) {
-            return new Response('<div class="alert alert-warning">Unable to load OG preview for '.htmlspecialchars($url).'</div>', 200);
+        } catch (Exception) {
+            return new Response('', Response::HTTP_NO_CONTENT);
         }
     }
 }

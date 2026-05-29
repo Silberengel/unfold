@@ -1383,12 +1383,16 @@ a.tag:focus-visible {
     text-align: left;
 }
 
-/* One main label (NIP-05, Payment) with values stacked in the next column */
+/* Section blocks: header on top, values stacked below (readable on narrow screens). */
 .author-profile__section--label-value {
-    display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr);
-    column-gap: 0.5rem;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+}
+
+.author-profile__section--label-value:first-child {
     margin-top: 0.5rem;
 }
 
@@ -1401,7 +1405,7 @@ a.tag:focus-visible {
        falls below 3:1 on dark backgrounds; text-mid has ≥7:1 in both schemes. */
     color: var(--color-text-mid);
     line-height: 1.35;
-    padding-top: 0.15em;
+    padding-top: 0;
 }
 
 .author-profile__value-stack {
@@ -1435,10 +1439,10 @@ a.tag:focus-visible {
 .author-profile__meta-line,
 .author-profile__identity-row,
 .author-profile__payment {
-    display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr);
-    column-gap: 0.5rem;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
     margin: 0.35rem 0;
     font-size: 0.9rem;
     line-height: 1.35;
@@ -1456,15 +1460,15 @@ a.tag:focus-visible {
 .author-profile__identity-link,
 .author-profile__payment-addr {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .author-profile__payment-value {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    align-items: flex-start;
+    gap: 0.5rem;
     min-width: 0;
     max-width: 100%;
 }
@@ -1476,18 +1480,32 @@ a.tag:focus-visible {
 }
 
 .author-profile__copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    font-size: 0.75rem;
-    padding: 0.2rem 0.5rem;
-    line-height: 1.2;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    line-height: 1;
 }
 
-/* NIP-05: ellipsis long addresses; keep ✓ immediately after the (truncated) text, not at the column edge. */
+.author-profile__copy-btn.is-copied {
+    color: var(--color-secondary, var(--color-primary));
+}
+
+.author-profile__copy-icon {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+}
+
+/* NIP-05: full addresses wrap; keep ✓ after the link text. */
 .author-profile__nip05-value {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: flex-start;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 0.25rem;
     min-width: 0;
     max-width: 100%;
@@ -1495,14 +1513,11 @@ a.tag:focus-visible {
 }
 
 .author-profile__nip05-link {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
-    /* reserve space for the checkmark on the same “line” of layout */
-    max-width: calc(100% - 1.4rem);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    word-break: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .author-profile__nip05-verified {
@@ -1516,13 +1531,13 @@ a.tag:focus-visible {
     flex-grow: 0;
 }
 
-/* Payment type groups: one label per type with its addresses stacked in the right column */
+/* Payment type groups: type label above its addresses */
 .author-profile__payment-group {
-    display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr);
-    column-gap: 0.5rem;
-    align-items: start;
-    margin: 0.35rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    margin: 0.5rem 0 0;
     font-size: 0.9rem;
     line-height: 1.35;
 }
@@ -1548,7 +1563,7 @@ a.tag:focus-visible {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--color-text-mid);
-    padding-top: 0.15em;
+    padding-top: 0;
 }
 
 .author-profile__jumble {
