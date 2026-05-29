@@ -37,15 +37,25 @@ export default class extends Controller {
     if (this.boundPageShow) {
       window.removeEventListener('pageshow', this.boundPageShow);
     }
+    this.clearPendingFinish();
+  }
+
+  /** Drop any in-flight load listener or rAF from {@see resumeIfPending}. */
+  clearPendingFinish() {
     if (this.loadListener) {
       window.removeEventListener('load', this.loadListener);
       this.loadListener = null;
+    }
+    if (this._resumeRafId) {
+      cancelAnimationFrame(this._resumeRafId);
+      this._resumeRafId = null;
     }
   }
 
   onPageShow(event) {
     if (event.persisted) {
       sessionStorage.removeItem(STORAGE_KEY);
+      this.clearPendingFinish();
       this.resetBar();
     }
   }
@@ -58,14 +68,17 @@ export default class extends Controller {
     if (sessionStorage.getItem(STORAGE_KEY) !== '1' || !this.hasBarTarget) {
       return;
     }
+    this.clearPendingFinish();
     this.barTarget.classList.add('pb-indeterminate');
     this.barTarget.style.transition = 'none';
     this.barTarget.style.width = '100%';
     const finish = () => {
+      this.loadListener = null;
+      this._resumeRafId = null;
       this.completeToDone();
     };
     if (document.readyState === 'complete') {
-      requestAnimationFrame(finish);
+      this._resumeRafId = requestAnimationFrame(finish);
     } else {
       this.loadListener = finish;
       window.addEventListener('load', finish, { once: true });
@@ -76,10 +89,9 @@ export default class extends Controller {
     if (sessionStorage.getItem(STORAGE_KEY) !== '1' || !this.hasBarTarget) {
       return;
     }
-    if (this.loadListener) {
-      window.removeEventListener('load', this.loadListener);
-      this.loadListener = null;
-    }
+    // Claim pending state immediately so a duplicate finish (stale listener / reconnect) is ignored.
+    sessionStorage.removeItem(STORAGE_KEY);
+    this.clearPendingFinish();
     this.barTarget.classList.remove('pb-indeterminate');
     this.barTarget.style.transition = 'width 0.18s ease-out';
     this.barTarget.style.width = '100%';
@@ -90,7 +102,6 @@ export default class extends Controller {
       this.barTarget.style.transition = 'none';
       this.barTarget.style.width = '0';
       this.barTarget.style.removeProperty('transition');
-      sessionStorage.removeItem(STORAGE_KEY);
     }, 220);
   }
 

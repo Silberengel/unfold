@@ -28,6 +28,10 @@ final class NostrRelayListFactoryTest extends TestCase
         );
         $this->assertSame(['wss://forest', 'wss://citadel'], $f->getSearchWssUrlList());
         $this->assertSame(['http://mercury.example'], $f->getSearchHttpUrlList());
+        $this->assertSame(
+            ['wss://forest', 'wss://citadel'],
+            $f->getNip46ClientRelayUrlList(),
+        );
     }
 
     public function testGetCommunityRelayUrl(): void

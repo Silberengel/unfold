@@ -2,19 +2,27 @@ import { Controller } from '@hotwired/stimulus';
 import { getComponent } from '@symfony/ux-live-component';
 import {
     activeSignerKind,
-    canSignEvents,
+    abortNostrConnectWait,
     clearNip46Session,
     connectNip46Bunker,
+    createNostrConnectPair,
+    hasNip07Extension,
     signEvent,
+    waitForNostrConnect,
 } from '../nostr/signer.js';
 
 export default class extends Controller {
   static targets = [
     'error',
     'submitButton',
+    'amberToggleButton',
     'amberPanel',
     'bunkerInput',
     'amberSubmitButton',
+    'qrCanvas',
+    'connectUriInput',
+    'copyUriButton',
+    'amberStatus',
   ];
   static values = {
     noExtensionMessage: String,
@@ -22,11 +30,24 @@ export default class extends Controller {
     failedMessage: String,
     amberPromptMessage: String,
     amberInvalidUrlMessage: String,
-    amberConnectingMessage: String,
+    amberWaitingMessage: String,
+    amberConnectedMessage: String,
+    copyUriLabel: String,
+    copiedMessage: String,
+    nip46Relays: Array,
+    siteName: String,
+    siteUrl: String,
   };
 
   async initialize() {
     this.component = await getComponent(this.element);
+    this._nostrConnectUri = '';
+    this._nostrConnectSecretKey = null;
+    this._nostrConnectAbort = null;
+  }
+
+  disconnect() {
+    this.abortNostrConnectFlow();
   }
 
   authLogout() {
@@ -51,25 +72,141 @@ export default class extends Controller {
     this.errorTarget.hidden = false;
   }
 
+  setAmberStatus(message) {
+    if (!this.hasAmberStatusTarget) {
+      return;
+    }
+    if (!message) {
+      this.amberStatusTarget.hidden = true;
+      this.amberStatusTarget.textContent = '';
+      return;
+    }
+    this.amberStatusTarget.textContent = message;
+    this.amberStatusTarget.hidden = false;
+  }
+
+  abortNostrConnectFlow() {
+    if (this._nostrConnectAbort) {
+      this._nostrConnectAbort.abort();
+      this._nostrConnectAbort = null;
+    }
+    abortNostrConnectWait();
+  }
+
   toggleAmberPanel() {
     if (!this.hasAmberPanelTarget) {
       return;
     }
-    const hidden = this.amberPanelTarget.hidden;
-    this.amberPanelTarget.hidden = !hidden;
-    if (!this.amberPanelTarget.hidden && this.hasBunkerInputTarget) {
-      this.bunkerInputTarget.focus();
+    const opening = this.amberPanelTarget.hidden;
+    this.amberPanelTarget.hidden = !opening;
+    if (this.hasAmberToggleButtonTarget) {
+      this.amberToggleButtonTarget.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    }
+    if (!opening) {
+      this.abortNostrConnectFlow();
+      this.setAmberStatus('');
+      return;
+    }
+    void this.startNostrConnectFlow();
+  }
+
+  async startNostrConnectFlow() {
+    this.clearError();
+    this.abortNostrConnectFlow();
+    this.setAmberStatus('');
+
+    const relays = Array.isArray(this.nip46RelaysValue) ? this.nip46RelaysValue : [];
+    if (relays.length === 0) {
+      this.showError(this.amberInvalidUrlMessageValue);
+      return;
+    }
+
+    try {
+      const { uri, secretKey } = await createNostrConnectPair(relays, {
+        name: this.siteNameValue || undefined,
+        url: this.siteUrlValue || undefined,
+      });
+      this._nostrConnectUri = uri;
+      this._nostrConnectSecretKey = secretKey;
+
+      if (this.hasConnectUriInputTarget) {
+        this.connectUriInputTarget.value = uri;
+      }
+      await this.renderQrCode(uri);
+      this.setAmberStatus(this.amberWaitingMessageValue);
+
+      this._nostrConnectAbort = new AbortController();
+      const signal = this._nostrConnectAbort.signal;
+      waitForNostrConnect(secretKey, uri, signal)
+        .then(async () => {
+          if (signal.aborted) {
+            return;
+          }
+          this.setAmberStatus(this.amberConnectedMessageValue);
+          await this.performLogin(async () => true, { prefer: 'nip46' });
+        })
+        .catch((e) => {
+          if (signal.aborted || (e instanceof Error && e.name === 'AbortError')) {
+            return;
+          }
+          const msg = e instanceof Error ? e.message : String(e);
+          this.showError(msg || this.amberInvalidUrlMessageValue);
+          this.setAmberStatus('');
+        })
+        .finally(() => {
+          if (this._nostrConnectAbort?.signal === signal) {
+            this._nostrConnectAbort = null;
+          }
+        });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.showError(msg || this.amberInvalidUrlMessageValue);
+    }
+  }
+
+  async renderQrCode(uri) {
+    if (!this.hasQrCanvasTarget) {
+      return;
+    }
+    const QRCode = (await import('qrcode')).default;
+    await QRCode.toCanvas(this.qrCanvasTarget, uri, {
+      width: 220,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    });
+    this.qrCanvasTarget.setAttribute('role', 'img');
+    this.qrCanvasTarget.setAttribute('aria-label', 'QR code for Amber remote signer connection');
+  }
+
+  async copyConnectUriAct() {
+    const t = this._nostrConnectUri || (this.hasConnectUriInputTarget ? this.connectUriInputTarget.value : '');
+    if (t === '') {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(t);
+      if (this.hasCopyUriButtonTarget) {
+        const btn = this.copyUriButtonTarget;
+        const prev = btn.textContent;
+        btn.textContent = this.copiedMessageValue || 'Copied';
+        window.setTimeout(() => {
+          btn.textContent = prev || this.copyUriLabelValue || 'Copy link';
+        }, 2000);
+      }
+    } catch (e) {
+      console.warn('Copy failed', e);
     }
   }
 
   async loginAct() {
+    this.abortNostrConnectFlow();
     await this.performLogin(async () => {
-      if (!canSignEvents()) {
+      if (!hasNip07Extension()) {
         this.showError(this.noExtensionMessageValue);
         return false;
       }
       return true;
-    });
+    }, { prefer: 'nip07' });
   }
 
   async loginWithAmberAct() {
@@ -78,14 +215,20 @@ export default class extends Controller {
       this.showError(this.amberPromptMessageValue);
       return;
     }
+    if (!/^bunker:\/\//i.test(url) && !/^nostrconnect:\/\//i.test(url)) {
+      this.showError(this.amberInvalidUrlMessageValue);
+      return;
+    }
     const amberBtn = this.hasAmberSubmitButtonTarget ? this.amberSubmitButtonTarget : null;
     if (amberBtn) {
       amberBtn.disabled = true;
     }
+    this.abortNostrConnectFlow();
+    this.setAmberStatus('');
     try {
       this.clearError();
       await connectNip46Bunker(url);
-      await this.performLogin(async () => true);
+      await this.performLogin(async () => true, { prefer: 'nip46' });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.showError(msg || this.amberInvalidUrlMessageValue);
@@ -96,7 +239,7 @@ export default class extends Controller {
     }
   }
 
-  async performLogin(beforeSign) {
+  async performLogin(beforeSign, signOptions = {}) {
     this.clearError();
 
     const ok = await beforeSign();
@@ -122,7 +265,7 @@ export default class extends Controller {
         content: '',
       };
 
-      const signed = await signEvent(ev);
+      const signed = await signEvent(ev, signOptions);
 
       const response = await fetch('/login', {
         method: 'POST',
@@ -144,13 +287,14 @@ export default class extends Controller {
       }
 
       if (response.ok && data?.npub) {
+        this.abortNostrConnectFlow();
         void this.component.render();
         window.dispatchEvent(
           new CustomEvent('unfold:auth-changed', {
             detail: {
               loggedIn: true,
               npub: data.npub,
-              signer: activeSignerKind(),
+              signer: signOptions.prefer === 'nip07' ? 'nip07' : activeSignerKind(),
             },
           })
         );

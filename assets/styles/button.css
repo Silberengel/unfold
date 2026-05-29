@@ -25,6 +25,11 @@ a.btn:active {
     border-color: var(--color-primary-strong, var(--color-primary));
 }
 
+button:focus-visible, .btn:focus-visible, a.btn:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+
 .btn.btn-outline-secondary {
     color: var(--color-text);
     background-color: var(--color-bg-light);
@@ -45,36 +50,39 @@ a.btn:active {
     border-color: var(--color-border-soft, var(--color-border));
 }
 
+/* Ghost / toolbar buttons: visible border, not the same fill as the page chrome. */
 .btn.btn-secondary {
     color: var(--color-secondary);
-    background-color: var(--color-bg);
-    border: 2px solid var(--color-bg);
+    background-color: var(--color-bg-light);
+    border: 2px solid var(--color-border);
     text-decoration: none;
 }
 
 .btn.btn-secondary:hover {
-    border: 2px solid var(--color-secondary);
+    color: var(--color-primary);
+    background-color: var(--color-bg);
+    border-color: var(--color-secondary);
     text-decoration: none;
 }
 
-/* Dark scheme: primary fill is a light accent — ink must stay dark, not body/link tints. */
-html[data-color-scheme="dark"] button,
-html[data-color-scheme="dark"] .btn,
-html[data-color-scheme="dark"] a.btn {
+/* Filled primary buttons only — do not override secondary/outline variants. */
+html[data-color-scheme="dark"] button:not(.btn-secondary):not(.btn-outline-secondary),
+html[data-color-scheme="dark"] .btn:not(.btn-secondary):not(.btn-outline-secondary),
+html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-secondary) {
     color: #121212;
 }
 
-html[data-color-scheme="dark"] button:hover,
-html[data-color-scheme="dark"] .btn:hover,
-html[data-color-scheme="dark"] a.btn:hover {
+html[data-color-scheme="dark"] button:not(.btn-secondary):not(.btn-outline-secondary):hover,
+html[data-color-scheme="dark"] .btn:not(.btn-secondary):not(.btn-outline-secondary):hover,
+html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-secondary):hover {
     color: var(--color-primary);
     background-color: var(--color-bg);
     border-color: var(--color-primary);
 }
 
-html[data-color-scheme="dark"] button:active,
-html[data-color-scheme="dark"] .btn:active,
-html[data-color-scheme="dark"] a.btn:active {
+html[data-color-scheme="dark"] button:not(.btn-secondary):not(.btn-outline-secondary):active,
+html[data-color-scheme="dark"] .btn:not(.btn-secondary):not(.btn-outline-secondary):active,
+html[data-color-scheme="dark"] a.btn:not(.btn-secondary):not(.btn-outline-secondary):active {
     color: #121212;
     background-color: var(--color-primary);
     border-color: var(--color-primary-strong, var(--color-primary));
@@ -95,4 +103,16 @@ html[data-color-scheme="dark"] .btn.btn-outline-secondary:hover {
 html[data-color-scheme="dark"] .btn.btn-outline-secondary.is-disabled {
     color: var(--color-text-mid);
     opacity: 0.55;
+}
+
+html[data-color-scheme="dark"] .btn.btn-secondary {
+    color: var(--color-secondary);
+    background-color: var(--color-bg-light);
+    border-color: var(--color-border);
+}
+
+html[data-color-scheme="dark"] .btn.btn-secondary:hover {
+    color: var(--color-text);
+    background-color: var(--color-bg-primary, var(--color-bg));
+    border-color: var(--color-secondary);
 }

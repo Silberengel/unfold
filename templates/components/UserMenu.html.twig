@@ -6,6 +6,13 @@
         failedMessage: 'login.error_failed'|trans,
         amberPromptMessage: 'login.amber_prompt'|trans,
         amberInvalidUrlMessage: 'login.amber_invalid_url'|trans,
+        amberWaitingMessage: 'login.amber_waiting'|trans,
+        amberConnectedMessage: 'login.amber_connected'|trans,
+        copyUriLabel: 'login.amber_copy_link'|trans,
+        copiedMessage: 'login.amber_copied'|trans,
+        nip46Relays: nip46_client_relays,
+        siteName: website_name,
+        siteUrl: app.request.schemeAndHttpHost,
     })) }}
 >
     {% if app.user %}
@@ -48,23 +55,50 @@
                 data-login-target="submitButton"
                 {{ ...stimulus_action('login', 'loginAct') }}
             >{{ 'login.extension'|trans }}</twig:Atoms:Button>
-            <button
-                type="button"
-                class="user-menu__amber-toggle"
-                {{ stimulus_action('login', 'toggleAmberPanel') }}
-            >{{ 'login.amber_toggle'|trans }}</button>
+            <twig:Atoms:Button
+                data-login-target="amberToggleButton"
+                aria-expanded="false"
+                {{ ...stimulus_action('login', 'toggleAmberPanel') }}
+            >{{ 'login.amber_toggle'|trans }}</twig:Atoms:Button>
         </div>
         <div class="user-menu__amber-panel" data-login-target="amberPanel" hidden>
+            <p class="user-menu__section-label">{{ 'login.amber_scan_heading'|trans }}</p>
+            <div class="user-menu__amber-qr-section">
+                <p class="user-menu__amber-help">{{ 'login.amber_qr_help'|trans }}</p>
+                <canvas class="user-menu__amber-qr" data-login-target="qrCanvas" width="220" height="220"></canvas>
+                <label class="user-menu__amber-label" for="user-menu-connect-uri">{{ 'login.amber_link_label'|trans }}</label>
+                <div class="user-menu__amber-uri-row">
+                    <input
+                        id="user-menu-connect-uri"
+                        type="text"
+                        class="user-menu__amber-uri-input"
+                        data-login-target="connectUriInput"
+                        readonly
+                        spellcheck="false"
+                        autocomplete="off"
+                        aria-label="{{ 'login.amber_link_label'|trans }}"
+                    >
+                    <button
+                        type="button"
+                        class="user-menu__amber-copy"
+                        data-login-target="copyUriButton"
+                        {{ stimulus_action('login', 'copyConnectUriAct') }}
+                    >{{ 'login.amber_copy_link'|trans }}</button>
+                </div>
+                <p class="user-menu__amber-status" data-login-target="amberStatus" role="status" hidden></p>
+            </div>
+            <p class="user-menu__section-label user-menu__section-label--spaced">{{ 'login.amber_paste_heading'|trans }}</p>
             <p class="user-menu__amber-help">{{ 'login.amber_help'|trans }}</p>
-            <label class="user-menu__amber-label" for="user-menu-bunker-url">{{ 'login.amber_url_label'|trans }}</label>
+            <label class="user-menu__amber-label" for="user-menu-signer-url">{{ 'login.amber_url_label'|trans }}</label>
             <input
-                id="user-menu-bunker-url"
-                type="url"
+                id="user-menu-signer-url"
+                type="text"
                 class="user-menu__amber-input"
                 data-login-target="bunkerInput"
                 placeholder="{{ 'login.amber_url_placeholder'|trans }}"
                 autocomplete="off"
                 spellcheck="false"
+                inputmode="url"
             >
             <twig:Atoms:Button
                 data-login-target="amberSubmitButton"

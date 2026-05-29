@@ -105,6 +105,19 @@ final readonly class NostrRelayListFactory
     }
 
     /**
+     * WSS relays for browser NIP-46 (nostrconnect://) listening. HTTP relays are excluded.
+     *
+     * @return list<string>
+     */
+    public function getNip46ClientRelayUrlList(): array
+    {
+        return $this->dedupeWssUrls(array_merge(
+            $this->communityRelayUrls,
+            $this->searchRelayUrls,
+        ));
+    }
+
+    /**
      * @return list<string>
      */
     public function getSearchHttpUrlList(): array

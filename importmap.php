@@ -99,4 +99,10 @@ return [
     '@noble/hashes/hmac.js' => [
         'version' => '2.0.1',
     ],
+    'qrcode' => [
+        'version' => '1.5.4',
+    ],
+    'dijkstrajs' => [
+        'version' => '1.0.3',
+    ],
 ];
