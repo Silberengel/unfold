@@ -2,6 +2,13 @@
 :root {
     --article-reading-pane-bg: color-mix(in srgb, var(--color-bg) 70%, #ffffff 30%);
     --article-reading-prose-color: color-mix(in srgb, var(--color-text-mid) 35%, var(--color-text) 65%);
+    /* Whole-pixel sizes avoid wavy serif hinting (fractional rem × line-height on Linux/Firefox). */
+    --article-prose-size: 22px;
+    --article-prose-leading: 32px;
+    --article-quote-size: 26px;
+    --article-quote-leading: 40px;
+    --article-table-size: 21px;
+    --article-table-leading: 30px;
 }
 
 .article-page-root > .card,
@@ -24,6 +31,9 @@
 
 .article-main {
     margin-top: 30px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 .article-main img {
@@ -45,8 +55,8 @@
 .article-main table {
     font-family: var(--main-body-font), serif;
     color: var(--color-text-mid);
-    font-size: 1.4rem;
-    line-height: 1.75;
+    font-size: var(--article-prose-size);
+    line-height: var(--article-prose-leading);
 }
 
 .article-page-root .article-main p,
@@ -65,7 +75,8 @@
 }
 
 .article-main table {
-    font-size: 1.3rem;
+    font-size: var(--article-table-size);
+    line-height: var(--article-table-leading);
 }
 
 .article-main table th,
@@ -160,7 +171,8 @@
 }
 
 .article-main blockquote p {
-    font-size: 1.6rem;
+    font-size: var(--article-quote-size);
+    line-height: var(--article-quote-leading);
     font-style: italic;
     color: var(--color-text-mid);
     padding-left: 30px;
@@ -517,8 +529,8 @@
 /* Full `context` quote + optional <mark> on the `content` substring (body copy, not a box) */
 .user-highlight__body {
     margin: 0.35rem 0 0;
-    font-size: 0.95rem;
-    line-height: 1.65;
+    font-size: var(--article-prose-size);
+    line-height: var(--article-prose-leading);
     color: var(--color-text);
     font-family: var(--main-body-font), serif;
 }
