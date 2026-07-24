@@ -1,5 +1,5 @@
 # Dev: debug → dev.log only; info and above → dev.log + stderr.
-# Prod: debug–notice → prod.log only; warning+ → prod.log + stderr. Deprecations: stderr (JSON) only.
+# Prod: warning+ → prod.log + stderr (max_files: 7). Deprecations: stderr (JSON) only.
 # Log rotation: Monolog’s rotating_file rolls daily and keeps the last N files (caps growth; not a strict MB cap).
 #
 # Deprecation channel: vendor (e.g. phrity/websocket extending Nyholm @final Request/Response via
@@ -59,7 +59,8 @@ when@test:
 when@prod:
     monolog:
         handlers:
-            # No fingers_crossed: we split explicitly between file (all) and stderr (warning+ only).
+            # No fingers_crossed: we split explicitly between file and stderr.
+            # File keeps warning+ only (was debug → ~400MB/day); max_files caps retention.
             main:
                 type: group
                 members: [file, stderr]
@@ -67,8 +68,8 @@ when@prod:
             file:
                 type: rotating_file
                 path: "%kernel.logs_dir%/%kernel.environment%.log"
-                level: debug
-                max_files: 30
+                level: warning
+                max_files: 7
             stderr:
                 type: stream
                 path: php://stderr

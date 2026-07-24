@@ -56,7 +56,11 @@ final readonly class NostrRelayQuery
         foreach ($kinds as $k) {
             $kindInts[] = $k instanceof \BackedEnum ? (int) $k->value : (int) $k;
         }
-        $filter->setKinds($kindInts);
+        // NIP-01: omit `kinds` entirely to accept any kind. Sending "kinds": [] makes
+        // Mercury's /api/events/filter reject the request with HTTP 400.
+        if ($kindInts !== []) {
+            $filter->setKinds($kindInts);
+        }
 
         foreach ($filters as $key => $value) {
             $method = 'set' . ucfirst($key);

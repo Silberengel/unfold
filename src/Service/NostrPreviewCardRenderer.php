@@ -71,7 +71,7 @@ final class NostrPreviewCardRenderer
         return (string) preg_replace_callback(
             '#<div class="nostr-preview(?:\s+nostr-preview--inline)?"[^>]*data-controller="nostr-preview"[^>]*>'
             .'<div data-nostr-preview-target="container">[\s\S]*?</div>\s*</div>#',
-            function (array $m): string {
+            function (array $m) use ($allowRelayFetch): string {
                 $chunk = $m[0];
                 $type = $this->attr($chunk, 'data-nostr-preview-type-value');
                 $identifier = $this->attr($chunk, 'data-nostr-preview-identifier-value');
