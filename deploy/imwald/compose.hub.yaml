@@ -6,8 +6,17 @@
 
 name: imwald
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   php:
+    logging: *default-logging
+    mem_limit: 1g
+    memswap_limit: 1g
     image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:imwald}
     pull_policy: always
     restart: unless-stopped
@@ -34,6 +43,9 @@ services:
       start_period: 180s
 
   prewarm:
+    logging: *default-logging
+    mem_limit: 1g
+    memswap_limit: 1g
     image: ${UNFOLD_DOCKER_IMAGE:-silberengel/unfold:imwald}
     pull_policy: always
     restart: unless-stopped

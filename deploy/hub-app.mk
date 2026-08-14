@@ -63,8 +63,8 @@ articles-get:
 backfill: up-app migrate articles-get prewarm-once
 	@echo "Backfill done."
 
-# Alias for repo-root `make prewarm` / scripts/docker-prewarm.sh (hub has no bind-mounted cron stack).
-prewarm: backfill
+# Magazine-safe: prewarm only (do NOT alias to backfill/articles:get).
+prewarm: prewarm-once
 
 shell:
 	$(COMPOSE) exec php sh

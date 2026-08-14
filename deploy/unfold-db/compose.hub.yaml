@@ -6,11 +6,20 @@
 
 name: unfold-db
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   database:
     image: mysql:${MYSQL_VERSION:-8.0.36}
     container_name: unfold-mysql
     restart: unless-stopped
+    mem_limit: 1.5g
+    memswap_limit: 1.5g
+    logging: *default-logging
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-unfold_db}
       MYSQL_USER: ${MYSQL_USER:-unfold_user}

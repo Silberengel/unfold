@@ -69,8 +69,9 @@ parameters:
     # Kind 30040 magazine root #d (NIP-33). Exposed as `d_tag` for backward compatibility.
     d_tag_magazine: 'newsroom-magazine-on-imwald-by-laeserin'
     d_tag: '%d_tag_magazine%'
-    # Whether to show community articles on the home page
-    community_articles: true
+    # Magazine-only: do not promote/ingest the open community long-form feed.
+    # Use app:prewarm (category a-tags) — never articles:get / make backfill.
+    community_articles: false
     # Whether to enable NKBIP-01 publications (Latest Publications, ingest 30040/30041/30818, search)
     community_publications: false
     publication_relay_timeout_sec: 10
